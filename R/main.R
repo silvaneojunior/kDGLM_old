@@ -6,8 +6,15 @@ source('R/plot_helper.R')
 source('R/structure_helper.R')
 source('R/kernels.R')
 
-ajusta_modelo <- function(...,data_out,kernel=poisson_gi_exp,offset=NULL,log_offset=NULL){
+ajusta_modelo <- function(...,data_out,kernel='Poisson (univariada)',offset=NULL,log_offset=NULL){
+  if(typeof(kernel)==typeof('kernel')){
+    kernel=kernel_list[[kernel]]
+  }
+
   structure=concat_bloco(...)
+  if(is.null(dim(data_out))){
+    data_out=array(data_out,c(length(data_out),1))
+  }
   if(!is.null(offset) & !is.null(log_offset)){
     stop('Erro: Cannot set both offset and log_offset. Choose only one.')
   }else{if(!is.null(offset)){
@@ -19,42 +26,48 @@ ajusta_modelo <- function(...,data_out,kernel=poisson_gi_exp,offset=NULL,log_off
     log_offset=0
   }}}
   if(1==length(log_offset)){
-    log_offset=rep(log_offset,length(data_out))
-    offset=rep(offset,length(data_out))
+    log_offset=rep(log_offset,dim(data_out)[1])
+    offset=rep(offset,dim(data_out)[1])
   }
-  if(length(data_out)!=length(log_offset)){
-    stop('Erro: offset/log_offset does not have the same length as data_out')
+  if(dim(data_out)[1]!=length(log_offset)){
+    stop('Erro: offset/log_offset does not have the same length as data_out.')
   }
 
   if(structure$t==1){
-    structure$D=array(structure$D,c(structure$n,structure$n,length(data_out)))
-    structure$W=array(structure$W,c(structure$n,structure$n,length(data_out)))
-    structure$FF=matrix(structure$FF,structure$n,length(data_out))
-    structure$t=length(data_out)
+    structure$t=dim(data_out)[1]
+    structure$D=array(structure$D,c(structure$n,structure$n,structure$t))
+    structure$W=array(structure$W,c(structure$n,structure$n,structure$t))
+    structure$FF=array(structure$FF,c(structure$n,structure$k,structure$t))
   }
-  if(length(data_out)!=structure$t){
-    stop('Erro: data_out does not have the same length as structure.')
+  if(dim(data_out)[1]!=structure$t){
+    stop(paste0('Erro: data_out does not have the same time length as structure: got ',dim(data_out)[1],' from data_out, expected ',structure$t))
   }
-
-  model=kernel(y=data_out,
+  #if(dim(data_out)[2]!=structure$k){
+  #  stop(paste0('Erro: data_out does not have the same dimensions as structure: got ',dim(data_out)[2],' from data_out, expected ',structure$k))
+  #}
+  model=kernel$fit(y=data_out,
                m0=structure$m0,
                C0=structure$C0,
-               F1=structure$FF,
-               G1=structure$G,
-               D1=structure$D,
-               W1=structure$W,
-               pop=log_offset)
+               FF=structure$FF,
+               G=structure$G,
+               D=structure$D,
+               W=structure$W,
+               pop=offset)
 
+  model$m0=structure$m0
+  model$C0=structure$C0
   model$names=structure$names
   model$data_out=data_out
+  model$kernel=kernel
 
   return(model)
 
 }
 
-predict=function(model,t=1,offset=NULL,log_offset=NULL,FF=NULL,D=NULL,W=NULL,plot=TRUE,IC_prob=0.95){
+predict=function(model,t=1,offset=NULL,log_offset=NULL,FF=NULL,D=NULL,W=NULL,plot=TRUE,IC_prob=0.95,labels=NULL){
   n=dim(model$mt)[1]
   t_last=dim(model$mt)[2]
+  r=dim(model$FF)[2]
 
   if(t>10){
     warning('Warning: Prediction window is big, results will probabily be unreliable.')
@@ -62,22 +75,26 @@ predict=function(model,t=1,offset=NULL,log_offset=NULL,FF=NULL,D=NULL,W=NULL,plo
 
   #### Consistency check ####
   if(is.null(FF)){
-    FF=array(model$F[,t_last],c(n,t))
+    FF=array(model$FF[,,t_last],c(n,r,t))
   }
   if(is.null(D)){
     D=array(model$D[,,t_last],c(n,n,t))
+    D[,,-1]=1
   }else{if(all(dim(D)==1)){
     D=array(D,c(n,n,t))
   }else{if(length(dim(D))==2 | (length(dim(D))==3 & dim(D)[3]==1)){
     D=array(D,c(n,n,t))
+    D[,,-1]=1
   }}
   }
   if(is.null(W)){
     W=array(model$W[,,t_last],c(n,n,t))
+    W[,,-1]=0
   }else{if(all(dim(W)==1)){
     W=array(diag(n)*W,c(n,n,t))
   }else{if(length(dim(W))==2 | (length(dim(W))==3 & dim(W)[3]==1)){
     W=array(W,c(n,n,t))
+    W[,,-1]=0
   }}
   # if(t>1){
   #   D[,,2:t]=0
@@ -102,8 +119,11 @@ predict=function(model,t=1,offset=NULL,log_offset=NULL,FF=NULL,D=NULL,W=NULL,plo
   }
   print('prediction')
 
-  if(dim(FF)[2]!=t){
-    stop(paste0('Error: FF should have one column for each time or exactly 1 column, got ',dim(FF)[2],'!=',t,'.'))
+  if(dim(FF)[3]!=t){
+    stop(paste0('Error: FF should have one matrix for each time or exactly 1 matrix, got ',dim(FF)[3],'!=',t,'.'))
+  }
+  if(dim(FF)[2]!=r){
+    stop(paste0('Error: FF should have one column for each serie or exactly 1 column, got ',dim(FF)[2],'!=',r,'.'))
   }
   if(dim(FF)[1]!=n){
     stop(paste0('Error: FF should have one line for each latent variable in the model, got ',dim(FF)[1],'!=',n,'.'))
@@ -130,137 +150,170 @@ predict=function(model,t=1,offset=NULL,log_offset=NULL,FF=NULL,D=NULL,W=NULL,plo
   m0=model$mt[,t_last]
   C0=model$Ct[,,t_last]
 
+  r=dim(model$FF)[2]
+
   D <- ifelse(D == 0, 1, D)
 
+  last_m=m0
+  last_C=C0
+
   # Definindo objetos
-  at <- matrix(0, ncol=t, nrow=n)
-  mt <- matrix(0, ncol=t, nrow=n)
-  ft <- matrix(0, ncol=1, nrow=t)
-  qt <- matrix(0, ncol=1, nrow=t)
-  Ct <- array(rep(diag(n),t),dim=c(n,n,t))
-  Rt <- array(rep(diag(n),t),dim=c(n,n,t))
-  a = b= 0
-  pred = var.pred = icl.pred = icu.pred = matrix(0, ncol=1, nrow=t)
+  at <- matrix(0, nrow=n, ncol=t)
+  Rt <- array(0,dim=c(n,n,t))
+  ft <- matrix(0, nrow=t, ncol=r)
+  Qt <- array(0,dim=c(r,r,t))
 
-  ## Algoritmo
+  pred <- matrix(NA,dim(model$pred)[1],t)
+  var.pred <- array(NA,c(dim(model$var.pred)[1],dim(model$var.pred)[2],t))
+  icl.pred <- matrix(NA,dim(model$icl.pred)[1],t)
+  icu.pred <- matrix(NA,dim(model$icu.pred)[1],t)
 
-  # Priori
+  for(t_i in c(1:t)){
 
-  at[,1] <- G%*%m0
-  Rt[,,1] <-G%*%C0%*%(t(G))*D[,,1]+W[,,1]
+    filter=model$kernel$filter(0,last_m,last_C,FF[,,t_i],G,D[,,t_i],W[,,t_i],offset[t_i])
 
-  reduc_RFF=Rt[,,1]%*%FF[,1]
+    print(filter$Rt)
 
-  # Previsão 1 passo a frente
-  ft[1,] <- t(FF[,1])%*%at[,1] + log_offset[1]
-  qt[1,] <- t(FF[,1])%*%reduc_RFF
+    last_m=filter$at
+    last_C=filter$Rt
+    Rt[,,t_i] <- filter$Rt
+    at[,t_i] <- filter$at
+    ft[t_i,] <- filter$ft
+    Qt[,,t_i] <-  filter$Qt
 
-  a[1] <- (1/qt[1,])
-  b[1] <- (exp(-ft[1,] -0.5*qt[1,])/(qt[1,]))
+    prediction=model$kernel$pred(filter,IC_prob)
 
-  # Preditiva em t = 1
+    pred[,t_i]     <- prediction$pred
+    var.pred[,,t_i] <- prediction$var.pred
+    icl.pred[,t_i] <- prediction$icl.pred
+    icu.pred[,t_i] <- prediction$icu.pred
+  }
 
-  pred[1] <- a[1]/ b[1]
-  var.pred <- a[1]*(b[1]+1)/(b[1])^2
-  icl.pred[1]<-qnbinom((1-IC_prob)/2, a[1], (b[1]/(b[1] +1)))
-  icu.pred[1]<-qnbinom(1-(1-IC_prob)/2, a[1], (b[1]/(b[1] +1)))
-  if(t>1){
-  for(i in c(2:t)){
-    # Priori
-
-    at[,i] <- G%*%at[,i-1]
-    Rt[,,i] <-G%*%Rt[,,i-1]%*%(t(G))*D[,,i]+W[,,i]
-
-    reduc_RFF=Rt[,,i]%*%FF[,i]
-
-    # Previsão 1 passo a frente
-    ft[i,] <- t(FF[,i])%*%at[,i] + log_offset[i]
-    qt[i,] <- t(FF[,i])%*%reduc_RFF
-
-    a[i] <- (1/qt[i,])
-    b[i] <- (exp(-ft[i,] -0.5*qt[i,])/(qt[i,]))
-
-    pred[i] <- a[i]/ b[i]
-    var.pred <- a[i]*(b[i]+1)/(b[i])^2
-    icl.pred[i]<-qnbinom((1-IC_prob)/2, a[i], (b[i]/(b[i] +1)))
-    icu.pred[i]<-qnbinom(1-(1-IC_prob)/2, a[i], (b[i]/(b[i] +1)))
-  }}
   return_list=list('pred'=pred,'var.pred'=var.pred,'icl.pred'=icl.pred,'icu.pred'=icu.pred,'at'=at,'Rt'=Rt)
   if(plot){
-    fill_list=c('#2596be','#2596be','black')
-    names(fill_list)=c(paste0('Prediction I.C. (',(100*IC_prob) %>% round(),'%)'),'Prediction','Observed values')
-    color_list=c('#2596be','black')
-    names(color_list)=c('Prediction','Observed values')
+    r=dim(pred)[1]
+    if(is.null(labels)){
+      labels=c('Serie_' %>% paste0(1:r))
+    }
+
+    pred=cbind(t_last+c(1:t),t(pred) %>% as.data.frame)
+    names(pred)=c('time',labels)
+    pred=pred %>% pivot_longer(2:(r+1))
+    names(pred)=c('time','Serie','Prediction')
+
+    obs=pred
+    obs$Prediction=NULL
+    obs$Observation=NA
+
+    icl.pred=cbind(t_last+c(1:t),t(icl.pred) %>% as.data.frame)
+    names(icl.pred)=c('time',labels)
+    icl.pred=icl.pred %>% pivot_longer(2:(r+1))
+    names(icl.pred)=c('time','Serie','I.C.lower')
+
+    icu.pred=cbind(t_last+c(1:t),t(icu.pred) %>% as.data.frame)
+    names(icu.pred)=c('time',labels)
+    icu.pred=icu.pred %>% pivot_longer(2:(r+1))
+    names(icu.pred)=c('time','Serie','I.C.upper')
+
+    plot_data=obs %>%
+      inner_join(pred,c('time','Serie')) %>%
+      inner_join(icl.pred,c('time','Serie')) %>%
+      inner_join(icu.pred,c('time','Serie'))
+
+    obs=cbind(c(1:t_last),model$data_out %>% as.data.frame)
+    names(obs)=c('time',labels)
+    obs=obs %>% pivot_longer(2:(r+1))
+    names(obs)=c('time','Serie','Observation')
+
+    pred=cbind(c(1:t_last),t(model$pred) %>% as.data.frame)
+    names(pred)=c('time',labels)
+    pred=pred %>% pivot_longer(2:(r+1))
+    names(pred)=c('time','Serie','Prediction')
+
+    icl.pred=cbind(c(1:t_last),t(model$icl.pred) %>% as.data.frame)
+    names(icl.pred)=c('time',labels)
+    icl.pred=icl.pred %>% pivot_longer(2:(r+1))
+    names(icl.pred)=c('time','Serie','I.C.lower')
+
+    icu.pred=cbind(c(1:t_last),t(model$icu.pred) %>% as.data.frame)
+    names(icu.pred)=c('time',labels)
+    icu.pred=icu.pred %>% pivot_longer(2:(r+1))
+    names(icu.pred)=c('time','Serie','I.C.upper')
+
+    plot_data2=obs %>%
+      inner_join(pred,c('time','Serie')) %>%
+      inner_join(icl.pred,c('time','Serie')) %>%
+      inner_join(icu.pred,c('time','Serie'))
+
+    max_value=calcula_max(plot_data2$Observation-min(plot_data2$Observation))[[3]]+min(plot_data2$Observation)
+    min_value=-calcula_max(-(plot_data2$Observation-max(plot_data2$Observation)))[[3]]+max(plot_data2$Observation)
+
+    plot_data=rbind(plot_data2,plot_data)
 
     plot=ggplotly(
-        ggplot()+
-          geom_point(aes(x=c(1:t)+t_last,y=pred,color='Prediction',fill='Prediction'))+
-          geom_ribbon(aes(x=c(1:t)+t_last,ymin=icl.pred,ymax=icu.pred,fill=paste0('Prediction I.C. (',(100*IC_prob) %>% round(),'%)'),color=paste0('Prediction I.C. (',(100*IC_prob) %>% round(),'%)')),alpha=0.25)+
-          geom_point(aes(x=c(1:t_last),y=model$data_out,color='Observed values',fill='Observed values'))+
-          scale_fill_manual('',na.value=NA,values=fill_list)+
-          scale_color_manual('',na.value=NA,values=color_list)+
+        ggplot(plot_data)+
+          geom_point(aes(x=time,y=Prediction,color=Serie,fill=Serie))+
+          geom_ribbon(aes(x=time,ymin=I.C.lower,ymax=I.C.upper,fill=Serie,color=Serie),alpha=0.25)+
+          geom_point(aes(x=time,y=Observation,color=Serie,fill=Serie))+
+          scale_fill_hue('',na.value=NA)+
+          scale_color_hue('',na.value=NA)+
           scale_x_continuous('Time')+
           scale_y_continuous('$y_t$')+
-          theme_bw()
+          theme_bw()+
+          coord_cartesian(ylim=c(min_value,max_value))
       )
     return_list$plot=plot
   }
 
   return(return_list)
 }
-eval_past=function(model,smooth=FALSE,t_offset=0){
+eval_past=function(model,smooth=FALSE,t_offset=0,IC_prob=0.95){
   if(smooth & t_offset>0){
     t_offset=0
     warning('t_offset is only used if smooth is set to TRUE.')
   }
   n=dim(model$mt)[1]
   t_last=dim(model$mt)[2]
+  r=dim(model$FF)[2]
+  k=dim(model$pred)[1]
+
+  FF=model$FF
+  G=diag(n)
+  pred=matrix(NA,k,t_last)
+  var.pred=array(NA,c(k,k,t_last))
+  icl.pred=matrix(NA,k,t_last)
+  icu.pred=matrix(NA,k,t_last)
+
+  if(smooth){
+    ref_mt=model$mts
+    ref_Ct=model$Cts
+    D=model$D**0
+    W=model$W*0
+  }else{
+    ref_mt=model$mt
+    ref_Ct=model$Ct
+    D=model$D
+    W=model$W
+    for(i in t_offset){
+      G=G%*%model$G
+    }
+  }
 
   at=array(0,c(n,t_last))
   Rt=array(0,c(n,n,t_last))
+  for(i in c(1:t_last)){
+    mt=if(i<=t_offset){model$m0}else{ref_mt[,i-t_offset]}
+    Ct=if(i<=t_offset){model$C0}else{ref_Ct[,,i-t_offset]}
 
-  ft=array(0,c(t_last))
-  qt=array(0,c(t_last))
-  a=array(0,c(t_last))
-  b=array(0,c(t_last))
-  FF=model$F
-  G=array(model$G,c(n,n,t_last))
-  D=model$D
-  W=model$W
+    filter=model$kernel$filter(model$data_out[i,],mt,Ct,FF[,,i]  %>% matrix(n,r),G,D[,,i],W[,,i],model$log_offset[i])
+    prediction=model$kernel$pred(filter,IC_prob)
 
-  pred=c(1:t_last)*0
-
-  for(i in c(1:(t_last-t_offset))+t_offset){
-    if(smooth){
-      at[,i]=model$mts[,i]
-      Rt[,,i]=model$Cts[,,i]
-    }else{
-      at[,i]=model$mt[,i-t_offset]
-      Rt[,,i]=model$Ct[,,i-t_offset]
-      if(t_offset>0){
-        at[,i]=G[,,i-t_offset+1]%*%at[,i]
-        Rt[,,i]=G[,,i-t_offset+1]%*%Rt[,,i]%*%t(G[,,i-t_offset+1])*D[,,1]+W[,,1]
-        if(t_offset>1){
-          multi_G=diag(n)
-          for(j in c(2:t_offset)){
-            multi_G=G[,,i-t_offset+j]%*%multi_G
-          }
-          at[,i]=multi_G%*%at[,i]
-          Rt[,,i]=multi_G%*%Rt[,,i]%*%t(multi_G)
-        }
-      }
-    }
-
-    ft[i] <- t(FF[,i])%*%at[,i] + model$log_offset[i]
-    qt[i] <- t(FF[,i])%*%Rt[,,i]%*%FF[,i]
-
-    a[i] <- (1/qt[i])
-    b[i] <- (exp(-ft[i] -0.5*qt[i])/(qt[i]))
-
-    pred[i] <- a[i]/ b[i]
-    #icl.pred[i]<-qnbinom((1-IC_prob)/2, a[i], (b[i]/(b[i] +1)))
-    #icu.pred[i]<-qnbinom(1-(1-IC_prob)/2, a[i], (b[i]/(b[i] +1)))
+    pred[,i]      <- prediction$pred
+    var.pred[,,i] <- prediction$var.pred
+    icl.pred[,i]  <- prediction$icl.pred
+    icu.pred[,i]  <- prediction$icu.pred
   }
 
-  return(list('pred'=pred,'a'=a,'b'=b))
+
+  return(list('pred'=pred,'icl.pred'=icl.pred,'icu.pred'=icu.pred))
 }

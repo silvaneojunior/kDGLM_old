@@ -14,11 +14,16 @@ library(tidyr)
 library(dplyr)
 library(purrr)
 library(stringr)
+library(abind)
 
 # Misc stuff
 library(hms)
 library(beepr)
 library(latex2exp)
+
+# Math stuff
+library(rootSolve)
+library(MASS)
 
 source('R/main.R')
 source('R/ui_helper.R')
@@ -32,22 +37,31 @@ final_ui=fluidPage(
     uiOutput('main_panel')
   ))
 
+
+abind_aux_array=function(...){
+  abind(...,along=1)
+}
+
 server=function(input, output) {
 
   modal_prompt=modalDialog(
     #numericInput('column_index', 'Select the index of the column to insert:', value = 1,min=1,max=,step=1),
     fluidRow(
       column(8,
-             uiOutput('modal_content'),
+             uiOutput('modal_content')),
       column(4,
+             fluidRow(selectInput('kernel','Target variable distribuition',choices=list('Poisson (univariada)','Multinomial'))),
              fluidRow(materialSwitch('by_column','Variables on rows:')),
              fluidRow(materialSwitch('column_name','Column names:',value=TRUE)),
-             fluidRow(materialSwitch('row_name','Row names:',value=TRUE))))),
+             fluidRow(materialSwitch('row_name','Row names:',value=TRUE)))
+      ),
     footer = actionButton('choosed_column','Select')
   )
 
   output$modal_content=renderUI({
-             selectInput('column_index','Select the column to insert:',choices=names(raw_data()))
+    selectInput('column_index','Select the column to insert:',
+                 choices=names(raw_data()),
+                 multiple=kernel_list[[input$kernel]][['multi_var']])
   })
 
   observeEvent(c(input$y_resp),{
@@ -70,12 +84,23 @@ server=function(input, output) {
     if(by_column){
       file=as.data.frame(t(file))
     }
+    names(file)=str_replace_all(names(file),' ','.')
     return(file)
     })
-  data=eventReactive(c(input$y_resp,input$choosed_column),{
+  data=eventReactive(c(input$y_resp,input$choosed_column,input$ref_multnom),{
     if(length(dim(raw_data()))>1){
       if(dim(raw_data())[2]>1){
-        file=raw_data()[[input$column_index]]
+        file=raw_data()[,names(raw_data()) %in% input$column_index]
+        if(input$kernel=='Multinomial'){
+          ref_col=file[,(names(file) %in% input$ref_multnom)]
+          file=file[,!(names(file) %in% input$ref_multnom)]
+          file=cbind(file,ref_col)
+          names(file)[length(names(file))]=input$ref_multnom
+        }
+        if(is.null(dim(file))){
+          file=data.frame(file)
+          names(file)=input$column_index
+        }
       }else{
         file=raw_data()[,1]
       }
@@ -89,99 +114,169 @@ server=function(input, output) {
     })
 
   model=eventReactive(input$fit_model,{
-      blocks_list=reac_vals$par_index
-      index_i=blocks_list[1]
-      type_i=input[['type_'%>%paste0(index_i)]]
-      order_i=input[['order_'%>%paste0(index_i)]]
-      value_i=input[['value_'%>%paste0(index_i)]]
-      name_i=input[['name_'%>%paste0(index_i)]]
-      D_i=input[['D_'%>%paste0(index_i)]]
-      W_i=input[['W_'%>%paste0(index_i)]]
-      m0_i=input[['m0_'%>%paste0(index_i)]]
-      C0_i=input[['C0_'%>%paste0(index_i)]]
-
-      if(is.na(value_i)){
-        row_name=input[['row_name_'%>%paste0(index_i)]] %||% TRUE
-        column_name=input[['column_name_'%>%paste0(index_i)]] %||% TRUE
-        by_column=input[['by_column_'%>%paste0(index_i)]] %||% FALSE
-
-        file=read.csv(input[['x_resp_'%>%paste0(index_i)]]$datapath,row.names=if(row_name){1}else{NULL},header=column_name)
-        if(by_column){
-          file=as.data.frame(t(file))
-        }
-        value_i=file[[input[['custom_value_index_'%>%paste0(index_i)]]]]
-      }
-
-      create_block=if(type_i=='Polynomial'){gera_bloco_poly}else{gera_bloco_sazo}
-      structure=create_block(order_i,value=value_i,name=name_i,D=1/D_i,m0=m0_i,C0=C0_i,W=W_i)
-      for(index_i in blocks_list[-1]){
+    values_name=input$column_index[!(input$column_index %in% input$ref_multnom)]
+    Series_n=dim(data())[2]-ifelse(input$kernel=='Multinomial',1,0)
+    Time_length=dim(data())[1]
+      aux_func=function(index_i){
         type_i=input[['type_'%>%paste0(index_i)]]
         order_i=input[['order_'%>%paste0(index_i)]]
-        value_i=input[['value_'%>%paste0(index_i)]]
+        value_i=matrix(NA,Series_n,Time_length)
+
+        for(index in 1:length(values_name)){
+          label=if(input[['check_shared_F_'%>%paste0(index_i)]]){paste0(index_i)}else{paste0(index_i,'_',values_name[index])}
+          pre_value_i=input[['value_'%>%paste0(label)]]
+          if(is.na(pre_value_i)){
+            row_name=input[['row_name_'%>%paste0(label)]] %||% TRUE
+            column_name=input[['column_name_'%>%paste0(label)]] %||% TRUE
+            by_column=input[['by_column_'%>%paste0(label)]] %||% FALSE
+
+            file=read.csv(input[['x_resp_'%>%paste0(label)]]$datapath,row.names=if(row_name){1}else{NULL},header=column_name)
+            if(by_column){
+              file=as.data.frame(t(file))
+            }
+            names(file)=str_replace_all(names(file),' ','.')
+            pre_value_i=file[[input[['custom_value_index_'%>%paste0(label)]]]]
+          }
+          value_i[index,]=pre_value_i
+        }
+
+        if(input[['check_offset_'%>%paste0(index_i)]]){
+          if(input$kernel=='Multinomial'){
+            label=paste0(index_i,'_',input$ref_multnom)
+            pre_value_i=input[['value_'%>%paste0(label)]]
+            if(is.na(pre_value_i)){
+              row_name=input[['row_name_'%>%paste0(label)]] %||% TRUE
+              column_name=input[['column_name_'%>%paste0(label)]] %||% TRUE
+              by_column=input[['by_column_'%>%paste0(label)]] %||% FALSE
+
+              file=read.csv(input[['x_resp_'%>%paste0(label)]]$datapath,row.names=if(row_name){1}else{NULL},header=column_name)
+              if(by_column){
+                file=as.data.frame(t(file))
+              }
+              names(file)=str_replace_all(names(file),' ','.')
+              pre_value_i=file[[input[['custom_value_index_'%>%paste0(label)]]]]
+            }
+            for(index in c(1:Series_n)){
+              value_i[index,]=value_i[index,]/pre_value_i
+            }
+          }
+          value_i=log(value_i)
+        }
+
         name_i=input[['name_'%>%paste0(index_i)]]
         D_i=input[['D_'%>%paste0(index_i)]]
         W_i=input[['W_'%>%paste0(index_i)]]
         m0_i=input[['m0_'%>%paste0(index_i)]]
         C0_i=input[['C0_'%>%paste0(index_i)]]
-
-        if(is.na(value_i)){
-
-          row_name=input[['row_name_'%>%paste0(index_i)]] %||% TRUE
-          column_name=input[['column_name_'%>%paste0(index_i)]] %||% TRUE
-          by_column=input[['by_column_'%>%paste0(index_i)]] %||% FALSE
-
-          file=read.csv(input[['x_resp_'%>%paste0(index_i)]]$datapath,row.names=if(row_name){1}else{NULL},header=column_name)
-          if(by_column){
-            file=as.data.frame(t(file))
-          }
-          value_i=file[[input[['custom_value_index_'%>%paste0(index_i)]]]]
-        }
-
         create_block=if(type_i=='Polynomial'){gera_bloco_poly}else{gera_bloco_sazo}
 
-        structure=concat_bloco(structure,create_block(order_i,value=value_i,name=name_i,D=1/D_i,m0=m0_i,C0=C0_i,W=W_i))
+        if(input[['check_shared_lat_'%>%paste0(index_i)]]){
+          return(create_block(order_i,value=value_i,name=name_i,D=1/D_i,m0=m0_i,C0=C0_i,W=W_i))
+        }else{
+          aux_bloc=function(index_s){
+            partial_value=value_i
+            partial_value[-index_s,]=0
+            create_block(order_i,value=partial_value,name=name_i %>% paste0('_',values_name[index_s]),D=1/D_i,m0=m0_i,C0=C0_i,W=W_i)
+          }
+          return(do.call(concat_bloco,lapply(1:length(values_name),aux_bloc)))
+        }
       }
+      structure=do.call(concat_bloco,lapply(reac_vals$par_index,aux_func))
 
-      ajusta_modelo(data_out=data(),struture=structure)
+      ajusta_modelo(data_out=data() %>% as.matrix,struture=structure,kernel=input$kernel)
     })
 
   observeEvent(input$fit_model,{
+    reac_vals$current_fit_input=input %>% as.list
+    reac_vals$current_par_index=reac_vals$par_index
     output$forecast_tab=renderUI({
-      column(8,
-        panel('Aditional data for forecasting:',
-                 do.call(
-                   tabsetPanel,
-                   map(names(model()$names),function(var){
-                     tabPanel(var,textInput('pred_value_'%>%paste0(var),label='Variable value:',value=1))
-                     })
+      isolate({
+        aux_func=function(index){
+          if(input[['check_shared_F_'%>%paste0(index)]]){
+            values_name=''
+            show_values_name=''
+            name_values_name=''
+          }else{
+            values_name=input$column_index[!(input$column_index %in% input$ref_multnom)]
+            show_values_name=paste0('_',values_name)
+            name_values_name=paste0(' (',values_name,')')
+          }
+
+          tabPanel(title=input[['name_'%>%paste0(index)]],
+                   do.call(fluidRow,
+                           lapply(X=1:length(values_name),
+                                  FUN=function(index_s){
+                                    num_input=numericInput('pred_value_'%>%paste0(index,show_values_name[index_s]),
+                                                           paste0('Value',name_values_name[index_s],':'),
+                                                           value=ifelse(length(values_name)==1,1,0))
+                                    isolate({
+                                      cond=!(show_values_name[index_s] %in% input$ref_multnom) | input[['check_offset_'%>%paste0(index)]]
+                                    })
+                                    toggleState(id='value_'%>%paste0(index,show_values_name[index_s]),
+                                                condition=cond)
+                                    num_input
+                                  }
+                           )
                    )
-                 ),
-        panel(numericInput('steps_ahead','Steps ahead:',min=1,value=1)),
-        panel(plotlyOutput('forecast_plot')))
-    })
-  })
-  output$forecast_plot=renderPlotly({
-      FF=matrix(0,0,input$steps_ahead)
-      for(var in names(model()$names)){
-        value=input[['pred_value_'%>%paste0(var)]]
-        value=value %>% str_remove_all(' ') %>% str_split(',')
-        value=value[[1]] %>% as.numeric
-        if(length(value)==1){
-          value=rep(value,input$steps_ahead)
-        }
-        if(length(value)<input$steps_ahead){
-          value=c(value,rep(1,input$steps_ahead-length(value)))
-        }else{if(length(value)>input$steps_ahead){
-          value=value[1:input$steps_ahead]
-        }
+          )
         }
 
-        n_inputs=length(model()$names[[var]])
-        pre_FF=matrix(0,n_inputs,input$steps_ahead)
-        pre_FF[1,]=value
-        FF=rbind(FF,pre_FF)
+        column(8,
+               panel('Aditional data for forecasting:',
+                     do.call(
+                       tabsetPanel,
+                       lapply(reac_vals$par_index,aux_func)
+                     )
+               ),
+               panel(numericInput('steps_ahead','Steps ahead:',min=1,value=1)),
+               panel(plotlyOutput('forecast_plot')))
+      })
+    })
+  })
+
+  output$forecast_plot=renderPlotly({
+      FF=array(0,c(0,dim(model()$FF)[2],input$steps_ahead))
+
+      current_fit_input=reac_vals$current_fit_input
+      values_name=current_fit_input$column_index[!(current_fit_input$column_index %in% current_fit_input$ref_multnom)]
+      Series_n=dim(data())[2]-ifelse(current_fit_input$kernel=='Multinomial',1,0)
+
+      for(index_i in reac_vals$current_par_index){
+        order_i=if(current_fit_input[['type_'%>%paste0(index_i)]]=='Polynomial'){current_fit_input[['order_'%>%paste0(index_i)]]}else{2}
+        value_i=matrix(NA,Series_n,input$steps_ahead)
+
+        for(index in 1:length(values_name)){
+          label=if(current_fit_input[['check_shared_F_'%>%paste0(index_i)]]){paste0(index_i)}else{paste0(index_i,'_',values_name[index])}
+          pre_value_i=input[['pred_value_'%>%paste0(label)]]
+          value_i[index,]=pre_value_i
+        }
+        if(current_fit_input[['check_offset_'%>%paste0(index_i)]]){
+          if(current_fit_input$kernel=='Multinomial'){
+            label=paste0(index_i,'_',input$ref_multnom)
+            pre_value_i=current_fit_input[['pred_value_'%>%paste0(label)]]
+            for(index in c(1:Series_n)){
+              value_i[index,]=value_i[index,]/pre_value_i
+            }
+          }
+          value_i=log(value_i)
+        }
+
+        if(current_fit_input[['check_shared_lat_'%>%paste0(index_i)]]){
+          pre_FF=array(0,c(order_i,Series_n,input$steps_ahead))
+          pre_FF[1,,]=value_i
+        }else{
+          aux_bloc=function(index_s){
+            partial_value=value_i
+            partial_value[-index_s,]=0
+            pre_FF=array(0,c(order_i,Series_n,input$steps_ahead))
+            pre_FF[1,,]=value_i
+            return(pre_FF)
+          }
+          pre_FF=do.call(abind_aux_array,lapply(1:length(values_name),aux_bloc))
+        }
+        FF=abind_aux_array(FF,pre_FF)
       }
-      predict(model(),t=input$steps_ahead,FF=FF)$plot
+      predict(model(),t=input$steps_ahead,FF=FF,labels=names(data()))$plot
     })
 
   output$main_panel=renderUI({
@@ -202,9 +297,17 @@ server=function(input, output) {
       )
   })
 
-  reac_vals=reactiveValues(par_index=c(),data_selected=NULL)
+  reac_vals=reactiveValues(par_index=c(),data_selected=NULL,current_fit_input=list(),current_par_index=c())
 
   output$y_resp_input=renderUI({isolate(fileInput('y_resp', 'Select target data:'))})
+  output$extra_param=renderUI({
+    row=NULL
+    if(input$kernel %||% 'None'=='Multinomial'){
+      row=selectInput('ref_multnom','Select the column to use as base:',
+                      choices=input$column_index)
+    }
+    return(row)
+    })
   output$add_variable_input=renderUI({isolate(disabled(actionButton('add_variable','',icon = icon('plus'))))})
   output$fit_model=renderUI({disabled(actionButton('fit_model','Fit model'))})
 
@@ -212,6 +315,7 @@ server=function(input, output) {
       sidebarPanel(
         fluidRow("Model structure interface"),
         fluidRow(uiOutput('y_resp_input')),
+        fluidRow(uiOutput('extra_param')),
         fluidRow(tabsetPanel(id='Var_tabs')),
         fluidRow(uiOutput('add_variable_input'),uiOutput('fit_model'))
       )
@@ -254,21 +358,22 @@ server=function(input, output) {
     req(reac_vals$data_selected)
     #req(input$column_index)
     if(as.numeric(input$fit_model)==0){
-    t_last=length(data())
-
-    fill_list=c('black')
-    names(fill_list)=c('Observed values')
-    color_list=c('black')
-    names(color_list)=c('Observed values')
+    t_last=ifelse(is.null(dim(data())[1]),length(data()),dim(data())[1])
 
     max_value=calcula_max(data()-min(data()))[[3]]+min(data())
     min_value=-calcula_max(-(data()-max(data())))[[3]]+max(data())
 
     date=row.names(raw_data())
+    time=c(1:t_last)
 
-    plt=ggplot()+geom_point(aes(x=c(1:t_last),y=data(),color='Observed values',fill='Observed values',date=date))+
-      scale_fill_manual('',na.value=NA,values=fill_list)+
-      scale_color_manual('',na.value=NA,values=color_list)+
+    pre_data=cbind(data.frame(time,date),data())
+
+    plot_data=(pre_data %>% pivot_longer(3:dim(pre_data)[2]))
+
+    plt=ggplot(plot_data)+
+      geom_point(aes(x=time,y=value,color=name,fill=name,date=date))+
+      scale_fill_hue('',na.value=NA)+
+      scale_color_hue('',na.value=NA)+
       scale_y_continuous(name='$y_t$')+
       scale_x_continuous('Time',labels=row.names(raw_data())[round(c(0:10)/(10/t_last))[-1]],breaks=round(c(0:10)/(10/t_last))[-1])+
       theme_bw()+
@@ -277,7 +382,7 @@ server=function(input, output) {
 
     return(ggplotly(plt))
     }else{
-      return(show_fit(model(),smooth = T,t_offset=1,dinamic=TRUE)$plot)
+      return(show_fit(model(),smooth = F,t_offset=1,dinamic=TRUE,labels=names(data()))$plot)
     }
   })
 }

@@ -28,30 +28,55 @@ calcula_max=function(pre_max){
   return(list(value,interval_size,max_value))
 }
 
-show_fit=function(model,IC_prob=0.95,smooth=TRUE,dinamic=TRUE,t_offset=0){
+show_fit=function(model,IC_prob=0.95,smooth=TRUE,dinamic=TRUE,t_offset=0,labels=NULL){
   n=dim(model$mt)[1]
   t_last=dim(model$mt)[2]
   eval=eval_past(model,smooth,t_offset)
   pred=eval$pred
-  a=eval$a
-  b=eval$b
-  icl.pred<-qnbinom((1-IC_prob)/2, a, (b/(b +1)))
-  icu.pred<-qnbinom(1-(1-IC_prob)/2, a, (b/(b +1)))
+  r=dim(pred)[1]
+  icl.pred<-eval$icl.pred
+  icu.pred<-eval$icu.pred
 
-  fill_list=c('#2596be','#2596be','black')
-  names(fill_list)=c(paste0('Prediction I.C. (',(100*IC_prob) %>% round(),'%)'),'Prediction','Observed values')
-  color_list=c('#2596be','black')
-  names(color_list)=c('Prediction','Observed values')
+  if(is.null(labels)){
+    labels=c('Serie_' %>% paste0(1:r))
+  }
+
+  obs=model$data_out
+
+  obs=cbind(c(1:t_last),obs %>% as.data.frame)
+  names(obs)=c('time',labels)
+  obs=obs %>% pivot_longer(2:(r+1))
+  names(obs)=c('time','Serie','Observation')
+
+  pred=cbind(c(1:t_last),t(pred) %>% as.data.frame)
+  names(pred)=c('time',labels)
+  pred=pred %>% pivot_longer(2:(r+1))
+  names(pred)=c('time','Serie','Prediction')
+
+  icl.pred=cbind(c(1:t_last),t(icl.pred) %>% as.data.frame)
+  names(icl.pred)=c('time',labels)
+  icl.pred=icl.pred %>% pivot_longer(2:(r+1))
+  names(icl.pred)=c('time','Serie','I.C.lower')
+
+  icu.pred=cbind(c(1:t_last),t(icu.pred) %>% as.data.frame)
+  names(icu.pred)=c('time',labels)
+  icu.pred=icu.pred %>% pivot_longer(2:(r+1))
+  names(icu.pred)=c('time','Serie','I.C.upper')
+
+  plot_data=obs %>%
+    inner_join(pred,c('time','Serie')) %>%
+    inner_join(icl.pred,c('time','Serie')) %>%
+    inner_join(icu.pred,c('time','Serie'))
 
   max_value=calcula_max(model$data_out-min(model$data_out))[[3]]+min(model$data_out)
   min_value=-calcula_max(-(model$data_out-max(model$data_out)))[[3]]+max(model$data_out)
 
-  plt=ggplot()+
-    geom_point(aes(x=c(1:t_last),y=pred,color='Prediction',fill='Prediction'))+
-    geom_ribbon(aes(x=c(1:t_last),ymin=icl.pred,ymax=icu.pred,fill=paste0('Prediction I.C. (',(100*IC_prob) %>% round(),'%)'),color=paste0('Prediction I.C. (',(100*IC_prob) %>% round(),'%)')),alpha=0.25)+
-    geom_point(aes(x=c(1:t_last),y=model$data_out,color='Observed values',fill='Observed values'))+
-    scale_fill_manual('',na.value=NA,values=fill_list)+
-    scale_color_manual('',na.value=NA,values=color_list)+
+  plt=ggplot(plot_data)+
+    geom_point(aes(x=time,y=Observation,color=Serie,fill=Serie))+
+    geom_ribbon(aes(x=time,ymin=I.C.lower,ymax=I.C.upper,fill=Serie,color=Serie),alpha=0.25)+
+    geom_line(aes(x=time,y=Prediction,color=Serie,fill=Serie))+
+    scale_fill_hue('',na.value=NA)+
+    scale_color_hue('',na.value=NA)+
     scale_y_continuous(name='$y_t$')+
     scale_x_continuous('Time')+
     theme_bw()+
@@ -63,14 +88,25 @@ show_fit=function(model,IC_prob=0.95,smooth=TRUE,dinamic=TRUE,t_offset=0){
 }
 
 plot_lat_var=function(model,var,smooth=TRUE,cut_off=10,IC_prob=0.95,dinamic=TRUE,tranform_y=function(y){y}){
-  if(!(var %in% names(model$names))){
+  if(!any(grepl(var,names(model$names)))){
     stop(paste0('Error: Invalid selected variable. Got ',var,', expected one of the following:\n',names(model$names)))
   }
   if(IC_prob>=1 | IC_prob<=0){
     stop(paste0('Error: Invalid value for I.C. width. Must be between 0 and 1, got ',IC_prob))
   }
 
-  indice=model$names[[var]]
+  indice=c()
+  names_var=c()
+  for(i in names(model$names)){
+    if(grepl(var,i)){
+      indice=c(indice,model$names[[i]])
+      count=0
+      for(index in model$names[[i]]){
+        count=count+1
+        names_var=c(names_var,paste0(i,':latent value ',count))
+      }
+    }
+    }
   size=length(indice)
   t=dim(model$mts)[2]
   m1=if(smooth){model$mts[indice,]}else{model$mt[indice,]}
@@ -92,9 +128,9 @@ plot_lat_var=function(model,var,smooth=TRUE,cut_off=10,IC_prob=0.95,dinamic=TRUE
   lim_i=as.data.frame(lim_i)
   lim_s=as.data.frame(lim_s)
 
-  names(m1)=paste0('Variable ',c(1:dim(m1)[2]))
-  names(lim_i)=paste0('Variable ',c(1:dim(lim_i)[2]))
-  names(lim_s)=paste0('Variable ',c(1:dim(lim_s)[2]))
+  names(m1)=names_var
+  names(lim_i)=names_var
+  names(lim_s)=names_var
 
   max_value=calcula_max(m1-min(m1))[[3]]+min(m1)
   min_value=-calcula_max(-(m1-max(m1)))[[3]]+max(m1)
