@@ -4,11 +4,11 @@ username:
 account: silvaneojunior
 server: shinyapps.io
 hostUrl: https://api.shinyapps.io/v1
-appId: 5990602
-bundleId: 5909032
+appId: 6314587
+bundleId: 5913263
 url: https://silvaneojunior.shinyapps.io/GDLM/
-when: 1652661357.86351
-lastSyncTime: 1652661357.86351
+when: 1652745127.84042
+lastSyncTime: 1652745127.84042
 asMultiple: FALSE
 asStatic: FALSE
-ignoredFiles: man/hello.Rd
+ignoredFiles: codigo_varicela.R|man/hello.Rd|test.rmd
