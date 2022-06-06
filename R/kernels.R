@@ -149,7 +149,8 @@ poisson_fit <- function(y,m0 = 0, C0 = 1, FF,G,D,W, pop, IC_prob=0.95){
                  FF, G, D,W,
                  pred, var.pred, icl.pred, icu.pred,
                  mts, Cts ,
-                 IC_prob,exp(pop),pop)
+                 IC_prob,exp(pop),pop,
+                 y)
   names(result) <- c("mt",  "Ct",
                      "ft", "qt",
                      "a", "b",
@@ -157,7 +158,8 @@ poisson_fit <- function(y,m0 = 0, C0 = 1, FF,G,D,W, pop, IC_prob=0.95){
                      "FF", "G", "D","W",
                      "pred", "var.pred", "icl.pred", "icu.pred",
                      "mts", "Cts",
-                     "IC_prob",'offset','log_offset')
+                     "IC_prob",'offset','log_offset',
+                     "data_out")
   return(result)
 
 }
@@ -337,7 +339,8 @@ multnom_fit <- function(y,m0=0, C0=1, FF,G,D,W, pop, IC_prob=0.95){
                  FF, G, D,W,
                  mts, Cts ,
                  pred, var.pred, icl.pred, icu.pred,
-                 exp(pop),pop)
+                 exp(pop),pop,
+                 y)
   names(result) <- c("mt",  "Ct",
                      "ft", "Qt",
                      'f_star', 'Q_star',
@@ -346,7 +349,172 @@ multnom_fit <- function(y,m0=0, C0=1, FF,G,D,W, pop, IC_prob=0.95){
                      "FF", "G", "D","W",
                      "mts", "Cts",
                      "pred", "var.pred", "icl.pred", "icu.pred",
-                     'offset','log_offset')
+                     'offset','log_offset',
+                     "data_out")
+  return(result)
+}
+
+normal_filter = function(y,m0,C0,FF,G,D,W,pop=NULL){
+  r=2
+
+  at = (G%*%m0)
+  Pt <-  G%*%C0%*%(t(G))
+  Rt <- as.matrix(D*Pt)+W
+
+  # Previsao em t = 1
+  ft <- (t(FF)%*%at)
+  Qt <- as.matrix(t(FF)%*%Rt%*%FF)
+
+  # minimizando...
+
+  f1=ft[1]
+  f2=ft[2]
+  q1 = Qt[1,1]
+  q2 = Qt[2,2]
+  q12 = Qt[1,2]
+
+  c0=1/(exp(f2 + q2/2)*q1)
+  mu0=f1
+
+  n0=2/q2
+  d0=n0/exp(f2+q2/2)
+
+  tau0=n0/2-1/2
+  tau1=-c0/2
+  tau2=c0*mu0
+  tau3=-(c0*(mu0**2)+d0)/2
+
+  tau0_star  <-  tau0 + 1/2
+  tau1_star  <-  tau1 - 1/2
+  tau2_star  <-  tau2 + y[1]
+  tau3_star  <-  tau3 - y[1]^2
+
+  aux_1=digamma(tau0_star + 0.5) -log(((tau2_star^2)/(4*tau1_star)) - tau3_star)
+
+  # Posteriori
+  f1star <-   -tau2_star/(2*tau1_star)
+  f2star <-   aux_1
+  Q1star <-   (tau2_star^2)/(4*tau1_star^2) - 8*(tau1_star^2)*(tau0_star + 1/2)/(tau2_star^2 - 4*tau1_star*(tau3_star))
+  Q2star <-   trigamma(tau0_star + 0.5) + aux_1^2
+  Q12star <-   (-tau2_star/(2*tau1_star))*aux_1
+
+  fstar <- c(f1star,   f2star)
+  Qstar <- matrix(c( Q1star,  Q12star,  Q12star,  Q2star), byrow =F, ncol = 2)
+
+  At <- Rt%*%FF%*%ginv(Qt)
+  mt <- at + At%*%(fstar -ft)
+  Ct <- Rt +  At%*%(Qstar - Qt)%*%t(At)
+
+  return(list('at'=at,   'Rt'=Rt,
+              'ft'=ft,   'Qt'=Qt,
+              'tau'=c(tau0,tau1,tau2,tau3),     'tau_star'=c(tau0_star,tau1_star,tau2_star,tau3_star),
+              'f_star'=fstar,'Q_star'=Qstar,
+              'At'=At,
+              'mt'=mt,   'Ct'=Ct,
+              'y'=y))
+}
+
+normal_pred=function(filter,IC_prob){
+  c0=-2*filter$tau[2]
+  mu0=filter$tau[3]/c0
+  alpha=(filter$tau[3]**2)/(4*filter$tau[2])-filter$tau[4]
+  beta=filter$tau[1]+0.5
+
+  mu=mu0
+  nu=2*alpha
+  sigma2=beta/(c0*alpha)
+  print(nu)
+
+  pred=mu
+  var.pred=sigma2*nu/(nu-2)
+
+  icl.pred=qt((1-IC_prob)/2,nu)*sqrt(sigma2)+mu
+  icu.pred=qt(1-(1-IC_prob)/2,nu)*sqrt(sigma2)+mu
+
+  list(
+    'pred'     = pred,
+    'var.pred' = var.pred,
+    'icl.pred' = icl.pred,
+    'icu.pred' = icu.pred
+  )
+}
+
+normal_fit <- function(y,m0=0, C0=1, FF,G,D,W, pop, IC_prob=0.95){
+
+  # Definindo quantidades
+  T <- nrow(y)
+  n <- dim(FF)[1]
+
+  D.aux <- D
+  D <- ifelse(D.aux == 0, 1, D.aux)
+  r = 2
+  m0 <- matrix(m0,n,1)
+  C0 <- C0
+  mt <- matrix(0,nrow=n,ncol=T)
+  Ct <- array(rep(diag(n),T),dim=c(n,n,T))
+  Rt <- array(rep(0,T),dim=c(n,n,T))
+  ft <- matrix(0,nrow=T,ncol=r)
+  at <- matrix(0,nrow=n,ncol=T)
+  Qt <-  array(0,dim=c(r,r,T))
+  At <- array(0,dim=c(n,r,T))
+
+  pred <-  matrix(0,r-1,T)
+  var.pred <- array(0,c(r-1,r-1,T))
+  icl.pred <- matrix(0,r-1,T)
+  icu.pred <- matrix(0,r-1,T)
+
+  f_star <- matrix(0,nrow=T,ncol=r)
+  Q_star <- array(0,c(r,r,T))
+
+  mt <- matrix(0,nrow=n,ncol=T)
+  Ct <- array(rep(diag(n),T),dim=c(n,n,T))
+  tau <- matrix(NA,nrow=4,ncol=T)
+  tau_star <- matrix(NA,nrow=4,ncol=T)
+
+  D=ifelse(D==0,1,D)
+
+  last_m=m0
+  last_C=C0
+
+  for(t in 1:T){
+    filter=normal_filter(y[t,],last_m,last_C,FF[,,t] %>% matrix(n,r),G,D[,,t],W[,,t])
+
+    at[,t]         <- filter$at
+    Rt[,,t]        <- filter$Rt
+    ft[t,]         <- filter$ft
+    Qt[,,t]        <- filter$Qt
+    tau[,t]        <- filter$tau
+    tau_star[,t]   <- filter$tau_star
+    f_star[t,]     <- filter$f_star
+    Q_star[,,t]    <- filter$Q_star
+    At[,,t]        <- filter$At
+    mt[,t]         <- filter$mt
+    Ct[,,t]        <- filter$Ct
+
+    last_m=mt[,t]
+    last_C=Ct[,,t]
+
+    prediction=normal_pred(filter,IC_prob)
+
+    pred[,t]      <- prediction$pred
+    var.pred[,,t] <- prediction$var.pred
+    icl.pred[,t]  <- prediction$icl.pred
+    icu.pred[,t]  <- prediction$icu.pred
+  }
+
+  smoothed=generic_smoother(mt,Ct,at,Rt,G)
+  mts <- smoothed$mts
+  Cts <- smoothed$Cts
+
+  result <- list("mt"=mt,  "Ct"=Ct,
+                 "at"=at,  "At"=At, "Rt"=Rt,
+                 "ft"=ft, "Qt"=Qt,
+                 'f_star'=f_star, 'Q_star'=Q_star,
+                 'tau'=tau,'tau_star'=tau_star,
+                 "FF"=FF, "G"=G, "D"=D,"W"=W,
+                 "mts"=mts, "Cts"=Cts,
+                 "pred"=pred, "var.pred"=var.pred, "icl.pred"=icl.pred, "icu.pred"=icu.pred,
+                 "data_out"=y)
   return(result)
 }
 
@@ -362,5 +530,12 @@ multnom_kernel=list('fit'=multnom_fit,
                     'pred'=multnom_pred,
                     'multi_var'=TRUE)
 
+normal_kernel=list('fit'=normal_fit,
+                   'filter'=normal_filter,
+                   'smoother'=generic_smoother,
+                   'pred'=normal_pred,
+                   'multi_var'=FALSE)
+
 kernel_list=list('Poisson (univariada)'=poisson_kernel,
-                 'Multinomial'=multnom_kernel)
+                 'Multinomial'=multnom_kernel,
+                 'Normal'=normal_kernel)

@@ -57,7 +57,6 @@ ajusta_modelo <- function(...,data_out,kernel='Poisson (univariada)',offset=NULL
   model$m0=structure$m0
   model$C0=structure$C0
   model$names=structure$names
-  model$data_out=data_out
   model$kernel=kernel
 
   return(model)

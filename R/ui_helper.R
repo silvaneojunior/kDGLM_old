@@ -15,7 +15,7 @@ create_type_ui=function(index,input,output,reac_vals,model){
 
 create_value_ui=function(index,input,output,reac_vals,model){
   output[['inner_block_value_'%>%paste0(index)]]=renderUI({
-    values_name=input$column_index
+    values_name=reac_vals$Series_n
     if(input[['check_shared_F_'%>%paste0(index)]]){
       num_input=numericInput('value_'%>%paste0(index),paste0('Value:'),value=1)
       create_custom_value_ui(index,input,output,reac_vals,model)
@@ -70,9 +70,9 @@ create_value_ui=function(index,input,output,reac_vals,model){
     })
 
   output[['block_value_'%>%paste0(index)]]=renderUI({
-    values_name=input$column_index
+    values_name=reac_vals$Series_n
     isolate({
-      if(length(input$column_index[!(input$column_index %in% input$ref_multnom)])>1){
+      if(length(values_name[!(values_name %in% input$ref_multnom)])>1){
         state=function(x){x}
       }else{
         state=disabled
@@ -89,7 +89,7 @@ create_value_ui=function(index,input,output,reac_vals,model){
   })
 
   observe({
-    cond=length(input$column_index[!(input$column_index %in% input$ref_multnom)])>1
+    cond=length(reac_vals$Series_n[!(reac_vals$Series_n %in% input$ref_multnom)])>1
     toggleState('check_shared_F_'%>%paste0(index),cond)
     toggleState('check_shared_lat_'%>%paste0(index),cond)
   })

@@ -37,13 +37,12 @@ show_fit=function(model,IC_prob=0.95,smooth=TRUE,dinamic=TRUE,t_offset=0,labels=
   icl.pred<-eval$icl.pred
   icu.pred<-eval$icu.pred
 
+  obs=model$data_out
   if(is.null(labels)){
     labels=c('Serie_' %>% paste0(1:r))
   }
 
-  obs=model$data_out
-
-  obs=cbind(c(1:t_last),obs %>% as.data.frame)
+  obs=cbind(c(1:t_last),obs[,1:r] %>% as.data.frame)
   names(obs)=c('time',labels)
   obs=obs %>% pivot_longer(2:(r+1))
   names(obs)=c('time','Serie','Observation')

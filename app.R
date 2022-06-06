@@ -50,7 +50,7 @@ server=function(input, output) {
       column(8,
              uiOutput('modal_content')),
       column(4,
-             fluidRow(selectInput('kernel','Target variable distribuition',choices=list('Poisson (univariada)','Multinomial'))),
+             fluidRow(selectInput('kernel','Target variable distribuition',choices=list('Poisson (univariada)','Multinomial','Normal'))),
              fluidRow(materialSwitch('by_column','Variables on rows:')),
              fluidRow(materialSwitch('column_name','Column names:',value=TRUE)),
              fluidRow(materialSwitch('row_name','Row names:',value=TRUE)))
@@ -88,6 +88,7 @@ server=function(input, output) {
     return(file)
     })
   data=eventReactive(c(input$y_resp,input$choosed_column,input$ref_multnom),{
+    reac_vals$Series_n=input$column_index
     if(length(dim(raw_data()))>1){
       if(dim(raw_data())[2]>1){
         file=raw_data()[,names(raw_data()) %in% input$column_index]
@@ -100,6 +101,11 @@ server=function(input, output) {
         if(is.null(dim(file))){
           file=data.frame(file)
           names(file)=input$column_index
+          if(input$kernel=='Normal'){
+            file=cbind(file,rep(0,length(file)))
+            names(file)=c(input$column_index,'Variance')
+            reac_vals$Series_n=c(reac_vals$Series_n,'Variance')
+          }
         }
       }else{
         file=raw_data()[,1]
@@ -114,7 +120,7 @@ server=function(input, output) {
     })
 
   model=eventReactive(input$fit_model,{
-    values_name=input$column_index[!(input$column_index %in% input$ref_multnom)]
+    values_name=reac_vals$Series_n[!(reac_vals$Series_n %in% input$ref_multnom)]
     Series_n=dim(data())[2]-ifelse(input$kernel=='Multinomial',1,0)
     Time_length=dim(data())[1]
       aux_func=function(index_i){
@@ -197,7 +203,7 @@ server=function(input, output) {
             show_values_name=''
             name_values_name=''
           }else{
-            values_name=input$column_index[!(input$column_index %in% input$ref_multnom)]
+            values_name=reac_vals$Series_n[!(reac_vals$Series_n %in% input$ref_multnom)]
             show_values_name=paste0('_',values_name)
             name_values_name=paste0(' (',values_name,')')
           }
@@ -236,9 +242,8 @@ server=function(input, output) {
 
   output$forecast_plot=renderPlotly({
       FF=array(0,c(0,dim(model()$FF)[2],input$steps_ahead))
-
       current_fit_input=reac_vals$current_fit_input
-      values_name=current_fit_input$column_index[!(current_fit_input$column_index %in% current_fit_input$ref_multnom)]
+      values_name=current_fit_input$Series_n[!(current_fit_input$Series_n %in% current_fit_input$ref_multnom)]
       Series_n=dim(data())[2]-ifelse(current_fit_input$kernel=='Multinomial',1,0)
 
       for(index_i in reac_vals$current_par_index){
@@ -297,7 +302,7 @@ server=function(input, output) {
       )
   })
 
-  reac_vals=reactiveValues(par_index=c(),data_selected=NULL,current_fit_input=list(),current_par_index=c())
+  reac_vals=reactiveValues(par_index=c(),data_selected=NULL,current_fit_input=list(),current_par_index=c(),Series_n=c())
 
   output$y_resp_input=renderUI({isolate(fileInput('y_resp', 'Select target data:'))})
   output$extra_param=renderUI({
@@ -356,17 +361,21 @@ server=function(input, output) {
 
   output$prediction_plot=renderPlotly({
     req(reac_vals$data_selected)
+    ref_data=data()
+    if(input$kernel=='Normal'){
+      ref_data=ref_data[,-2]
+    }
     #req(input$column_index)
     if(as.numeric(input$fit_model)==0){
-    t_last=ifelse(is.null(dim(data())[1]),length(data()),dim(data())[1])
+    t_last=ifelse(is.null(dim(ref_data)[1]),length(ref_data),dim(ref_data)[1])
 
-    max_value=calcula_max(data()-min(data()))[[3]]+min(data())
-    min_value=-calcula_max(-(data()-max(data())))[[3]]+max(data())
+    max_value=calcula_max(ref_data-min(ref_data))[[3]]+min(ref_data)
+    min_value=-calcula_max(-(ref_data-max(ref_data)))[[3]]+max(ref_data)
 
     date=row.names(raw_data())
     time=c(1:t_last)
 
-    pre_data=cbind(data.frame(time,date),data())
+    pre_data=cbind(data.frame(time,date),ref_data)
 
     plot_data=(pre_data %>% pivot_longer(3:dim(pre_data)[2]))
 
@@ -382,7 +391,7 @@ server=function(input, output) {
 
     return(ggplotly(plt))
     }else{
-      return(show_fit(model(),smooth = F,t_offset=1,dinamic=TRUE,labels=names(data()))$plot)
+      return(show_fit(model(),smooth = F,t_offset=1,dinamic=TRUE,labels=names(ref_data))$plot)
     }
   })
 }
