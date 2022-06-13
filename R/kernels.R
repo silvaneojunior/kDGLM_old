@@ -38,6 +38,44 @@ poisson_filter = function(y,m0,C0,FF,G,D,W,pop){
   a.post <- a + y
   b.post <- b + 1
 
+  gt <- digamma(a.post)-log(b.post)
+  pt <- trigamma(a.post)
+
+  mt <- at+reduc_RFF*as.vector((gt-ft)*(1/(qt)))
+  if(length(qt)>1){
+    Ct <- Rt - (reduc_RFF%*%t(reduc_RFF))%*%diag((1 - pt/qt)*(1/qt))
+  }else{
+    Ct <- Rt - (reduc_RFF%*%t(reduc_RFF))*as.vector((1 - pt/qt)*(1/qt))
+  }
+
+  return(list('at'=at,   'Rt'=Rt,
+              'ft'=ft,   'Qt'=qt,
+              'a'=a,     'b'=b,
+              'a.post'=a,'b.post'=b,
+              'mt'=mt,   'Ct'=Ct,
+              'y'=y))
+}
+
+poisson_LB_filter = function(y,m0,C0,FF,G,D,W,pop){
+  at <- G%*%m0
+  Rt <-G%*%C0%*%(t(G))*D+W
+
+  reduc_RFF=Rt%*%FF
+
+  # Previsão 1 passo a frente
+  ft <- t(FF)%*%at + log(pop)
+  qt <- t(FF)%*%reduc_RFF
+
+  # Compatibilizando prioris
+
+  a <- (1/qt)
+  b <- (exp(-ft -0.5*qt)/(qt))
+
+  # Posteriori
+
+  a.post <- a + y
+  b.post <- b + 1
+
   gt <- log(a.post/b.post) + 1/(2*a.post)
   pt <- (2*a.post-1)/(2*a.post^2)
 
@@ -84,7 +122,7 @@ poisson_fit <- function(y,m0 = 0, C0 = 1, FF,G,D,W, pop, IC_prob=0.95){
   qt <-  array(0,dim=c(r,r,T))
 
   # Definindo objetos
-  r=1
+  #r=1
   at <- matrix(0, nrow=n, ncol=T)
   mt <- matrix(0, nrow=n, ncol=T)
   ft <- matrix(0, nrow=r, ncol=T)
