@@ -1,6 +1,24 @@
-# library(Matrix)   # Pode ser substituido pela bilbioteca Matrix.
-# library(tidyr)
-# library(dplyr)
+# Plotting stuff
+library(ggplot2)
+library(plotly)
+
+# Manipulation  stuff
+library(Matrix)
+library(tidyr)
+library(dplyr)
+library(purrr)
+library(stringr)
+library(abind)
+
+# Misc stuff
+library(hms)
+library(beepr)
+library(latex2exp)
+
+# Math stuff
+library(rootSolve)
+library(MASS)
+
 
 source('R/plot_helper.R')
 source('R/structure_helper.R')

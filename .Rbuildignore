@@ -1,2 +1,5 @@
 ^.*\.Rproj$
 ^\.Rproj\.user$
+aux_app/*
+Multinom/*
+reports/*
