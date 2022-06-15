@@ -22,10 +22,13 @@ library(kableExtra)
 library(DT)
 library(scales)
 
+library(plotly)
+library(ggplot2)
+
 library(shiny)
 library(shinythemes)
 
-source(getwd() %>% paste0('/R/main.R'))
+library(GDLM)
 
 # Ajustando os dados
 
@@ -37,7 +40,7 @@ dados=aggregate(.~FaixaEtaria,dados,sum)
 labels=dados[,1]
 dados=dados[,-1]
 
-pre_exp=read.csv('data/populacao 2000-2020.csv')[-12,c(1,10:22)]
+pre_exp=read.csv2('data/populacao 2000-2020.csv')[-12,c(1,10:22)]
 pre_exp[4:7,1]='15 a 49 anos'
 pre_exp[8:11,1]='50 anos e mais'
 pre_exp=aggregate(.~FaixaEtaria,pre_exp,sum)[,-1]
