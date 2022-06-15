@@ -1,3 +1,24 @@
+# Plotting stuff
+library(ggplot2)
+library(plotly)
+
+# Manipulation  stuff
+library(Matrix)
+library(tidyr)
+library(dplyr)
+library(purrr)
+library(stringr)
+library(abind)
+
+# Misc stuff
+library(hms)
+library(beepr)
+library(latex2exp)
+
+# Math stuff
+library(rootSolve)
+library(MASS)
+
 gera_bloco_poly <- function(order,value=1,name='Var_Poly',D=1,m0=0,C0=1,W=0){
   G=diag(order)
   t=ifelse(is.null(dim(value)),length(value),dim(value)[2])

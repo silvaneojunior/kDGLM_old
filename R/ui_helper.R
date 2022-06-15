@@ -1,3 +1,24 @@
+# Plotting stuff
+library(ggplot2)
+library(plotly)
+
+# Manipulation  stuff
+library(Matrix)
+library(tidyr)
+library(dplyr)
+library(purrr)
+library(stringr)
+library(abind)
+
+# Misc stuff
+library(hms)
+library(beepr)
+library(latex2exp)
+
+# Math stuff
+library(rootSolve)
+library(MASS)
+
 create_order_ui=function(index,input,output,reac_vals,model){
   output[['block_order_'%>%paste0(index)]]=renderUI({
     numericInput(paste0('order_',index),

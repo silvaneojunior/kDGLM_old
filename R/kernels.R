@@ -1,3 +1,24 @@
+# Plotting stuff
+library(ggplot2)
+library(plotly)
+
+# Manipulation  stuff
+library(Matrix)
+library(tidyr)
+library(dplyr)
+library(purrr)
+library(stringr)
+library(abind)
+
+# Misc stuff
+library(hms)
+library(beepr)
+library(latex2exp)
+
+# Math stuff
+library(rootSolve)
+library(MASS)
+
 generic_smoother= function(mt,Ct,at,Rt,G){
   T=dim(mt)[2]
   n=dim(mt)[1]
@@ -225,7 +246,7 @@ multnom_filter = function(y,m0,C0,FF,G,D,W,pop=NULL){
 
   parms = list('ft'=ft, 'media.log'=media.log)
 
-  ss1 <- rootSolve::multiroot(f = system_multinom , start = c(rep(0.01,r),0.01*(r+1)), parms = parms)
+  ss1 <- multiroot(f = system_multinom , start = c(rep(0.01,r),0.01*(r+1)), parms = parms)
 
   tau <- as.numeric(ss1$root)
 
