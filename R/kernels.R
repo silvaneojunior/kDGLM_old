@@ -23,13 +23,13 @@ library(MASS)
 #'
 #' Generic smoother for all models.
 #'
-#' @param mt A matrix containing the filtered mean of the latent variables at each time. Each row should represent one variable.
-#' @param Ct A 3D-array representing the filtered covariance matrix of the latent variables at each time. The third dimension should represent the time index.
-#' @param at A matrix containing the one-step-ahead mean of the latent variables at each time based upon the filtered mean. Each row should represent one variable.
-#' @param Rt A 3D-array representing the one-step-ahead covariance matrix of the latent variables at each time based upon the filtered covariance matrix. The third dimension should represent the time index.
-#' @param G  A matrix representing the transition matrix of the model.
+#' @param mt Matrix: A matrix containing the filtered mean of the latent variables at each time. Each row should represent one variable.
+#' @param Ct Array: A 3D-array representing the filtered covariance matrix of the latent variables at each time. The third dimension should represent the time index.
+#' @param at Matrix: A matrix containing the one-step-ahead mean of the latent variables at each time based upon the filtered mean. Each row should represent one variable.
+#' @param Rt Array: A 3D-array representing the one-step-ahead covariance matrix of the latent variables at each time based upon the filtered covariance matrix. The third dimension should represent the time index.
+#' @param G  Matrix: A matrix representing the transition matrix of the model.
 #'
-#' @return The smoothed mean (mts) and covariance (Cts) of the latent variables at each time. Their dimension follows, respectivelly, the dimensions of mt and Ct.
+#' @return List: The smoothed mean (mts) and covariance (Cts) of the latent variables at each time. Their dimension follows, respectivelly, the dimensions of mt and Ct.
 #' @export
 #'
 #' @examples
@@ -130,6 +130,20 @@ poisson_filter = function(y,m0,C0,FF,G,D,W,offset){
               'y'=y))
 }
 
+#' Title
+#'
+#' @param y
+#' @param m0
+#' @param C0
+#' @param FF
+#' @param G
+#' @param D
+#' @param W
+#' @param pop
+#'
+#' @return
+#'
+#' @examples
 poisson_LB_filter = function(y,m0,C0,FF,G,D,W,pop){
   at <- G%*%m0
   Rt <-G%*%C0%*%(t(G))*D+W
