@@ -19,6 +19,29 @@ library(latex2exp)
 library(rootSolve)
 library(MASS)
 
+#' generic_smoother
+#'
+#' Generic smoother for all models.
+#'
+#' @param mt A matrix containing the filtered mean of the latent variables at each time. Each row should represent one variable.
+#' @param Ct A 3D-array representing the filtered covariance matrix of the latent variables at each time. The third dimension should represent the time index.
+#' @param at A matrix containing the one-step-ahead mean of the latent variables at each time based upon the filtered mean. Each row should represent one variable.
+#' @param Rt A 3D-array representing the one-step-ahead covariance matrix of the latent variables at each time based upon the filtered covariance matrix. The third dimension should represent the time index.
+#' @param G  A matrix representing the transition matrix of the model.
+#'
+#' @return The smoothed mean (mts) and covariance (Cts) of the latent variables at each time. Their dimension follows, respectivelly, the dimensions of mt and Ct.
+#' @export
+#'
+#' @examples
+#' T=20
+#'
+#' mt=matrix(c(cumsum(rnorm(T)+1),rep(1,T)),2,T,byrow=TRUE)
+#' Ct=array(diag(c(1,1)),c(2,2,T))
+#' G=matrix(c(1,0,1,1),2,2)
+#' at=G%*%mt
+#' Rt=array(G%*%t(G)+diag(c(0.1,0.1)),c(2,2,T))
+#'
+#' smoothed_values=generic_smoother(mt,Ct,at,Rt,G)
 generic_smoother= function(mt,Ct,at,Rt,G){
   T=dim(mt)[2]
   n=dim(mt)[1]
@@ -39,25 +62,55 @@ generic_smoother= function(mt,Ct,at,Rt,G){
   return(list('mts'=mts,'Cts'=Cts))
 }
 
-poisson_filter = function(y,m0,C0,FF,G,D,W,pop){
+#' poisson_filter
+#'
+#' Filtering function for the Poisson model.
+#'
+#' @param y Vector: The observed value at time t.
+#' @param m0 Vector: The prior mean for the latent vector at time t.
+#' @param C0 Matrix: The prior covariance matrix for the latent vector at time t.
+#' @param FF Matrix: The regression matrix at time t. Should be compatible with the dimensions of m0 and y, i.e., if m0 has dimension n and y has dimension m, FF should be n x m.
+#' @param G Matrix: The state evolution matrix.
+#' @param D Matrix: The discount factor matrix at time t.
+#' @param W Matrix: The noise matrix at time t.
+#' @param pop Vector: Same dimension as y. A vector contaning the offset at time t.
+#'
+#' @return A list containing:
+#' - at: One-step-ahead mean for the latent vectors.
+#' - Rt: One-step-ahead covariance matrix for the latent vectors.
+#' - ft: One-step-ahead linear predictor.
+#' - qt: One-step-ahead covariance matrix for the linear predictior.
+#' - a: The \alpha parameter of the compatibilized gamma prior (see Ref. Raíra).
+#' - b: The \beta parameter of the compatibilized gamma prior (see Ref. Raíra).
+#' - a.post: The \alpha parameter of the gamma posteirior (see Ref. Raíra).
+#' - b.post: The \beta parameter of the gamma posteirior (see Ref. Raíra).
+#' - mt: The filtered mean of the latent vector at time t.
+#' - Ct: The filtered covariance matrix of the latent vector at time t.
+#' - y: The observed value at time t.
+#' @export
+#'
+#' @examples
+poisson_filter = function(y,m0,C0,FF,G,D,W,offset){
   at <- G%*%m0
   Rt <-G%*%C0%*%(t(G))*D+W
 
   reduc_RFF=Rt%*%FF
 
-  # Previsão 1 passo a frente
-  ft <- t(FF)%*%at + log(pop)
+  # One-step-ahead prediction
+  ft <- t(FF)%*%at + log(offset)
   qt <- t(FF)%*%reduc_RFF
 
-  # Compatibilizando prioris
+  # Compatibilizing priors
 
   a <- (1/qt)
   b <- (exp(-ft -0.5*qt)/(qt))
 
-  # Posteriori
+  # Calculating posterior
 
   a.post <- a + y
   b.post <- b + 1
+
+  # Compatibilizing posterior
 
   gt <- digamma(a.post)-log(b.post)
   pt <- trigamma(a.post)
@@ -223,6 +276,22 @@ poisson_fit <- function(y,m0 = 0, C0 = 1, FF,G,D,W, pop, IC_prob=0.95){
 
 }
 
+#' multnom_filter
+#'
+#' @param y
+#' @param m0
+#' @param C0
+#' @param FF
+#' @param G
+#' @param D
+#' @param W
+#' @param pop
+#'
+#' @return
+#' @importFrom(rootSolve,multiroot)
+#' @export
+#'
+#' @examples
 multnom_filter = function(y,m0,C0,FF,G,D,W,pop=NULL){
   r=dim(FF)[2]
 
@@ -435,7 +504,24 @@ normal_filter = function(y,m0,C0,FF,G,D,W,pop=NULL){
   c0=1/(exp(f2 + q2/2)*q1)
   mu0=f1
 
-  n0=2/q2
+  # n0=2/q2
+  parms = c(q2)
+  model_tau <- function(x, parms){
+    output=c(
+      F4 =  -digamma(exp(x[1])/2)+x[1]-q2/2-log(2)
+    )
+    return(output)
+  }
+  jacfunc=function(x,parms){
+    jac=matrix(c(-0.5*exp(x[1])*trigamma(exp(x[1])/2)+1),
+               1,1)
+    return(jac)
+  }
+
+  ss1 <- multiroot(f = model_tau , start = c(0), parms = parms,jacfunc = jacfunc, jactype='fullusr', rtol = 1e-40)
+  n0=exp(ss1$root[1])
+
+  #print(exp(-f2-q2/2))
   d0=n0/exp(f2+q2/2)
 
   tau0=n0/2-1/2
@@ -443,19 +529,27 @@ normal_filter = function(y,m0,C0,FF,G,D,W,pop=NULL){
   tau2=c0*mu0
   tau3=-(c0*(mu0**2)+d0)/2
 
+  # parms = c(f1,f2, q1, q2)
+  #
+  # model_tau <- function(x, parms) c(
+  #   F1 =  (q1 + f1^2)*exp(f2 + q2/2) - ((2*x[1] + 1)*x[3]^2)/(2*x[2]*(x[3]^2) - 8*(x[2]^2)*x[4]) + 1/(2*x[2])  ,
+  #   F2 =  f1*exp(f2 + q2/2) + (2*x[1] + 1)*x[3]/(x[3]^2 - 4*x[2]*x[4]),
+  #   F3 =  exp(f2 + 0.5*q2) - 4*x[2]*(x[1] + 1/2)/(x[3]^2 - 4*x[2]*x[4]),
+  #   F4 =  f2 -digamma(x[1]+ 1/2) + log(x[3]^2/(4*x[2]) -x[4]))
+  #
+  # print(model_tau(x=c(tau0,tau1,tau2,tau3),parms=parms))
+
   tau0_star  <-  tau0 + 1/2
   tau1_star  <-  tau1 - 1/2
   tau2_star  <-  tau2 + y[1]
   tau3_star  <-  tau3 - y[1]^2
 
-  aux_1=digamma(tau0_star + 0.5) -log(((tau2_star^2)/(4*tau1_star)) - tau3_star)
-
   # Posteriori
   f1star <-   -tau2_star/(2*tau1_star)
-  f2star <-   aux_1
-  Q1star <-   (tau2_star^2)/(4*tau1_star^2) - 8*(tau1_star^2)*(tau0_star + 1/2)/(tau2_star^2 - 4*tau1_star*(tau3_star))
-  Q2star <-   trigamma(tau0_star + 0.5) + aux_1^2
-  Q12star <-   (-tau2_star/(2*tau1_star))*aux_1
+  f2star <-   digamma(tau0_star + 0.5) -log(((tau2_star^2)/(4*tau1_star)) - tau3_star)
+  Q1star <-   f1star**2 - 8*(tau1_star^2)*(tau0_star + 1/2)/(tau2_star^2 - 4*tau1_star*(tau3_star))
+  Q2star <-   trigamma(tau0_star + 0.5) + f2star**2
+  Q12star<-   f1star*f2star
 
   fstar <- c(f1star,   f2star)
   Qstar <- matrix(c( Q1star,  Q12star,  Q12star,  Q2star), byrow =F, ncol = 2)
@@ -482,7 +576,7 @@ normal_pred=function(filter,IC_prob){
   mu=mu0
   nu=2*alpha
   sigma2=beta/(c0*alpha)
-  print(nu)
+  # print(nu)
 
   pred=mu
   var.pred=sigma2*nu/(nu-2)

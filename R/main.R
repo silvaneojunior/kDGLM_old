@@ -20,9 +20,9 @@ library(rootSolve)
 library(MASS)
 
 
-#source('R/plot_helper.R')
-#source('R/structure_helper.R')
-#source('R/kernels.R')
+source('R/plot_helper.R')
+source('R/structure_helper.R')
+source('R/kernels.R')
 
 ajusta_modelo <- function(...,data_out,kernel='Poisson (univariada)',offset=NULL,log_offset=NULL){
   if(typeof(kernel)==typeof('kernel')){
