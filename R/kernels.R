@@ -76,20 +76,32 @@ generic_smoother= function(mt,Ct,at,Rt,G){
 #' @param pop Vector: Same dimension as y. A vector contaning the offset at time t.
 #'
 #' @return A list containing:
-#' \n- at: One-step-ahead mean for the latent vectors.
-#' \n- Rt: One-step-ahead covariance matrix for the latent vectors.
-#' \n- ft: One-step-ahead linear predictor.
-#' \n- qt: One-step-ahead covariance matrix for the linear predictior.
-#' \n- a: The alpha parameter of the compatibilized gamma prior (see Ref. Raíra).
-#' \n- b: The beta parameter of the compatibilized gamma prior (see Ref. Raíra).
-#' \n- a.post: The alpha parameter of the gamma posteirior (see Ref. Raíra).
-#' \n- b.post: The beta parameter of the gamma posteirior (see Ref. Raíra).
-#' \n- mt: The filtered mean of the latent vector at time t.
-#' \n- Ct: The filtered covariance matrix of the latent vector at time t.
-#' \n- y: The observed value at time t.
+#' \itemize{
+#'  \item at: One-step-ahead mean for the latent vectors.
+#'  \item Rt: One-step-ahead covariance matrix for the latent vectors.
+#'  \item ft: One-step-ahead linear predictor.
+#'  \item qt: One-step-ahead covariance matrix for the linear predictior.
+#'  \item a: The alpha parameter of the compatibilized gamma prior (see Ref. Raíra).
+#'  \item b: The beta parameter of the compatibilized gamma prior (see Ref. Raíra).
+#'  \item a.post: The alpha parameter of the gamma posteirior (see Ref. Raíra).
+#'  \item b.post: The beta parameter of the gamma posteirior (see Ref. Raíra).
+#'  \item mt: The filtered mean of the latent vector at time t.
+#'  \item Ct: The filtered covariance matrix of the latent vector at time t.
+#'  \item y: The observed value at time t.
+#'  }
 #' @export
 #'
 #' @examples
+#' y=5
+#' m0=c(4,1)
+#' C0=diag(c(1,1))
+#' G=matrix(c(1,0,1,1),2,2)
+#' FF=matrix(c(1,0),2,1)
+#' D=diag(c(0.1,0.1),2,2)+1
+#' W=diag(c(0,0),2,2)
+#' offset=1
+#'
+#' filtered_data=poisson_filter(y,m0,C0,FF,G,D,W,offset)
 poisson_filter = function(y,m0,C0,FF,G,D,W,offset){
   at <- G%*%m0
   Rt <-G%*%C0%*%(t(G))*D+W
@@ -125,7 +137,7 @@ poisson_filter = function(y,m0,C0,FF,G,D,W,offset){
   return(list('at'=at,   'Rt'=Rt,
               'ft'=ft,   'Qt'=qt,
               'a'=a,     'b'=b,
-              'a.post'=a,'b.post'=b,
+              'a.post'=a.post,'b.post'=b.post,
               'mt'=mt,   'Ct'=Ct,
               'y'=y))
 }
@@ -189,10 +201,63 @@ poisson_pred=function(filter,IC_prob){
   )
 }
 
-poisson_fit <- function(y,m0 = 0, C0 = 1, FF,G,D,W, pop, IC_prob=0.95){
-
-  # Definindo quantidades
-
+#' poisson_fit
+#'
+#' @param y Matrix: The observed data. It's dimension shoulb be T x m, where T is the length of the time series and m is the number of outcomes at each time.
+#' @param m0 Vector: The prior mean for the latent vector.
+#' @param C0 Matrix: The prior covariance matrix for the latent vector.
+#' @param FF Array: A 3D-array containing the regression matrix for each time. It's dimension should be n x m x T, where n is the number of latent variables, m is the number of outcomes in the model and T is the time series length.
+#' @param G Matrix: The state evolution matrix.
+#' @param D Array: A 3D-array containing the discount factor matrix for each time. It's dimension should be n x n x T, where n is the number of latent variables and T is the time series length.
+#' @param W Array: A 3D-array containing the covariance matrix of the noise for each time. It's dimension should be the same as D.
+#' @param offset Matrix: The offset of the model. It's dimension should be the same as y.
+#' @param IC_prob Numeric: Deprecated.
+#'
+#' @return A list containing the following values:
+#' \itemize{
+#'    \item mt Matrix: The filtered mean of the latent variables for each time. Dimensions are n x T.
+#'    \item Ct Array: A 3D-array containing the filtered covariance matrix of the latent variable for each time. Dimensions are n x n x T.
+#'    \item ft Matrix: The one-step-ahead linear predictor for each time. Dimensions are m x T.
+#'    \item qt Array: A 3D-array containing the one-step-ahead covariance matrix for the linear predictor for each time. Dimensions are m x T.
+#'    \item a Matrix: The alpha parameter for the gamma prior for each time. Dimensions are m x T.
+#'    \item b Matrix: The beta parameter for the gamma prior for each time. Dimensions are m x T.
+#'    \item a.post Matrix: The alpha parameter for the gamma posteior for each time. Dimensions are m x T.
+#'    \item b.post Matrix: The beta parameter for the gamma posteior for each time. Dimensions are m x T.
+#'    \item FF Array: The same as the argument (same values).
+#'    \item G Matrix: The same as the argument (same values).
+#'    \item D Array: The same as the argument (same values).
+#'    \item W Array: The same as the argument (same values).
+#'    \item pred Matrix: The one-step-ahead predictions for each time. Dimensions are m x T.
+#'    \item var.pred Matrix: The variance for the one-step-ahead predictions for each time. Dimensions are m x T. Note that, in the multivariate Poisson case, the series are supossed independent, so, in particular, they are uncorrelated.
+#'    \item icl.pred Matrix: The lower credibility interval for the prediction at each time. Dimensions are m x T.
+#'    \item icu.pred Matrix: The upper credibility interval for the prediction at each time. Dimensions are m x T.
+#'    \item mts Matrix: The smoothed mean of the latent variables for each time. Dimensions are n x T.
+#'    \item Cts Array: A 3D-array containing the smoothed covariance matrix of the latent variable for each time. Dimensions are n x n x T.
+#'    \item IC_prob Numeric: Deprecated
+#'    \item offset Vector: The same as the argument (same values).
+#'    \item log_offset Vector: The log offset.
+#'    \item data_out Matrix: The same as the argument y (same values).
+#' }
+#' @export
+#'
+#' @examples
+#' # Not ideal way: should use fit_model function.
+#' T=200
+#' w=(200/40)*2*pi
+#' y= matrix(rpois(T,20*(sin(w*1:T/T)+2)),T,1)
+#' m0=c(0,0,0)
+#' C0=diag(c(1,1,1))
+#' G=as.matrix(Matrix::bdiag(1,matrix(c(cos(w),sin(w),-sin(w),cos(w)),2,2)))
+#' FF=array(matrix(c(1,1,0),3,1),c(3,1,T))
+#' D=array(diag(c(0.1,0,0)),c(3,3,T))+1
+#' W=array(diag(c(0,0,0)),c(3,3,T))
+#' offset=matrix(1,T,1)
+#'
+#' filtered_data=GDLM::poisson_fit(y=y,m0 = m0, C0 = C0, FF=FF,G=G,D=D,W=W, offset=offset, IC_prob=0.95)
+#'
+#' plot(y)
+#' lines(filtered_data$pred[1,])
+poisson_fit <- function(y,m0 = 0, C0 = 1, FF,G,D,W, offset, IC_prob=0.95){
   T <- dim(y)[1]
   n <- dim(FF)[1]
   r <- dim(FF)[2]
@@ -209,7 +274,6 @@ poisson_fit <- function(y,m0 = 0, C0 = 1, FF,G,D,W, pop, IC_prob=0.95){
   at <- matrix(0,nrow=n,ncol=T)
   qt <-  array(0,dim=c(r,r,T))
 
-  # Definindo objetos
   #r=1
   at <- matrix(0, nrow=n, ncol=T)
   mt <- matrix(0, nrow=n, ncol=T)
@@ -219,30 +283,28 @@ poisson_fit <- function(y,m0 = 0, C0 = 1, FF,G,D,W, pop, IC_prob=0.95){
   Rt <- array(rep(diag(n),T),dim=c(n,n,T))
   pred = var.pred = icl.pred = icu.pred = matrix(0, nrow=r, ncol=T)
   media.post = var.post = icu.post = icl.post = matrix(0, nrow=r, ncol=T)
-  a = b= rep(0,T)
-  a.post = b.post = rep(0,T)
+  a = b = matrix(0,r,T)
+  a.post = b.post = matrix(0,r,T)
 
   norm_ic=qnorm(1-(1-IC_prob)/2)
 
-  ## Algoritmo
-
-  # Priori
+  # Prior
 
   last_m=m0
   last_C=C0
 
   start<- proc.time()
   for(t in 1:T){
-    filter=poisson_filter(y[t,],last_m,last_C,FF[,,t],G,D[,,t],W[,,t],pop[t])
+    filter=poisson_filter(y[t,],last_m,last_C,FF[,,t],G,D[,,t],W[,,t],offset[t,])
 
     at[,t]  <- filter$at
     Rt[,,t] <- filter$Rt
     ft[,t]  <- filter$ft
     qt[,t]  <- filter$Qt
-    a[t]  <- filter$a
-    b[t] <- filter$b
-    a.post[t]  <- filter$a.post
-    b.post[t] <- filter$b.post
+    a[,t]  <- filter$a
+    b[,t] <- filter$b
+    a.post[,t]  <- filter$a.post
+    b.post[,t] <- filter$b.post
     mt[,t]  <- filter$mt
     Ct[,,t] <- filter$Ct
 
@@ -253,8 +315,6 @@ poisson_fit <- function(y,m0 = 0, C0 = 1, FF,G,D,W, pop, IC_prob=0.95){
     var.post[t] <- a.post[t]/(b.post[t]^2)
     icu.post[t] <- media.post[t] + norm_ic*sqrt(var.post[t])
     icl.post[t] <- media.post[t] - norm_ic*sqrt(var.post[t])
-
-    # Preditiva em t = 1
 
     prediction=poisson_pred(filter,IC_prob)
 
@@ -275,7 +335,7 @@ poisson_fit <- function(y,m0 = 0, C0 = 1, FF,G,D,W, pop, IC_prob=0.95){
                  FF, G, D,W,
                  pred, var.pred, icl.pred, icu.pred,
                  mts, Cts ,
-                 IC_prob,exp(pop),pop,
+                 IC_prob,exp(offset),offset,
                  y)
   names(result) <- c("mt",  "Ct",
                      "ft", "qt",

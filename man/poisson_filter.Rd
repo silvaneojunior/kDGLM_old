@@ -25,18 +25,32 @@ poisson_filter(y, m0, C0, FF, G, D, W, offset)
 }
 \value{
 A list containing:
-\n- at: One-step-ahead mean for the latent vectors.
-\n- Rt: One-step-ahead covariance matrix for the latent vectors.
-\n- ft: One-step-ahead linear predictor.
-\n- qt: One-step-ahead covariance matrix for the linear predictior.
-\n- a: The alpha parameter of the compatibilized gamma prior (see Ref. Raíra).
-\n- b: The beta parameter of the compatibilized gamma prior (see Ref. Raíra).
-\n- a.post: The alpha parameter of the gamma posteirior (see Ref. Raíra).
-\n- b.post: The beta parameter of the gamma posteirior (see Ref. Raíra).
-\n- mt: The filtered mean of the latent vector at time t.
-\n- Ct: The filtered covariance matrix of the latent vector at time t.
-\n- y: The observed value at time t.
+\itemize{
+ \item at: One-step-ahead mean for the latent vectors.
+ \item Rt: One-step-ahead covariance matrix for the latent vectors.
+ \item ft: One-step-ahead linear predictor.
+ \item qt: One-step-ahead covariance matrix for the linear predictior.
+ \item a: The alpha parameter of the compatibilized gamma prior (see Ref. Raíra).
+ \item b: The beta parameter of the compatibilized gamma prior (see Ref. Raíra).
+ \item a.post: The alpha parameter of the gamma posteirior (see Ref. Raíra).
+ \item b.post: The beta parameter of the gamma posteirior (see Ref. Raíra).
+ \item mt: The filtered mean of the latent vector at time t.
+ \item Ct: The filtered covariance matrix of the latent vector at time t.
+ \item y: The observed value at time t.
+ }
 }
 \description{
 Filtering function for the Poisson model.
+}
+\examples{
+y=5
+m0=c(4,1)
+C0=diag(c(1,1))
+G=matrix(c(1,0,1,1),2,2)
+FF=matrix(c(1,0),2,1)
+D=diag(c(0.1,0.1),2,2)+1
+W=diag(c(0,0),2,2)
+offset=1
+
+filtered_data=poisson_filter(y,m0,C0,FF,G,D,W,offset)
 }
