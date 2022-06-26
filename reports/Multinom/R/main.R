@@ -1,3 +1,11 @@
+# library(Matrix)   # Pode ser substituido pela bilbioteca Matrix.
+# library(tidyr)
+# library(dplyr)
+
+source('R/plot_helper.R')
+source('R/structure_helper.R')
+source('R/kernels.R')
+
 ajusta_modelo <- function(...,data_out,kernel='Poisson (univariada)',offset=NULL,log_offset=NULL){
   if(typeof(kernel)==typeof('kernel')){
     kernel=kernel_list[[kernel]]
@@ -44,7 +52,7 @@ ajusta_modelo <- function(...,data_out,kernel='Poisson (univariada)',offset=NULL
                G=structure$G,
                D=structure$D,
                W=structure$W,
-               offset=offset)
+               pop=offset)
 
   model$m0=structure$m0
   model$C0=structure$C0

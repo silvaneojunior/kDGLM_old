@@ -1,3 +1,7 @@
+# library(ggplot2)
+# library(plotly)
+# library(latex2exp)
+
 calcula_max=function(pre_max){
   if(length(pre_max)==0 | sum(pre_max**2)<10**-20){
     pre_max=1
@@ -67,9 +71,9 @@ show_fit=function(model,IC_prob=0.95,smooth=TRUE,dinamic=TRUE,t_offset=0,labels=
   min_value=-calcula_max(-(model$data_out-max(model$data_out)))[[3]]+max(model$data_out)
 
   plt=ggplot(plot_data)+
-    geom_ribbon(aes(x=time,ymin=I.C.lower,ymax=I.C.upper,fill=Serie,color=Serie,linetype='Fitted values'),alpha=0.25)+
-    geom_line(aes(x=time,y=Prediction,color=Serie,fill=Serie,linetype='Fitted values'))+
-    geom_point(aes(x=time,y=Observation,color=Serie,fill=Serie),alpha=0.5)+
+    geom_point(aes(x=time,y=Observation,color=Serie,fill=Serie))+
+    geom_ribbon(aes(x=time,ymin=I.C.lower,ymax=I.C.upper,fill=Serie,color=Serie),alpha=0.25)+
+    geom_line(aes(x=time,y=Prediction,color=Serie,fill=Serie))+
     scale_fill_hue('',na.value=NA)+
     scale_color_hue('',na.value=NA)+
     scale_y_continuous(name='$y_t$')+

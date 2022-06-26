@@ -28,7 +28,16 @@ library(ggplot2)
 library(shiny)
 library(shinythemes)
 
-library(GDLM)
+library(MASS)
+library(rootSolve)
+library(tidyr)
+library(dplyr)
+
+# library(GDLM)
+source('R/main.R')
+source('R/kernels.R')
+source('R/plot_helper.R')
+source('R/structure_helper.R')
 
 # Ajustando os dados
 
