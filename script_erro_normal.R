@@ -50,7 +50,7 @@ resultado=ajusta_modelo(nivel_mu_bloc,nivel_sig_bloc,
 # Essas funções auxiliam na vizualização dos dados
 # show_fit mostra o ajuste (pode ser suavizado, filtrado ou a previsão k passos a frente)
 # para a previsão k passos a frente coloque smooth=FALSE e offset=k
-show_fit(resultado,smooth=TRUE)$plot
+show_fit(resultado,smooth=FALSE)$plot
 # plot_lat_var exibe o valor estimado das variáveis latentes.
 # o argumento var deve ser igual ao nome do bloco (argumento name).
 # smooth indica se o valor exibido deve ser filtrado ou suavizado

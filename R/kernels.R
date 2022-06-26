@@ -797,7 +797,7 @@ normal_pred=function(filter,IC_prob){
 
   mu=mu0
   nu=2*alpha
-  sigma2=beta/(c0*alpha)
+  sigma2=(beta/alpha)+filter$Qt[1,1]
   # print(nu)
 
   pred=mu
