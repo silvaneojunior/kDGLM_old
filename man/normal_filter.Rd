@@ -41,14 +41,13 @@ A list containing:
 Filtering function for the Normal model with unknown variance.
 }
 \examples{
-y=c(3,2,5)
-m0=log(c(0.5,0.5))
-C0=diag(c(1,1))
+y=c(rnorm(1,0,1),0)
+m0=c(2,-log(1.1))
+C0=diag(2)
 G=matrix(c(1,0,0,1),2,2)
 FF=matrix(c(1,0,0,1),2,2)
 D=diag(c(0.1,0.1),2,2)+1
 W=diag(c(0,0),2,2)
-offset=c(1,1,1)
-
-filtered_data=GDLM::multnom_filter(y,m0,C0,FF,G,D,W,offset)
+offset=c(0)
+filtered_data=GDLM::normal_filter(y,m0,C0,FF,G,D,W,offset)
 }

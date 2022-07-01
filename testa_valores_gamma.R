@@ -23,7 +23,7 @@ T=length(data)
 data=data.frame(mu=data,phi=rep(0,T)) %>% as.matrix
 
 # GDLM
-values=c(70:100)/100
+values=c(700:1000)/1000
 erros=rep(0,length(values))
 
 # Ainda n fiz documentação das funções usadas nesse script, por isso estou incluindo comentários explicando o básico.
@@ -59,8 +59,8 @@ for(i in 1:length(values)){
   erros[i]=sum(resultado$log.vero)
 }
 
-plot(values,erros)
-
+plot(values,erros,type='l')
+points(values,erros,type='p',pch='O',cex=0.5)
 
 # Testa ajuste para um valor de gamma
 nivel_sig_bloc$G=0.9

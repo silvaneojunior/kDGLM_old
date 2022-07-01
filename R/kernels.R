@@ -768,11 +768,18 @@ normal_filter = function(y,m0,C0,FF,G,D,W,offset=NULL){
   tau2_star  <-  tau2 + y[1]
   tau3_star  <-  tau3 - y[1]^2
 
+  c1=-2*tau1_star
+  m1=-0.5*tau2_star/tau1_star
+  d1=2*((tau2_star**2)/(4*tau1_star)-tau3_star)
+  n1=2*tau0_star+1
+
   # Posteriori
   f1star <-   -tau2_star/(2*tau1_star)
-  f2star <-   digamma(tau0_star + 0.5) -log(((tau2_star^2)/(4*tau1_star)) - tau3_star)
-  Q1star <-   f1star**2 - 8*(tau1_star^2)*(tau0_star + 1/2)/(tau2_star^2 - 4*tau1_star*(tau3_star))
-  Q2star <-   trigamma(tau0_star + 0.5) + f2star**2
+  f2star <-   digamma(tau0_star + 0.5) -log((tau2_star^2)/(4*tau1_star) - tau3_star)
+  # Q1star <-   f1star**2 - 8*(tau1_star^2)*(tau0_star + 1/2)/(tau2_star^2 - 4*tau1_star*(tau3_star))
+  # Q2star <-   trigamma(tau0_star + 0.5) + f2star**2
+  Q2star <-   2*(log(n1/d1)-f2star)
+  Q1star <-   -1/(2*tau1_star*exp(f2star+Q2star/2))
   Q12star<-   f1star*f2star
 
   fstar <- c(f1star,   f2star)
@@ -896,24 +903,28 @@ normal_fit <- function(y,m0=0, C0=1, FF,G,D,W, offset, IC_prob=0.95){
   return(result)
 }
 
+#' @export
 poisson_kernel=list('fit'=poisson_fit,
                     'filter'=poisson_filter,
                     'smoother'=generic_smoother,
                     'pred'=poisson_pred,
                     'multi_var'=TRUE)
 
+#' @export
 multnom_kernel=list('fit'=multnom_fit,
                     'filter'=multnom_filter,
                     'smoother'=generic_smoother,
                     'pred'=multnom_pred,
                     'multi_var'=TRUE)
 
+#' @export
 normal_kernel=list('fit'=normal_fit,
                    'filter'=normal_filter,
                    'smoother'=generic_smoother,
                    'pred'=normal_pred,
                    'multi_var'=FALSE)
 
+#' @export
 kernel_list=list('Poisson (univariada)'=poisson_kernel,
                  'Multinomial'=multnom_kernel,
                  'Normal'=normal_kernel)

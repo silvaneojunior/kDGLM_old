@@ -67,7 +67,7 @@ s=1
 mu0=0
 C0=1
 # offset da média dos dados observado.
-offset=0
+offset=1
 
 set.seed(13031998)
 y=rnorm(T,mu,s)+offset
@@ -118,7 +118,7 @@ plot(resultado$mt[1,],
      type='l',ylim=c(0.8*mu+offset,1.2*mu+offset),
      main='media do parametro mu')
 points(post.mean,col='red')
-legend(150,1+offset,legend=c('GDLM','sol. analítica'),col=c('black','red'),lty=c(1,1))
+legend(125,1+offset,legend=c('GDLM','sol. analítica'),col=c('black','red'),lty=c(1,1))
 
 outcome=resultado$Ct[1,1,]
 plot(outcome)
