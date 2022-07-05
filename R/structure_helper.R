@@ -1,10 +1,24 @@
-gera_bloco_poly <- function(order,value=1,name='Var_Poly',D=1,m0=0,C0=1,W=0){
+#' polynomial_block
+#'
+#' @param order
+#' @param values
+#' @param name
+#' @param D
+#' @param m0
+#' @param C0
+#' @param W
+#'
+#' @return
+#' @export
+#'
+#' @examples
+polynomial_block <- function(order,values=1,name='Var_Poly',D=1,m0=0,C0=1,W=0){
   G=diag(order)
-  t=ifelse(is.null(dim(value)),length(value),dim(value)[2])
-  k=ifelse(is.null(dim(value)),1,dim(value)[1])
-  #FF=matrix(c(ifelse(is.na(value),0,value),rep(0,(order-1)*t)),order,t,byrow = TRUE)
+  t=ifelse(is.null(dim(values)),length(values),dim(values)[2])
+  k=ifelse(is.null(dim(values)),1,dim(values)[1])
+  #FF=matrix(c(ifelse(is.na(values),0,values),rep(0,(order-1)*t)),order,t,byrow = TRUE)
   FF=array(0,c(order,k,t))
-  FF[1,,]=value
+  FF[1,,]=values
 
   if(order==2){
     G[1,2]=1
@@ -39,18 +53,34 @@ gera_bloco_poly <- function(order,value=1,name='Var_Poly',D=1,m0=0,C0=1,W=0){
               't'=t,
               'k'=k))
 }
-gera_bloco_sazo <- function(period,value=1,name='Var_Sazo',D=1,m0=0,C0=1,W=0){
+
+
+#' harmonic_block
+#'
+#' @param period
+#' @param values
+#' @param name
+#' @param D
+#' @param m0
+#' @param C0
+#' @param W
+#'
+#' @return
+#' @export
+#'
+#' @examples
+harmonic_block <- function(period,values=1,name='Var_Sazo',D=1,m0=0,C0=1,W=0){
   w=2*pi/period
   order=2
-  t=ifelse(is.null(dim(value)),length(value),dim(value)[2])
-  k=ifelse(is.null(dim(value)),1,dim(value)[1])
+  t=ifelse(is.null(dim(values)),length(values),dim(values)[2])
+  k=ifelse(is.null(dim(values)),1,dim(values)[1])
   G <- matrix(c(cos(w),-sin(w),sin(w),cos(w)),order,order)
   if(length(m0)<2){
     m0=rep(m0,order)
   }
-  #FF=matrix(c(ifelse(is.na(value),0,value),rep(0,(order-1)*t)),order,t,byrow = TRUE)
+  #FF=matrix(c(ifelse(is.na(values),0,values),rep(0,(order-1)*t)),order,t,byrow = TRUE)
   FF=array(0,c(order,k,t))
-  FF[1,,]=value
+  FF[1,,]=values
   if(length(D)==1){
     D=array(1,c(order,order,t))*D
     D[,,apply(is.na(FF),2,any)]=1
@@ -75,10 +105,10 @@ gera_bloco_sazo <- function(period,value=1,name='Var_Sazo',D=1,m0=0,C0=1,W=0){
               'k'=k))
 }
 
-gera_bloco_poly_transf <- function(lag,value,name='Var_Poly_transf',D=1,m0=0,C0=1,W=0){
+transf_block <- function(lag,values,name='Var_Poly_transf',D=1,m0=0,C0=1,W=0){
   G=diag(order)
-  t=dim(value)[2]
-  k=dim(value)[1]
+  t=dim(values)[2]
+  k=dim(values)[1]
 
   x=c(1:lag)
   mat=c()
@@ -88,7 +118,7 @@ gera_bloco_poly_transf <- function(lag,value,name='Var_Poly_transf',D=1,m0=0,C0=
 
   M=matrix(mat,lag,lag,byrow=TRUE)
   pre_time=matrix(0,out_var,lag)
-  extended_values=cbind(pre_time,value)
+  extended_values=cbind(pre_time,values)
   pre_FF=matrix(0,(lag+1)*out_var,T_final)
   for(t in c(1:T_final)){
     for(out in c(1:out_var)){
@@ -103,17 +133,17 @@ gera_bloco_poly_transf <- function(lag,value,name='Var_Poly_transf',D=1,m0=0,C0=
     W[,,true_indice_inter]=1
     bloc_final=concat_bloco(bloc_final,
                             gera_bloco_poly(order=1,
-                                            value=placeholder,
+                                            values=placeholder,
                                             name='vac_serie_' %>% paste0(i,'_',0),
                                             D=1/1,
                                             m0=0,
                                             C0=0,
                                             W=W))
-                            }
+  }
 
 
   FF=array(0,c(order,k,t))
-  FF[1,,]=value
+  FF[1,,]=values
   if(order==2){
     G[1,2]=1
   }else{if(order>2){
@@ -125,11 +155,11 @@ gera_bloco_poly_transf <- function(lag,value,name='Var_Poly_transf',D=1,m0=0,C0=
 
   if(length(D)==1){
     D=array(1,c(order,order,t))*D
-    D[,,apply(is.na(value),2,any)]=1
+    D[,,apply(is.na(values),2,any)]=1
   }
   if(length(W)==1){
     W=array(diag(order),c(order,order,t))*W
-    W[,,apply(is.na(value),2,any)]=0
+    W[,,apply(is.na(values),2,any)]=0
   }
 
   names=list()
@@ -147,7 +177,16 @@ gera_bloco_poly_transf <- function(lag,value,name='Var_Poly_transf',D=1,m0=0,C0=
               'k'=k))
 }
 
-concat_bloco <- function(...){
+
+#' block_join
+#'
+#' @param ...
+#'
+#' @return
+#' @export
+#'
+#' @examples
+block_join <- function(...){
   blocks=list(...)
 
   n=0

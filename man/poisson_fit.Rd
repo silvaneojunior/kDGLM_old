@@ -48,7 +48,6 @@ A list containing the following values:
    \item Cts Array: A 3D-array containing the smoothed covariance matrix of the latent variable for each time. Dimensions are n x n x T.
    \item IC_prob Numeric: Deprecated
    \item offset Vector: The same as the argument (same values).
-   \item log_offset Vector: The log offset.
    \item data_out Matrix: The same as the argument y (same values).
 }
 }

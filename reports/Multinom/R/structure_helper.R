@@ -39,6 +39,7 @@ gera_bloco_poly <- function(order,value=1,name='Var_Poly',D=1,m0=0,C0=1,W=0){
               't'=t,
               'k'=k))
 }
+
 gera_bloco_sazo <- function(period,value=1,name='Var_Sazo',D=1,m0=0,C0=1,W=0){
   w=2*pi/period
   order=2
@@ -75,7 +76,7 @@ gera_bloco_sazo <- function(period,value=1,name='Var_Sazo',D=1,m0=0,C0=1,W=0){
               'k'=k))
 }
 
-gera_bloco_poly_transf <- function(lag,value,name='Var_Poly_transf',D=1,m0=0,C0=1,W=0){
+transf_block <- function(lag,value,name='Var_Poly_transf',D=1,m0=0,C0=1,W=0){
   G=diag(order)
   t=dim(value)[2]
   k=dim(value)[1]

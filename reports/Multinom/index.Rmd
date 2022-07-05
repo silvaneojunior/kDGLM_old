@@ -33,11 +33,7 @@ library(rootSolve)
 library(tidyr)
 library(dplyr)
 
-# library(GDLM)
-source('R/main.R')
-source('R/kernels.R')
-source('R/plot_helper.R')
-source('R/structure_helper.R')
+library(GDLM)
 
 # Ajustando os dados
 
@@ -140,6 +136,7 @@ shinyApp(
     tabsetPanel(
       tabPanel('Previsão 1 passo à frente',plotlyOutput("plot",height='500px',width='800px')),
       tabPanel('Efeito da vacina',dataTableOutput("table"),plotOutput("plotError",height='500px',width='800px')),
+      tabPanel('Efeito da COVID',dataTableOutput("tableCovid"),plotOutput("plotErrorCovid",height='500px',width='800px')),
       tabPanel('Regiões de confiança para os efeitos da vacina',plotOutput("plotRegConf",height='800px',width='800px')),
       tabPanel('Matriz de correlação dos efeitos da vacina',plotOutput("plotCorrel",height='800px',width='800px')))
     
@@ -163,10 +160,10 @@ shinyApp(
       offset[3,]=offset[3,]/offset[5,]
       offset[4,]=offset[4,]/offset[5,]
       
-      offset=log(offset[-5,])
+      offset=log(offset[-5,])**0
       #### offset ####
         
-      bloc_final=gera_bloco_poly(order=1,
+      bloc_final=polynomial_block(order=1,
                                  value=offset,
                                  name='offset',
                                  D=1/1,
@@ -179,30 +176,30 @@ shinyApp(
         #### nível ####
         FF_static=matrix(0,out_var,T_final)
         FF_static[i,]=1
-        bloc_nivel=gera_bloco_poly(order=2,value=FF_static,name='nivel_serie_' %>% paste0(i),
+        bloc_nivel=polynomial_block(order=2,values=FF_static,name='nivel_serie_' %>% paste0(i),
                                    D=1/0.95,m0=0,C0=1,W=0)
         #### sazonalidade ####
-        bloc_sazo=gera_bloco_sazo(period=12,value=FF_static,name='sazo_serie_' %>% paste0(i),
+        bloc_sazo=harmonic_block(period=12,values=FF_static,name='sazo_serie_' %>% paste0(i),
                                   D=1/0.98,m0=0,C0=1,W=0)
         #### vacina ####
         FF_vac=matrix(0,out_var,T_final)
         FF_vac[i,true_indice_inter:T_final]=1
         W=array(0,c(1,1,T_final))
         W[,,true_indice_inter]=1
-        bloc_vac=gera_bloco_poly(order=1,value=FF_vac,name='vac_serie_' %>% paste0(i),
+        bloc_vac=polynomial_block(order=1,values=FF_vac,name='vac_serie_' %>% paste0(i),
                                    D=1/1,m0=0,C0=0,W=W)
         #### covid ####
         FF_cov=matrix(0,out_var,T_final)
         FF_cov[i,146:T_final]=1
         W=array(0,c(1,1,T_final))
         W[,,146]=1
-        bloc_cov=gera_bloco_poly(order=1,value=FF_cov,name='cov_serie_' %>% paste0(i),
+        bloc_cov=polynomial_block(order=1,values=FF_cov,name='cov_serie_' %>% paste0(i),
                                  D=1/1,m0=0,C0=0,W=W)
         
-        bloc_final=concat_bloco(bloc_final,bloc_nivel,bloc_sazo,bloc_vac,bloc_cov)
+        bloc_final=block_join(bloc_final,bloc_nivel,bloc_sazo,bloc_vac,bloc_cov)
       }
       
-      resultado=ajusta_modelo(bloc_final,
+      resultado=fit_model(bloc_final,
                               data_out=y,
                               kernel='Multinomial')
       })
@@ -223,6 +220,8 @@ shinyApp(
       plot_data=matrix(0,0,3)
       tile_data=matrix(1,4,4)
       
+      n_var=5
+      
       for( i in c(1:4)){
         for(j in c(1:4)){
       if(i==j){
@@ -232,13 +231,13 @@ shinyApp(
       plot_data=rbind(plot_data,data)
         }else{
           
-      sd1=ajuste()$Cts[i*6,i*6,156]**0.5
-      sd2=ajuste()$Cts[j*6,j*6,156]**0.5
-      correl=ajuste()$Cts[i*6,j*6,156]/(sd1*sd2)
+      sd1=ajuste()$Cts[i*n_var,i*n_var,156]**0.5
+      sd2=ajuste()$Cts[j*n_var,j*n_var,156]**0.5
+      correl=ajuste()$Cts[i*n_var,j*n_var,156]/(sd1*sd2)
       
       tile_data[i,j]=correl
       
-      cov_mat=ajuste()$Cts[c(i,j)*6,c(i,j)*6,156]
+      cov_mat=ajuste()$Cts[c(i,j)*n_var,c(i,j)*n_var,156]
       transf=chol(cov_mat)
       
       data=matrix(c(x,y),2,n_points,byrow=TRUE)
@@ -246,7 +245,7 @@ shinyApp(
       data=transf%*%data
       
       for(k in c(1:n_points)){
-        data[,k]=data[,k]+ajuste()$mts[c(i,j)*6,156]
+        data[,k]=data[,k]+ajuste()$mts[c(i,j)*n_var,156]
       }
       
       data=cbind(paste0(labels[-indices[5]][i],'-',labels[-indices[5]][j]),t(data))
@@ -316,6 +315,46 @@ shinyApp(
                 )
     })
     
+    output$tableCovid = renderDataTable({
+      out_var=4
+      ref_var=input$FaixaEtaria %>% as.numeric
+      indices=c(c(1:5)[c(1:5)!=ref_var],ref_var)
+      
+      ord_labels=labels[indices]
+      
+      vars=c()
+      for(i in c(1:length(ajuste()$names))){
+        if(grepl('cov',names(ajuste()$names)[i])){
+          vars=c(vars,ajuste()$names[i])
+        }
+      }
+      
+      vars=as.numeric(vars)
+      
+      valor.estimado=exp(ajuste()$mts[vars,156])
+      lin_var=diag(valor.estimado)
+      std=sqrt(diag(lin_var%*%ajuste()$Cts[vars,vars,156]%*%lin_var))
+      
+      valor.estimado.raw=ajuste()$mts[vars,156]
+      std.raw=sqrt(diag(ajuste()$Cts[vars,vars,156]))
+      
+      tabela=data.frame(Faixa.Etaria=labels[-(input$FaixaEtaria %>% as.numeric)],
+        valor.estimado.raw=valor.estimado.raw %>% round(2),
+        I.C.inf.raw=(valor.estimado.raw-2*std.raw)  %>% round(2),
+        I.C.sup.raw=(valor.estimado.raw+2*std.raw)  %>% round(2),
+        valor.estimado=(100*(valor.estimado-1)) %>% round(2) %>% paste('%'),
+        I.C.inf=(100*((valor.estimado-1)-2*std))  %>% round(2) %>% paste('%'),
+        I.C.sup=(100*((valor.estimado-1)+2*std))  %>% round(2) %>% paste('%'))
+      
+      names(tabela)=c('Faixa etária','Efeito pontual', 'I.C. inferior', 'I.C. superior','Efeito pontual (%)', 'I.C. inferior  (%)', 'I.C. superior (%)')
+      
+      datatable(tabela,
+                rownames=F,
+                options=list(sDom  = '<"top"><"bottom">',
+                                          ordering=F),
+                )
+    })
+    
     output$plotError = renderPlot({
       out_var=4
       ref_var=input$FaixaEtaria %>% as.numeric
@@ -348,6 +387,41 @@ shinyApp(
         geom_hline(yintercept=0,linetype='dashed')+
         scale_x_discrete('Faixa etária')+
         scale_y_continuous('Efeito da vacina')+
+        scale_color_manual('Faixa etária',values=color)+
+        theme_bw()
+    })
+    output$plotErrorCovid = renderPlot({
+      out_var=4
+      ref_var=input$FaixaEtaria %>% as.numeric
+      indices=c(c(1:5)[c(1:5)!=ref_var],ref_var)
+      
+      ord_labels=labels[indices]
+      
+      vars=c()
+      for(i in c(1:length(ajuste()$names))){
+        if(grepl('cov',names(ajuste()$names)[i])){
+          vars=c(vars,ajuste()$names[i])
+        }
+      }
+      
+      vars=as.numeric(vars)
+      
+      valor.estimado.raw=ajuste()$mts[vars,156]
+      std.raw=sqrt(diag(ajuste()$Cts[vars,vars,156]))
+      
+      color=hue_pal()(5)[-ref_var]
+      
+      ggplot()+
+        geom_point(aes(x=labels[-ref_var],y=valor.estimado.raw,color=labels[-ref_var]),shape=4,size=10)+
+        geom_errorbar(aes(x=labels[-ref_var],
+                          ymin=valor.estimado.raw-2*std.raw,
+                          ymax=valor.estimado.raw+2*std.raw,
+                          color=labels[-ref_var]),
+                width=.3,
+                 position=position_dodge(.9)) +
+        geom_hline(yintercept=0,linetype='dashed')+
+        scale_x_discrete('Faixa etária')+
+        scale_y_continuous('Efeito da COVID')+
         scale_color_manual('Faixa etária',values=color)+
         theme_bw()
     })

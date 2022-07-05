@@ -94,7 +94,7 @@ for(i in c(1:out_var)){
   #### nível ####
   FF_static=matrix(0,out_var,T_final)
   FF_static[i,]=1
-  bloc_nivel=gera_bloco_poly(order=2,value=FF_static,name='nivel_serie_' %>% paste0(i),
+  bloc_nivel=gera_bloco_poly(order=3,value=FF_static,name='nivel_serie_' %>% paste0(i),
                              D=1/0.95,m0=0,C0=1,W=0)
   #### sazonalidade ####
   bloc_sazo=gera_bloco_sazo(period=12,value=FF_static,name='sazo_serie_' %>% paste0(i),
@@ -102,16 +102,16 @@ for(i in c(1:out_var)){
   #### vacina ####
   FF_vac=matrix(0,out_var,T_final)
   # Caso seja usado a indicadora
-  #FF_vac[i,true_indice_inter:T_final]=1
+  FF_vac[i,true_indice_inter:T_final]=1
   # Caso seja usado a cobertura vacinal
-  FF_vac[i,]=as.numeric(vac_corb)
+  #FF_vac[i,]=as.numeric(vac_corb)
   W=array(0,c(1,1,T_final))
   # Caso seja usado a indicadora
-  #W[,,true_indice_inter]=1
-  # Caso seja usado a cobertura vacinal
   W[,,true_indice_inter]=1
+  # Caso seja usado a cobertura vacinal
+  #W[,,true_indice_inter]=1
   bloc_vac=gera_bloco_poly(order=1,value=FF_vac,name='vac_serie_' %>% paste0(i),
-                           D=1/0.99,m0=0,C0=0,W=W)
+                           D=1/1,m0=0,C0=0,W=W)
   #### covid ####
   FF_cov=matrix(0,out_var,T_final)
   FF_cov[i,146:T_final]=1
@@ -131,13 +131,37 @@ indices=c(c(1:5)[c(1:5)!=ref_var],ref_var)
 
 ord_labels=labels[indices]
 
+p_intenacao=rep(0,T_final)
+p_faixa=resultado$pred*0
+
+for(t in 1:T_final){
+  p_intenacao[t]=(sum(resultado$data_out[t,])/sum(t(pre_exp)[t,]))
+  p_faixa[,t]=(t(pre_exp)[t,]/sum(t(pre_exp)[t,]))
+
+  fator=p_intenacao[t]/p_faixa[,t]
+
+  resultado$pred[,t]=resultado$pred[,t]*fator
+  resultado$var.pred[,,t]=(fator*diag(5))%*%resultado$var.pred[,,t]%*%(fator*diag(5))
+  resultado$icu.pred[,t]=resultado$pred[,t]+2*sqrt(diag(resultado$var.pred[,,t]))
+  resultado$icl.pred[,t]=resultado$pred[,t]-2*sqrt(diag(resultado$var.pred[,,t]))
+
+  #resultado$data_out[t,]=resultado$data_out[t,]/sum(resultado$data_out[t,])
+}
+resultado$data_out=resultado$data_out/t(pre_exp)
+
+
 (show_fit(resultado,labels=ord_labels,dinamic=FALSE,t_offset=1,smooth=FALSE)$plot+
     geom_vline(xintercept=true_indice_inter,linetype='dashed')+
-    labs(title='Previsão um passo à frente')+
-    scale_y_continuous('Internações')+
+    labs(title='Filtered mean')+
+    scale_y_continuous('Probability of hospital admission given each age group',expand=c(0,0))+#, labels=function(x){round(100*x) %>% paste('%')})+
     scale_x_continuous('Data', breaks=c(0:12)*12+1,labels=c(2008:2020))+
     theme(axis.text = element_text(angle=90))+
-    coord_cartesian(ylim=c(0,1000))) %>% ggplotly
+    coord_cartesian(ylim=c(0,10**-4.25))) %>% ggplotly
+
+
+data_plot=1:T_final %>% cbind(as.data.frame(t(pre_exp))) %>%
+  pivot_longer(-1)
+
 
 (plot_lat_var(resultado,'vac_serie',dinamic=FALSE)+
   geom_vline(xintercept=true_indice_inter,linetype='dashed')+

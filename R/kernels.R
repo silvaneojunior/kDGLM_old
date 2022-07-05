@@ -182,8 +182,8 @@ poisson_filter = function(y,m0,C0,FF,G,D,W,offset=1){
 #'
 #' poisson_pred(model)
 poisson_pred=function(model,IC_prob=0.95){
-  a=cur_values$a
-  b=cur_values$b
+  a=model$a
+  b=model$b
   list(
     'pred'     = a/ b,
     'var.pred' = a*(b+1)/(b)^2,
@@ -228,7 +228,6 @@ poisson_pred=function(model,IC_prob=0.95){
 #'    \item Cts Array: A 3D-array containing the smoothed covariance matrix of the latent variable for each time. Dimensions are n x n x T.
 #'    \item IC_prob Numeric: Deprecated
 #'    \item offset Vector: The same as the argument (same values).
-#'    \item log_offset Vector: The log offset.
 #'    \item data_out Matrix: The same as the argument y (same values).
 #' }
 #' @export
@@ -328,7 +327,7 @@ poisson_fit <- function(y,m0 = 0, C0 = 1, FF,G,D,W, offset, IC_prob=0.95){
                  FF, G, D,W,
                  pred, var.pred, icl.pred, icu.pred,
                  mts, Cts ,
-                 IC_prob,exp(offset),offset,
+                 IC_prob,offset,
                  y)
   names(result) <- c("mt",  "Ct",
                      "ft", "qt",
@@ -337,7 +336,7 @@ poisson_fit <- function(y,m0 = 0, C0 = 1, FF,G,D,W, offset, IC_prob=0.95){
                      "FF", "G", "D","W",
                      "pred", "var.pred", "icl.pred", "icu.pred",
                      "mts", "Cts",
-                     "IC_prob",'offset','log_offset',
+                     "IC_prob",'offset',
                      "data_out")
   return(result)
 
@@ -488,37 +487,83 @@ multnom_filter = function(y,m0,C0,FF,G,D,W,offset=c(1,1,1)){
 #'
 #' multnom_pred(model)
 multnom_pred=function(model,IC_prob=0.95){
-  r=length(model$ft)
-  pre_ps=exp(model$ft)/(sum(exp(model$ft))+1)
+  r=length(model$alpha)
+  n=sum(model$y)
 
-  p=pre_ps
-  var=model$Qt
+  alpha=model$alpha
+  alpha0=sum(alpha)
 
-  diag_mult=diag(p*(1-p))
-  cov_mult=diag_mult%*%var%*%diag_mult
+  p=alpha/alpha0
+  p_var=p*(1-p)/(alpha0+1)
 
-  vec_rest=1-sum(p)
+  pred=n*p
+  var.pred=diag(n*p*(1-p)*(n+alpha0)/(alpha0+1))
+  for(i in 2:r){
+    for(j in 1:(i-1)){
+      var.pred[i,j]=var.pred[j,i]=-n*p[i]*p[j]*(n+alpha0)/(alpha0+1)
+    }
+  }
 
-  n_total=sum(model$y)
+  const=lgamma(alpha0)+lgamma(n+1)-lgamma(n+alpha0)
 
-  p=c(p,vec_rest)*n_total
-  trans_mat=rbind(diag(r),rep(-1,r))
-  var=(trans_mat%*%cov_mult%*%t(trans_mat))%*%(diag(r+1)*(n_total**2))
+  x_mat=matrix(0:n,n+1,r)
+  alpha_mat=matrix(alpha,n+1,r,byrow=TRUE)
+  x_alpha_mat=x_mat+alpha_mat
 
-  p_i=p-2*sqrt(diag(var))
-  p_s=p+2*sqrt(diag(var))
+  prob_mat=lgamma(x_alpha_mat)-lgamma(x_mat+1)-lgamma(alpha_mat)+lgamma(n+alpha0-x_alpha_mat)-lgamma(n-x_mat+1)-lgamma(alpha0-alpha_mat)
+  prob_mat=exp(const+prob_mat)
+  icl.pred=rep(0,r)
+  icu.pred=rep(0,r)
+  for(i in 1:r){
+    probs_acum=cumsum(prob_mat[,i])
+
+    icl.pred[i]=sum(probs_acum<=((1-IC_prob)/2))-1
+    icu.pred[i]=sum(probs_acum<=(1-(1-IC_prob)/2))
+
+    icl.pred[i]=max(0,icl.pred[i])
+    icu.pred[i]=min(n,icu.pred[i])
+  }
 
   list(
-    'pred'     = p,
-    'var.pred' = var,
-    'icl.pred' = p_i,
-    'icu.pred' = p_s
+    'pred'     = pred,
+    'var.pred' = var.pred,
+    'icl.pred' = icl.pred,
+    'icu.pred' = icu.pred
   )
 }
 
+# multnom_pred=function(model,IC_prob=0.95){
+#   r=length(model$ft)
+#   pre_ps=exp(model$ft)/(sum(exp(model$ft))+1)
+#
+#   p=pre_ps
+#   var=model$Qt
+#
+#   diag_mult=diag(p*(1-p))
+#   cov_mult=diag_mult%*%var%*%diag_mult
+#
+#   vec_rest=1-sum(p)
+#
+#   n_total=sum(model$y)
+#
+#   p=c(p,vec_rest)*n_total
+#   trans_mat=rbind(diag(r),rep(-1,r))
+#   var=(trans_mat%*%cov_mult%*%t(trans_mat))%*%(diag(r+1)*(n_total**2))
+#
+#   p_i=p-2*sqrt(diag(var))
+#   p_s=p+2*sqrt(diag(var))
+#
+#   list(
+#     'pred'     = p,
+#     'var.pred' = var,
+#     'icl.pred' = p_i,
+#     'icu.pred' = p_s
+#   )
+# }
+
 #' multnom_fit
 #'
-#'  Fit the multinomial model giver the observed value and the model parameters.
+#'  Fit the multinomial model given the observed value and the model parameters.
 #'
 #' @param y Matrix: The observed data. It's dimension shoulb be T x m, where T is the length of the time series and m is the number of outcomes at each time.
 #' @param m0 Vector: The prior mean for the latent vector.
@@ -780,7 +825,7 @@ normal_filter = function(y,m0,C0,FF,G,D,W,offset=NULL){
   # Q2star <-   trigamma(tau0_star + 0.5) + f2star**2
   Q2star <-   2*(log(n1/d1)-f2star)
   Q1star <-   -1/(2*tau1_star*exp(f2star+Q2star/2))
-  Q12star<-   f1star*f2star
+  Q12star<-   0#f1star*f2star
 
   fstar <- c(f1star,   f2star)
   Qstar <- matrix(c( Q1star,  Q12star,  Q12star,  Q2star), byrow =F, ncol = 2)
@@ -925,6 +970,6 @@ normal_kernel=list('fit'=normal_fit,
                    'multi_var'=FALSE)
 
 #' @export
-kernel_list=list('Poisson (univariada)'=poisson_kernel,
-                 'Multinomial'=multnom_kernel,
-                 'Normal'=normal_kernel)
+kernel_list=list('poisson'=poisson_kernel,
+                 'multinomial'=multnom_kernel,
+                 'normal'=normal_kernel)

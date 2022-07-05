@@ -31,7 +31,7 @@ calcula_max=function(pre_max){
 show_fit=function(model,IC_prob=0.95,smooth=TRUE,dinamic=TRUE,t_offset=0,labels=NULL){
   n=dim(model$mt)[1]
   t_last=dim(model$mt)[2]
-  eval=eval_past(model,smooth,t_offset)
+  eval=model#eval_past(model,smooth,t_offset)
   pred=eval$pred
   r=dim(pred)[1]
   icl.pred<-eval$icl.pred

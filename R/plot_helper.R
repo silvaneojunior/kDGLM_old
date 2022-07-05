@@ -1,3 +1,10 @@
+#' calcula_max
+#'
+#' @param pre_max
+#'
+#' @return
+#'
+#' @examples
 calcula_max=function(pre_max){
   if(length(pre_max)==0 | sum(pre_max**2)<10**-20){
     pre_max=1
@@ -24,10 +31,28 @@ calcula_max=function(pre_max){
   return(list(value,interval_size,max_value))
 }
 
+#' show_fit
+#'
+#' @param model
+#' @param IC_prob
+#' @param smooth
+#' @param dinamic
+#' @param t_offset
+#' @param labels
+#'
+#' @return
+#' @export
+#'
+#' @import ggplot2
+#' @import plotly
+#' @import dplyr
+#' @import tidyr
+#'
+#' @examples
 show_fit=function(model,IC_prob=0.95,smooth=TRUE,dinamic=TRUE,t_offset=0,labels=NULL){
   n=dim(model$mt)[1]
   t_last=dim(model$mt)[2]
-  eval=eval_past(model,smooth,t_offset)
+  eval=eval_past(model,smooth=smooth,t_offset=t_offset)
   pred=eval$pred
   r=dim(pred)[1]
   icl.pred<-eval$icl.pred
@@ -82,6 +107,25 @@ show_fit=function(model,IC_prob=0.95,smooth=TRUE,dinamic=TRUE,t_offset=0,labels=
   return(list('plot'=plt,'pred'=pred,'icl.pred'=icl.pred,'icu.pred'=icu.pred))
 }
 
+#' plot_lat_var
+#'
+#' @param model
+#' @param var
+#' @param smooth
+#' @param cut_off
+#' @param IC_prob
+#' @param dinamic
+#' @param tranform_y
+#'
+#' @return
+#' @export
+#'
+#' @import ggplot2
+#' @import plotly
+#' @import dplyr
+#' @import tidyr
+#'
+#' @examples
 plot_lat_var=function(model,var,smooth=TRUE,cut_off=10,IC_prob=0.95,dinamic=TRUE,tranform_y=function(y){y}){
   if(!any(grepl(var,names(model$names)))){
     stop(paste0('Error: Invalid selected variable. Got ',var,', expected one of the following:\n',names(model$names)))

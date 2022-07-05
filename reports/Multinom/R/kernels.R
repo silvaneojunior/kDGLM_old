@@ -230,7 +230,7 @@ multnom_pred=function(filter,IC_prob){
 
   vec_rest=1-sum(p)
 
-  n_total=sum(filter$y)
+  n_total=1
 
   p=c(p,vec_rest)*n_total
   trans_mat=rbind(diag(r),rep(-1,r))

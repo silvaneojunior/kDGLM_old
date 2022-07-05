@@ -1,28 +1,68 @@
-ajusta_modelo <- function(...,data_out,kernel='Poisson (univariada)',offset=NULL,log_offset=NULL){
+#' fit_model
+#'
+#' Fit a model given it's structure and the observed data. This function can be used for any kernel.
+#'
+#' @param ... <undefined class> or list: The structural block of the model.
+#' @param data_out Matrix: A matrix containing the observed data. Dimensions should be T x k, where T is the time series length and k is the number of outcomes.
+#' @param kernel String or <undefined class>: The list of functions (or it's name) used to fit the data. Should be choosed based on the distribution of the outcomes.
+#' @param offset Matrix: A matrix containing the offset value for the data. Dimesions should be the same as y.
+#'
+#' @return The fitted model (an object of the <undefined class> or list). Contains the values returned in the fit function for the choosed kernel.
+#' @export
+#'
+#' @examples
+#' library(GDLM)
+#'
+#' Normal case
+#' T=200
+#' mu=rnorm(T,0,0.1)
+#' y=rnorm(T,cumsum(mu))
+#'
+#' level=polynomial_block(order=1,
+#'                        values=matrix(c(rep(1,T),rep(0,T)),2,T,byrow=TRUE),
+#'                        D=1/0.98)
+#' variance=polynomial_block(order=1,
+#'                           values=matrix(c(rep(0,T),rep(1,T)),2,T,byrow=TRUE),
+#'                           D=1/1)
+#'
+#' fitted_data=fit_model(level,variance,data_out=matrix(c(y,rep(0,T)),T,2),kernel='Normal')
+#' show_fit(fitted_data,smooth = TRUE)$plot
+#'
+#' plot(fitted_data$mt[1,])
+#' lines(fitted_data$mts[1,])
+#'
+#' # Poisson case
+#' w=(200/40)*2*pi
+#' y=rpois(T,20*(sin(w*1:T/T)+2))
+#'
+#' level=polynomial_block(order=1,values=matrix(1,1,T),D=1/0.95)
+#' season=harmonic_block(period=40,values=matrix(1,1,T),D=1/0.98)
+#'
+#' fitted_data=fit_model(level,season,data_out=y,kernel='Poisson')
+#' show_fit(fitted_data,smooth = TRUE)$plot
+#'
+#' # Multinomial case
+#' w=(200/40)*2*pi
+#' y1= matrix(rpois(T,20*(sin(w*1:T/T)+2)),T,1)
+#' y2= matrix(rpois(T,1:200/200+1),T,1)
+#' y3= matrix(rpois(T,6),T,1)
+#' y=cbind(y1,y2,y3)
+#'
+#' level_1=polynomial_block(order=1,values=matrix(c(rep(1,T),rep(0,T)),2,T,byrow=TRUE))
+#' level_2=polynomial_block(order=2,values=matrix(c(rep(0,T),rep(1,T)),2,T,byrow=TRUE))
+#' season_2=harmonic_block(period=20,values=matrix(c(rep(0,T),rep(1,T)),2,T,byrow=TRUE))
+#'
+#'
+#' fitted_data=fit_model(level_1,level_2,season_2,data_out=y,kernel='Multinomial')
+#' show_fit(fitted_data,smooth = TRUE)$plot
+fit_model <- function(...,data_out,kernel='Poisson',offset=data_out**0){
   if(typeof(kernel)==typeof('kernel')){
-    kernel=kernel_list[[kernel]]
+    kernel=kernel_list[[tolower(kernel)]]
   }
 
-  structure=concat_bloco(...)
-  if(is.null(dim(data_out))){
-    data_out=array(data_out,c(length(data_out),1))
-  }
-  if(!is.null(offset) & !is.null(log_offset)){
-    stop('Erro: Cannot set both offset and log_offset. Choose only one.')
-  }else{if(!is.null(offset)){
-    log_offset=log(offset)
-  }else{if(!is.null(log_offset)){
-    offset=exp(log_offset)
-  }else{
-    offset=1
-    log_offset=0
-  }}}
-  if(1==length(log_offset)){
-    log_offset=rep(log_offset,dim(data_out)[1])
-    offset=rep(offset,dim(data_out)[1])
-  }
-  if(dim(data_out)[1]!=length(log_offset)){
-    stop('Erro: offset/log_offset does not have the same length as data_out.')
+  structure=block_join(...)
+  if(any(dim(data_out)!=dim(offset))){
+    stop('Erro: offset does not have the same dim as data_out.')
   }
 
   if(structure$t==1){
@@ -30,6 +70,12 @@ ajusta_modelo <- function(...,data_out,kernel='Poisson (univariada)',offset=NULL
     structure$D=array(structure$D,c(structure$n,structure$n,structure$t))
     structure$W=array(structure$W,c(structure$n,structure$n,structure$t))
     structure$FF=array(structure$FF,c(structure$n,structure$k,structure$t))
+  }
+  if(is.null(dim(data_out))){
+    data_out=as.matrix(data_out)
+  }
+  if(is.null(dim(offset))){
+    offset=as.matrix(offset)
   }
   if(dim(data_out)[1]!=structure$t){
     stop(paste0('Erro: data_out does not have the same time length as structure: got ',dim(data_out)[1],' from data_out, expected ',structure$t))
@@ -55,7 +101,35 @@ ajusta_modelo <- function(...,data_out,kernel='Poisson (univariada)',offset=NULL
 
 }
 
-predict=function(model,t=1,offset=NULL,log_offset=NULL,FF=NULL,D=NULL,W=NULL,plot=TRUE,IC_prob=0.95,labels=NULL){
+#' predict
+#'
+#' Makes predictions for t times ahead using the fitted model.
+#'
+#' @param model <undefined class> or list: The fitted model to be use for predictions.
+#' @param t Numeric: Time window for prediction.
+#' @param offset Matrix: offset for predictions. Should have dimensions k x t, where k is the number of outcomes of the model. If offset is not specified, the last value observed by the model will be used.
+#' @param FF Array: A 3D-array containing the regression matrix for each time. It's dimension should be n x k x t, where n is the number of latent variables, k is the number of outcomes in the model. If not specified, the last value given to the model will be used.
+#' @param D Array: A 3D-array containing the discount factor matrix for each time. It's dimension should be n x n x t, where n is the number of latent variables and T is the time series length. If not specified, the last value given to the model will be used in the first step, and 1 will be use thereafter.
+#' @param W Array: A 3D-array containing the covariance matrix of the noise for each time. It's dimension should be n x n x t, where n is the number of latent variables and T is the time series length. If not specified, 0 will be used.
+#' @param plot Bool: A flag indicating if a plot should be produced.
+#' @param IC_prob Numeric: The credibility level for the I.C. intervals.
+#' @param labels Vector: A string vector with the names for the series of prediction. If none is given, will use generic names.
+#'
+#'
+#' @return A list containing:
+#' \itemize{
+#'    \item pred Matrix: A matrix with the predictive mean at each time. Dimensions are k x t, where k is the number of outcomes.
+#'    \item var.pred Array: A 3D-array with the predictive covariance matrix at each time. Dimensions are k x k x t, where k is the number of outcomes.
+#'    \item icl.pred Matrix: A matrix with the lower bound of the I.C. based on the credibility given in the arguments. Dimensions are k x t, where k is the number of outcomes.
+#'    \item icu.pred Matrix: A matrix with the upper bound of the I.C. based on the credibility given in the arguments. Dimensions are k x t, where k is the number of outcomes.
+#'    \item at Matrix: A matrix with the values for the linear predictor at each time. Dimensions are k x t, where k is the number of outcomes.
+#'    \item Rt Array: A 3D-array with the covariance of the linear predictor matrix at each time. Dimensions are k x k x t, where k is the number of outcomes.
+#'    \item plot (if so choosed): A plotly object.
+#' }
+#' @export
+#'
+#' @examples
+predict=function(model,t=1,offset=NULL,FF=NULL,D=NULL,W=NULL,plot=TRUE,IC_prob=0.95,labels=NULL){
   n=dim(model$mt)[1]
   t_last=dim(model$mt)[2]
   r=dim(model$FF)[2]
@@ -258,6 +332,18 @@ predict=function(model,t=1,offset=NULL,log_offset=NULL,FF=NULL,D=NULL,W=NULL,plo
 
   return(return_list)
 }
+
+#' eval_past
+#'
+#' @param model
+#' @param smooth
+#' @param t_offset
+#' @param IC_prob
+#'
+#' @return
+#' @export
+#'
+#' @examples
 eval_past=function(model,smooth=FALSE,t_offset=0,IC_prob=0.95){
   if(smooth & t_offset>0){
     t_offset=0
@@ -285,8 +371,10 @@ eval_past=function(model,smooth=FALSE,t_offset=0,IC_prob=0.95){
     ref_Ct=model$Ct
     D=model$D
     W=model$W
-    for(i in t_offset){
-      G=G%*%model$G
+    if(t_offset>0){
+      for(i in c(1:t_offset)){
+        G=G%*%model$G
+      }
     }
   }
 
@@ -296,7 +384,7 @@ eval_past=function(model,smooth=FALSE,t_offset=0,IC_prob=0.95){
     mt=if(i<=t_offset){model$m0}else{ref_mt[,i-t_offset]}
     Ct=if(i<=t_offset){model$C0}else{ref_Ct[,,i-t_offset]}
 
-    filter=model$kernel$filter(model$data_out[i,],mt,Ct,FF[,,i]  %>% matrix(n,r),G,D[,,i],W[,,i],model$log_offset[i])
+    filter=model$kernel$filter(model$data_out[i,],mt,Ct,FF[,,i]  %>% matrix(n,r),G,D[,,i],W[,,i],model$offset[i,])
     prediction=model$kernel$pred(filter,IC_prob)
 
     pred[,i]      <- prediction$pred

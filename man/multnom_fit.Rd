@@ -53,7 +53,7 @@ A list containing the following values:
 }
 }
 \description{
-Fit the multinomial model giver the observed value and the model parameters.
+Fit the multinomial model given the observed value and the model parameters.
 }
 \examples{
 # Not ideal way: should use fit_model function.
