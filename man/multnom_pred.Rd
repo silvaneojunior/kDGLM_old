@@ -9,7 +9,7 @@ multnom_pred(model, IC_prob = 0.95)
 \arguments{
 \item{model}{List: contaning the parameters of the conjugated distribuition for the linear predictor (may be based on the prior, filtered or smoothed distribuition).}
 
-\item{IC_prob}{Numeric: the desired credibility for the I.C.}
+\item{IC_prob}{Numeric: the desired credibility for the credibility interval}
 }
 \value{
 A list containing the following values:

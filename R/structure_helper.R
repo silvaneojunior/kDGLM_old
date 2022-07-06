@@ -199,6 +199,7 @@ block_join <- function(...){
       ref_names[[name]]=ref_names[[name]]+n
     }
     names=c(names,ref_names)
+    print(block$t)
     if(block$t>1){
       if(block$t!=t & t>1){
         stop(paste('Error: Blocks should have same length or length equal 1. Got',block$t,'and',t))

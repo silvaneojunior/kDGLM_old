@@ -4,7 +4,13 @@
 \alias{fit_model}
 \title{fit_model}
 \usage{
-fit_model(..., data_out, kernel = "Poisson", offset = data_out^0)
+fit_model(
+  ...,
+  data_out,
+  kernel = "Poisson",
+  offset = data_out^0,
+  parms = list()
+)
 }
 \arguments{
 \item{...}{<undefined class> or list: The structural block of the model.}
@@ -50,6 +56,19 @@ level=polynomial_block(order=1,values=matrix(1,1,T),D=1/0.95)
 season=harmonic_block(period=40,values=matrix(1,1,T),D=1/0.98)
 
 fitted_data=fit_model(level,season,data_out=y,kernel='Poisson')
+show_fit(fitted_data,smooth = TRUE)$plot
+
+# Gamma case
+w=(200/40)*2*pi
+phi=2.5
+y= matrix(rgamma(T,phi,phi/20*(sin(w*1:T/T)+2)),T,1)
+
+level=polynomial_block(order=1,values=matrix(1,1,T),D=1/0.95)
+season=harmonic_block(period=40,values=matrix(1,1,T),D=1/0.98)
+
+final_block=block_join(level,season)
+
+fitted_data=fit_model(final_block,data_out=y,kernel='Gamma',parms=list('phi'=phi))
 show_fit(fitted_data,smooth = TRUE)$plot
 
 # Multinomial case

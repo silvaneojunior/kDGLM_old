@@ -23,7 +23,7 @@ poisson_fit(y, m0 = 0, C0 = 1, FF, G, D, W, offset, IC_prob = 0.95)
 
 \item{offset}{Matrix: The offset of the model. It's dimension should be the same as y.}
 
-\item{IC_prob}{Numeric: Deprecated.}
+\item{IC_prob}{Numeric: the desired credibility for the credibility interval.}
 }
 \value{
 A list containing the following values:
@@ -67,8 +67,8 @@ D=array(diag(c(0.1,0,0)),c(3,3,T))+1
 W=array(diag(c(0,0,0)),c(3,3,T))
 offset=matrix(1,T,1)
 
-filtered_data=GDLM::poisson_fit(y=y,m0 = m0, C0 = C0, FF=FF,G=G,D=D,W=W, offset=offset, IC_prob=0.95)
+fitted_data=GDLM::poisson_fit(y=y,m0 = m0, C0 = C0, FF=FF,G=G,D=D,W=W, offset=offset, IC_prob=0.95)
 
 plot(y)
-lines(filtered_data$pred[1,])
+lines(fitted_data$pred[1,])
 }

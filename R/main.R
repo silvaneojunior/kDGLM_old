@@ -41,6 +41,19 @@
 #' fitted_data=fit_model(level,season,data_out=y,kernel='Poisson')
 #' show_fit(fitted_data,smooth = TRUE)$plot
 #'
+#' # Gamma case
+#' w=(200/40)*2*pi
+#' phi=2.5
+#' y= matrix(rgamma(T,phi,phi/20*(sin(w*1:T/T)+2)),T,1)
+#'
+#' level=polynomial_block(order=1,values=matrix(1,1,T),D=1/0.95)
+#' season=harmonic_block(period=40,values=matrix(1,1,T),D=1/0.98)
+#'
+#' final_block=block_join(level,season)
+#'
+#' fitted_data=fit_model(final_block,data_out=y,kernel='Gamma',parms=list('phi'=phi))
+#' show_fit(fitted_data,smooth = TRUE)$plot
+#'
 #' # Multinomial case
 #' w=(200/40)*2*pi
 #' y1= matrix(rpois(T,20*(sin(w*1:T/T)+2)),T,1)
@@ -55,7 +68,7 @@
 #'
 #' fitted_data=fit_model(level_1,level_2,season_2,data_out=y,kernel='Multinomial')
 #' show_fit(fitted_data,smooth = TRUE)$plot
-fit_model <- function(...,data_out,kernel='Poisson',offset=data_out**0){
+fit_model <- function(...,data_out,kernel='Poisson',offset=data_out**0,parms=list()){
   if(typeof(kernel)==typeof('kernel')){
     kernel=kernel_list[[tolower(kernel)]]
   }
@@ -90,7 +103,8 @@ fit_model <- function(...,data_out,kernel='Poisson',offset=data_out**0){
                G=structure$G,
                D=structure$D,
                W=structure$W,
-               offset=offset)
+               offset=offset,
+               parms=parms)
 
   model$m0=structure$m0
   model$C0=structure$C0

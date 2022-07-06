@@ -22,6 +22,8 @@ normal_filter(y, m0, C0, FF, G, D, W, offset = NULL)
 \item{W}{Matrix: The noise matrix at time t.}
 
 \item{offset}{Vector: Same dimension as y. A vector contaning the offset at time t.}
+
+\item{params}{list: a list contaning extra arguments. In this model, extra parameters are not used.}
 }
 \value{
 A list containing:
@@ -35,6 +37,7 @@ A list containing:
  \item mt: The filtered mean of the latent vector at time t.
  \item Ct: The filtered covariance matrix of the latent vector at time t.
  \item y: The observed value at time t.
+ \item params: The same as the argument.
  }
 }
 \description{
