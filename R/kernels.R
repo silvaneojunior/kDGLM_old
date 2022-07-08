@@ -146,6 +146,7 @@ gamma_filter = function(y,m0,C0,FF,G,D,W,offset=1,parms){
 #'    \item icu.pred vector/matrix: the percentile of 100*(1-(1-IC_prob)/2)% of the predictive distribuition of a next observation. Same type and shape as the parameter in model.
 #' }
 #' @export
+#' @importFrom extraDistr qbetapr
 #'
 #' @examples
 #' # A fitted model shoulb be used as argument, but you can also pass only the parameter themselves.
@@ -162,10 +163,10 @@ gamma_pred=function(model,IC_prob=0.95){
   tau0=model$tau0
   tau1=model$tau1
   list(
-    'pred'     = tau0/tau1,
-    'var.pred' = phi*(tau0/tau1)*(tau0+1/tau1),
-    'icl.pred' = tau0/tau1-2*sqrt(phi*(tau0/tau1)*(tau0+1/tau1)),
-    'icu.pred' = tau0/tau1+2*sqrt(phi*(tau0/tau1)*(tau0+1/tau1))
+    'pred'     = tau1/(tau0-1),
+    'var.pred' = ((tau0/(tau1-1))**2)*(tau0+phi-1)/((tau0-2)*phi),
+    'icl.pred' = qbetapr((1-IC_prob)/2,phi,tau0,tau1/phi),
+    'icu.pred' = qbetapr(1-(1-IC_prob)/2,phi,tau0,tau1/phi)
   )
 }
 
