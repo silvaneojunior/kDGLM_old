@@ -53,7 +53,7 @@ generic_smoother= function(mt,Ct,at,Rt,G){
 #' @param D Matrix: The discount factor matrix at time t.
 #' @param W Matrix: The noise matrix at time t.
 #' @param offset Vector: Same dimension as y. A vector contaning the offset at time t.
-#' @param params list: a list contaning extra arguments. In this model, params must contain a variable named phi, which is equal to alpha.
+#' @param parms list: a list contaning extra arguments. In this model, parms must contain a variable named phi, which is equal to alpha.
 #'
 #' @return A list containing:
 #' \itemize{
@@ -68,7 +68,7 @@ generic_smoother= function(mt,Ct,at,Rt,G){
 #'  \item mt: The filtered mean of the latent vector at time t.
 #'  \item Ct: The filtered covariance matrix of the latent vector at time t.
 #'  \item y: The observed value at time t.
-#'  \item params: The same as the argument.
+#'  \item parms: The same as the argument.
 #'  }
 #' @export
 #'
@@ -183,6 +183,7 @@ gamma_pred=function(model,IC_prob=0.95){
 #' @param W Array: A 3D-array containing the covariance matrix of the noise for each time. It's dimension should be the same as D.
 #' @param offset Matrix: The offset of the model. It's dimension should be the same as y.
 #' @param IC_prob Numeric: the desired credibility for the credibility interval.
+#' @param parms list: a list contaning extra arguments. In this model, parms must contain a variable named phi, which is equal to alpha.
 #'
 #' @return A list containing the following values:
 #' \itemize{
@@ -207,6 +208,7 @@ gamma_pred=function(model,IC_prob=0.95){
 #'    \item IC_prob Numeric: Deprecated
 #'    \item offset Vector: The same as the argument (same values).
 #'    \item data_out Matrix: The same as the argument y (same values).
+#'    \item parms: The same as the argument.
 #' }
 #' @export
 #'
@@ -333,7 +335,7 @@ gamma_fit <- function(y,m0 = 0, C0 = 1, FF,G,D,W, offset, IC_prob=0.95,parms=lis
 #' @param D Matrix: The discount factor matrix at time t.
 #' @param W Matrix: The noise matrix at time t.
 #' @param offset Vector: Same dimension as y. A vector contaning the offset at time t.
-#' @param params list: a list contaning extra arguments. In this model, extra parameters are not used.
+#' @param parms list: a list contaning extra arguments. In this model, extra parameters are not used.
 #'
 #' @return A list containing:
 #' \itemize{
@@ -348,7 +350,7 @@ gamma_fit <- function(y,m0 = 0, C0 = 1, FF,G,D,W, offset, IC_prob=0.95,parms=lis
 #'  \item mt: The filtered mean of the latent vector at time t.
 #'  \item Ct: The filtered covariance matrix of the latent vector at time t.
 #'  \item y: The observed value at time t.
-#'  \item params: The same as the argument.
+#'  \item parms: The same as the argument.
 #'  }
 #' @export
 #'
@@ -363,7 +365,7 @@ gamma_fit <- function(y,m0 = 0, C0 = 1, FF,G,D,W, offset, IC_prob=0.95,parms=lis
 #' offset=1
 #'
 #' filtered_data=poisson_filter(y,m0,C0,FF,G,D,W,offset)
-poisson_filter = function(y,m0,C0,FF,G,D,W,offset=1){
+poisson_filter = function(y,m0,C0,FF,G,D,W,offset=1,parms=list()){
   at <- G%*%m0
   Rt <-G%*%C0%*%(t(G))*D+W
 
@@ -400,7 +402,7 @@ poisson_filter = function(y,m0,C0,FF,G,D,W,offset=1){
               'a'=a,     'b'=b,
               'a.post'=a.post,'b.post'=b.post,
               'mt'=mt,   'Ct'=Ct,
-              'y'=y))
+              'y'=y,'parms'=parms))
 }
 
 # poisson_LB_filter = function(y,m0,C0,FF,G,D,W,pop){
@@ -487,6 +489,7 @@ poisson_pred=function(model,IC_prob=0.95){
 #' @param W Array: A 3D-array containing the covariance matrix of the noise for each time. It's dimension should be the same as D.
 #' @param offset Matrix: The offset of the model. It's dimension should be the same as y.
 #' @param IC_prob Numeric: the desired credibility for the credibility interval.
+#' @param parms list: a list contaning extra arguments. In this model, extra parameters are not used.
 #'
 #' @return A list containing the following values:
 #' \itemize{
@@ -511,6 +514,7 @@ poisson_pred=function(model,IC_prob=0.95){
 #'    \item IC_prob Numeric: Deprecated
 #'    \item offset Vector: The same as the argument (same values).
 #'    \item data_out Matrix: The same as the argument y (same values).
+#'    \item parms: The same as the argument.
 #' }
 #' @export
 #'
@@ -531,7 +535,7 @@ poisson_pred=function(model,IC_prob=0.95){
 #'
 #' plot(y)
 #' lines(fitted_data$pred[1,])
-poisson_fit <- function(y,m0 = 0, C0 = 1, FF,G,D,W, offset, IC_prob=0.95){
+poisson_fit <- function(y,m0 = 0, C0 = 1, FF,G,D,W, offset, IC_prob=0.95,parms=list()){
   T <- dim(y)[1]
   n <- dim(FF)[1]
   r <- dim(FF)[2]
@@ -610,7 +614,7 @@ poisson_fit <- function(y,m0 = 0, C0 = 1, FF,G,D,W, offset, IC_prob=0.95){
                  pred, var.pred, icl.pred, icu.pred,
                  mts, Cts ,
                  IC_prob,offset,
-                 y)
+                 y,parms)
   names(result) <- c("mt",  "Ct",
                      "ft", "qt",
                      "a", "b",
@@ -619,7 +623,7 @@ poisson_fit <- function(y,m0 = 0, C0 = 1, FF,G,D,W, offset, IC_prob=0.95){
                      "pred", "var.pred", "icl.pred", "icu.pred",
                      "mts", "Cts",
                      "IC_prob",'offset',
-                     "data_out")
+                     "data_out",'parms')
   return(result)
 
 }
@@ -656,7 +660,7 @@ system_multinom <- function(x, parms){
 #' @param D Matrix: The discount factor matrix at time t.
 #' @param W Matrix: The noise matrix at time t.
 #' @param offset Vector: Same dimension as y. A vector contaning the offset at time t.
-#' @param params list: a list contaning extra arguments. In this model, extra parameter are not used.
+#' @param parms list: a list contaning extra arguments. In this model, extra parameters are not used.
 #'
 #' @return A list containing:
 #' \itemize{
@@ -688,7 +692,7 @@ system_multinom <- function(x, parms){
 #' offset=c(1,1,1)
 #'
 #' filtered_data=GDLM::multnom_filter(y,m0,C0,FF,G,D,W,offset)
-multnom_filter = function(y,m0,C0,FF,G,D,W,offset=c(1,1,1)){
+multnom_filter = function(y,m0,C0,FF,G,D,W,offset=c(1,1,1),parms=list()){
   r=dim(FF)[2]
 
   at = (G%*%m0)[,1]
@@ -738,7 +742,7 @@ multnom_filter = function(y,m0,C0,FF,G,D,W,offset=c(1,1,1)){
               'alpha'=alpha,     'alpha_star'=alpha_star,
               'At'=At,
               'mt'=mt,   'Ct'=Ct,
-              'y'=y))
+              'y'=y,'parms'=parms))
 }
 
 #' multnom_pred
@@ -858,6 +862,7 @@ multnom_pred=function(model,IC_prob=0.95){
 #' @param W Array: A 3D-array containing the covariance matrix of the noise for each time. It's dimension should be the same as D.
 #' @param offset Matrix: The offset of the model. It's dimension should be the same as y.
 #' @param IC_prob Numeric: the desired credibility for the credibility interval.
+#' @param parms list: a list contaning extra arguments. In this model, extra parameters are not used.
 #'
 #' @return A list containing the following values:
 #' \itemize{
@@ -883,6 +888,7 @@ multnom_pred=function(model,IC_prob=0.95){
 #'    \item offset Vector: The same as the argument (same values).
 #'    \item log_offset Vector: The log offset.
 #'    \item data_out Matrix: The same as the argument y (same values).
+#'    \item parms: The same as the argument.
 #' }
 #' @export
 #' @importFrom MASS ginv
@@ -915,7 +921,7 @@ multnom_pred=function(model,IC_prob=0.95){
 #' lines(fitted_model$pred[1,],col='red')
 #' lines(fitted_model$pred[2,],col='green')
 #' lines(fitted_model$pred[3,],col='blue')
-multnom_fit <- function(y,m0=0, C0=1, FF,G,D,W, offset, IC_prob=0.95){
+multnom_fit <- function(y,m0=0, C0=1, FF,G,D,W, offset, IC_prob=0.95,parms=list()){
   T <- nrow(y)
   n <- dim(FF)[1]
 
@@ -994,7 +1000,7 @@ multnom_fit <- function(y,m0=0, C0=1, FF,G,D,W, offset, IC_prob=0.95){
                  mts, Cts ,
                  pred, var.pred, icl.pred, icu.pred,
                  exp(offset),offset,
-                 y)
+                 y,parms)
   names(result) <- c("mt",  "Ct",
                      "ft", "Qt",
                      'alpha','alpha_star',
@@ -1003,7 +1009,7 @@ multnom_fit <- function(y,m0=0, C0=1, FF,G,D,W, offset, IC_prob=0.95){
                      "mts", "Cts",
                      "pred", "var.pred", "icl.pred", "icu.pred",
                      'offset','log_offset',
-                     "data_out")
+                     "data_out",'parms')
   return(result)
 }
 
@@ -1019,7 +1025,7 @@ multnom_fit <- function(y,m0=0, C0=1, FF,G,D,W, offset, IC_prob=0.95){
 #' @param D Matrix: The discount factor matrix at time t.
 #' @param W Matrix: The noise matrix at time t.
 #' @param offset Vector: Same dimension as y. A vector contaning the offset at time t.
-#' @param params list: a list contaning extra arguments. In this model, extra parameters are not used.
+#' @param parms list: a list contaning extra arguments. In this model, extra parameters are not used.
 #'
 #' @return A list containing:
 #' \itemize{
@@ -1048,7 +1054,7 @@ multnom_fit <- function(y,m0=0, C0=1, FF,G,D,W, offset, IC_prob=0.95){
 #' W=diag(c(0,0),2,2)
 #' offset=c(0)
 #' filtered_data=GDLM::normal_filter(y,m0,C0,FF,G,D,W,offset)
-normal_filter = function(y,m0,C0,FF,G,D,W,offset=NULL){
+normal_filter = function(y,m0,C0,FF,G,D,W,offset=NULL,parms=list()){
   r=2
 
   at = (G%*%m0)
@@ -1124,7 +1130,7 @@ normal_filter = function(y,m0,C0,FF,G,D,W,offset=NULL){
               'ft'=ft,   'Qt'=Qt,
               'tau'=c(tau0,tau1,tau2,tau3),     'tau_star'=c(tau0_star,tau1_star,tau2_star,tau3_star),
               'mt'=mt,   'Ct'=Ct,
-              'y'=y))
+              'y'=y,'parms'=parms))
 }
 
 normal_pred=function(filter,IC_prob){
@@ -1153,7 +1159,7 @@ normal_pred=function(filter,IC_prob){
   )
 }
 
-normal_fit <- function(y,m0=0, C0=1, FF,G,D,W, offset, IC_prob=0.95){
+normal_fit <- function(y,m0=0, C0=1, FF,G,D,W, offset, IC_prob=0.95,parms=list()){
 
   # Definindo quantidades
   T <- nrow(y)
@@ -1230,7 +1236,7 @@ normal_fit <- function(y,m0=0, C0=1, FF,G,D,W, offset, IC_prob=0.95){
                  "mts"=mts, "Cts"=Cts,
                  "pred"=pred, "var.pred"=var.pred, "icl.pred"=icl.pred, "icu.pred"=icu.pred,
                  'log.vero'=log.vero,
-                 "data_out"=y)
+                 "data_out"=y,'parms'=parms)
   return(result)
 }
 

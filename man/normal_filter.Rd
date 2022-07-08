@@ -4,7 +4,7 @@
 \alias{normal_filter}
 \title{normal_filter}
 \usage{
-normal_filter(y, m0, C0, FF, G, D, W, offset = NULL)
+normal_filter(y, m0, C0, FF, G, D, W, offset = NULL, parms = list())
 }
 \arguments{
 \item{y}{Vector: The observed values at time t. Must have length greater than 1.}
@@ -23,7 +23,7 @@ normal_filter(y, m0, C0, FF, G, D, W, offset = NULL)
 
 \item{offset}{Vector: Same dimension as y. A vector contaning the offset at time t.}
 
-\item{params}{list: a list contaning extra arguments. In this model, extra parameters are not used.}
+\item{parms}{list: a list contaning extra arguments. In this model, extra parameters are not used.}
 }
 \value{
 A list containing:

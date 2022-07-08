@@ -4,7 +4,7 @@
 \alias{multnom_filter}
 \title{multnom_filter}
 \usage{
-multnom_filter(y, m0, C0, FF, G, D, W, offset = c(1, 1, 1))
+multnom_filter(y, m0, C0, FF, G, D, W, offset = c(1, 1, 1), parms = list())
 }
 \arguments{
 \item{y}{Vector: The observed values at time t. Must have length greater than 1.}
@@ -23,7 +23,7 @@ multnom_filter(y, m0, C0, FF, G, D, W, offset = c(1, 1, 1))
 
 \item{offset}{Vector: Same dimension as y. A vector contaning the offset at time t.}
 
-\item{params}{list: a list contaning extra arguments. In this model, extra parameter are not used.}
+\item{parms}{list: a list contaning extra arguments. In this model, extra parameters are not used.}
 }
 \value{
 A list containing:

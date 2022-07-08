@@ -35,6 +35,8 @@ gamma_fit(
 \item{offset}{Matrix: The offset of the model. It's dimension should be the same as y.}
 
 \item{IC_prob}{Numeric: the desired credibility for the credibility interval.}
+
+\item{parms}{list: a list contaning extra arguments. In this model, parms must contain a variable named phi, which is equal to alpha.}
 }
 \value{
 A list containing the following values:
@@ -60,6 +62,7 @@ A list containing the following values:
    \item IC_prob Numeric: Deprecated
    \item offset Vector: The same as the argument (same values).
    \item data_out Matrix: The same as the argument y (same values).
+   \item parms: The same as the argument.
 }
 }
 \description{

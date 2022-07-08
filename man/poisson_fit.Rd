@@ -4,7 +4,18 @@
 \alias{poisson_fit}
 \title{poisson_fit}
 \usage{
-poisson_fit(y, m0 = 0, C0 = 1, FF, G, D, W, offset, IC_prob = 0.95)
+poisson_fit(
+  y,
+  m0 = 0,
+  C0 = 1,
+  FF,
+  G,
+  D,
+  W,
+  offset,
+  IC_prob = 0.95,
+  parms = list()
+)
 }
 \arguments{
 \item{y}{Matrix: The observed data. It's dimension shoulb be T x m, where T is the length of the time series and m is the number of outcomes at each time.}
@@ -24,6 +35,8 @@ poisson_fit(y, m0 = 0, C0 = 1, FF, G, D, W, offset, IC_prob = 0.95)
 \item{offset}{Matrix: The offset of the model. It's dimension should be the same as y.}
 
 \item{IC_prob}{Numeric: the desired credibility for the credibility interval.}
+
+\item{parms}{list: a list contaning extra arguments. In this model, extra parameters are not used.}
 }
 \value{
 A list containing the following values:
@@ -49,6 +62,7 @@ A list containing the following values:
    \item IC_prob Numeric: Deprecated
    \item offset Vector: The same as the argument (same values).
    \item data_out Matrix: The same as the argument y (same values).
+   \item parms: The same as the argument.
 }
 }
 \description{

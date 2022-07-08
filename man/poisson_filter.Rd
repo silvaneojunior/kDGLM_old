@@ -4,7 +4,7 @@
 \alias{poisson_filter}
 \title{poisson_filter}
 \usage{
-poisson_filter(y, m0, C0, FF, G, D, W, offset = 1)
+poisson_filter(y, m0, C0, FF, G, D, W, offset = 1, parms = list())
 }
 \arguments{
 \item{y}{Vector: The observed value at time t.}
@@ -23,7 +23,7 @@ poisson_filter(y, m0, C0, FF, G, D, W, offset = 1)
 
 \item{offset}{Vector: Same dimension as y. A vector contaning the offset at time t.}
 
-\item{params}{list: a list contaning extra arguments. In this model, extra parameters are not used.}
+\item{parms}{list: a list contaning extra arguments. In this model, extra parameters are not used.}
 }
 \value{
 A list containing:
@@ -39,7 +39,7 @@ A list containing:
  \item mt: The filtered mean of the latent vector at time t.
  \item Ct: The filtered covariance matrix of the latent vector at time t.
  \item y: The observed value at time t.
- \item params: The same as the argument.
+ \item parms: The same as the argument.
  }
 }
 \description{
