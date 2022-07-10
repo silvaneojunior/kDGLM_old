@@ -4,13 +4,7 @@
 \alias{fit_model}
 \title{fit_model}
 \usage{
-fit_model(
-  ...,
-  data_out,
-  kernel = "Poisson",
-  offset = data_out^0,
-  parms = list()
-)
+fit_model(..., data_out, kernel, offset = data_out^0, parms = list())
 }
 \arguments{
 \item{...}{<undefined class> or list: The structural block of the model.}
@@ -36,10 +30,10 @@ mu=rnorm(T,0,0.1)
 y=rnorm(T,cumsum(mu))
 
 level=polynomial_block(order=1,
-                       values=matrix(c(rep(1,T),rep(0,T)),2,T,byrow=TRUE),
+                       values=c(1,0),
                        D=1/0.98)
 variance=polynomial_block(order=1,
-                          values=matrix(c(rep(0,T),rep(1,T)),2,T,byrow=TRUE),
+                          values=c(0,1),
                           D=1/1)
 
 fitted_data=fit_model(level,variance,data_out=matrix(c(y,rep(0,T)),T,2),kernel='Normal')
@@ -52,37 +46,22 @@ lines(fitted_data$mts[1,])
 w=(200/40)*2*pi
 y=rpois(T,20*(sin(w*1:T/T)+2))
 
-level=polynomial_block(order=1,values=matrix(1,1,T),D=1/0.95)
-season=harmonic_block(period=40,values=matrix(1,1,T),D=1/0.98)
+level=polynomial_block(order=1,values=1,D=1/0.95)
+season=harmonic_block(period=40,values=1,D=1/0.98)
 
 fitted_data=fit_model(level,season,data_out=y,kernel='Poisson')
 show_fit(fitted_data,smooth = TRUE)$plot
 
 # Gamma case
+T=200
 w=(200/40)*2*pi
 phi=2.5
 y= matrix(rgamma(T,phi,phi/20*(sin(w*1:T/T)+2)),T,1)
 
-level=polynomial_block(order=1,values=matrix(1,1,T),D=1/0.95)
-season=harmonic_block(period=40,values=matrix(1,1,T),D=1/0.98)
+level=polynomial_block(order=1,values=1,D=1/0.95)
+season=harmonic_block(period=40,values=1,D=1/0.98)
 
-final_block=block_join(level,season)
+fitted_data=fit_model(level,season,data_out=y,kernel='Gamma',parms=list('phi'=phi))
 
-fitted_data=fit_model(final_block,data_out=y,kernel='Gamma',parms=list('phi'=phi))
-show_fit(fitted_data,smooth = TRUE)$plot
-
-# Multinomial case
-w=(200/40)*2*pi
-y1= matrix(rpois(T,20*(sin(w*1:T/T)+2)),T,1)
-y2= matrix(rpois(T,1:200/200+1),T,1)
-y3= matrix(rpois(T,6),T,1)
-y=cbind(y1,y2,y3)
-
-level_1=polynomial_block(order=1,values=matrix(c(rep(1,T),rep(0,T)),2,T,byrow=TRUE))
-level_2=polynomial_block(order=2,values=matrix(c(rep(0,T),rep(1,T)),2,T,byrow=TRUE))
-season_2=harmonic_block(period=20,values=matrix(c(rep(0,T),rep(1,T)),2,T,byrow=TRUE))
-
-
-fitted_data=fit_model(level_1,level_2,season_2,data_out=y,kernel='Multinomial')
 show_fit(fitted_data,smooth = TRUE)$plot
 }

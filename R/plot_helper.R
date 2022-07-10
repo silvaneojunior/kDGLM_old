@@ -36,7 +36,7 @@ calcula_max=function(pre_max){
 #' @param model
 #' @param IC_prob
 #' @param smooth
-#' @param dinamic
+#' @param dynamic
 #' @param t_offset
 #' @param labels
 #'
@@ -114,7 +114,7 @@ show_fit=function(model,IC_prob=0.95,smooth=TRUE,dinamic=TRUE,t_offset=0,labels=
 #' @param smooth
 #' @param cut_off
 #' @param IC_prob
-#' @param dinamic
+#' @param dynamic
 #' @param tranform_y
 #'
 #' @return

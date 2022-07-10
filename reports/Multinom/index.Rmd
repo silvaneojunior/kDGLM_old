@@ -153,55 +153,31 @@ shinyApp(
       
       ord_labels=labels[indices]
       
-      offset=pre_exp
-      offset=offset[indices,]
-      offset[1,]=offset[1,]/offset[5,]
-      offset[2,]=offset[2,]/offset[5,]
-      offset[3,]=offset[3,]/offset[5,]
-      offset[4,]=offset[4,]/offset[5,]
+      offset=t(pre_exp)[,indices]
       
-      offset=log(offset[-5,])**0
-      #### offset ####
-        
-      bloc_final=polynomial_block(order=1,
-                                 value=offset,
-                                 name='offset',
-                                 D=1/1,
-                                 m0=1,
-                                 C0=0,
-                                 W=0)
-      
-      
-      for(i in c(1:out_var)){
-        #### nível ####
-        FF_static=matrix(0,out_var,T_final)
-        FF_static[i,]=1
-        bloc_nivel=polynomial_block(order=1,values=FF_static,name='nivel_serie_' %>% paste0(i),
-                                   D=1/0.95,m0=0,C0=1,W=0)
-        #### sazonalidade ####
-        bloc_sazo=harmonic_block(period=12,values=FF_static,name='sazo_serie_' %>% paste0(i),
-                                  D=1/0.98,m0=0,C0=1,W=0)
-        #### vacina ####
-        FF_vac=matrix(0,out_var,T_final)
-        FF_vac[i,true_indice_inter:T_final]=1
-        W=array(0,c(1,1,T_final))
-        W[,,true_indice_inter]=1
-        bloc_vac=polynomial_block(order=1,values=FF_vac,name='vac_serie_' %>% paste0(i),
-                                   D=1/1,m0=0,C0=0,W=W)
-        #### covid ####
-        FF_cov=matrix(0,out_var,T_final)
-        FF_cov[i,146:T_final]=1
-        W=array(0,c(1,1,T_final))
-        W[,,146]=1
-        bloc_cov=polynomial_block(order=1,values=FF_cov,name='cov_serie_' %>% paste0(i),
-                                 D=1/1,m0=0,C0=0,W=W)
-        
-        bloc_final=block_join(bloc_final,bloc_nivel,bloc_sazo,bloc_vac,bloc_cov)
-      }
-      
-      resultado=fit_model(bloc_final,
-                              data_out=y,
-                              kernel='Multinomial')
+      #### nível ####
+      bloc_nivel=polynomial_block(order=1,values=1,name='level',
+                                 D=1/0.95,m0=0,C0=1,W=0,k=4)
+      #### sazonalidade ####
+      bloc_sazo=harmonic_block(period=12,values=1,name='season',
+                                D=1/0.98,m0=0,C0=1,W=0,k=4)
+      #### vacina ####
+      values_vac=rep(0,T_final)
+      values_vac[true_indice_inter:T_final]=1
+      W=array(0,c(1,1,T_final))
+      W[,,true_indice_inter]=1
+      bloc_vac=polynomial_block(order=1,values=values_vac,name='vaccine',
+                                 D=1/1,m0=0,C0=0,W=W,k=4)
+      #### covid ####
+      values_cov=rep(0,T_final)
+      values_cov[146:T_final]=1
+      W=array(0,c(1,1,T_final))
+      W[,,146]=1
+      bloc_cov=polynomial_block(order=1,values=values_cov,name='covid',
+                               D=1/1,m0=0,C0=0,W=W,k=4)
+
+      resultado=fit_model(bloc_nivel,bloc_sazo,bloc_vac,bloc_cov,
+                          data_out=y,kernel='Multinomial',offset=offset)
       })
     plot_data=eventReactive(input$FaixaEtaria,{
       out_var=4
@@ -221,7 +197,7 @@ shinyApp(
       tile_data=matrix(1,4,4)
       
       # 5=Vacina
-      n_var=5
+      n_var=dim(ajuste()$FF)[1]-8
       
       print(ajuste()$names)
       
@@ -234,13 +210,13 @@ shinyApp(
       plot_data=rbind(plot_data,data)
         }else{
           
-      sd1=ajuste()$Cts[i*n_var,i*n_var,156]**0.5
-      sd2=ajuste()$Cts[j*n_var,j*n_var,156]**0.5
-      correl=ajuste()$Cts[i*n_var,j*n_var,156]/(sd1*sd2)
+      sd1=ajuste()$Cts[i+n_var,i+n_var,156]**0.5
+      sd2=ajuste()$Cts[j+n_var,j+n_var,156]**0.5
+      correl=ajuste()$Cts[i+n_var,j+n_var,156]/(sd1*sd2)
       
       tile_data[i,j]=correl
       
-      cov_mat=ajuste()$Cts[c(i,j)*n_var,c(i,j)*n_var,156]
+      cov_mat=ajuste()$Cts[c(i,j)+n_var,c(i,j)+n_var,156]
       transf=chol(cov_mat)
       
       data=matrix(c(x,y),2,n_points,byrow=TRUE)
@@ -248,7 +224,7 @@ shinyApp(
       data=transf%*%data
       
       for(k in c(1:n_points)){
-        data[,k]=data[,k]+ajuste()$mts[c(i,j)*n_var,156]
+        data[,k]=data[,k]+ajuste()$mts[c(i,j)+n_var,156]
       }
       
       data=cbind(paste0(labels[-indices[5]][i],'-',labels[-indices[5]][j]),t(data))

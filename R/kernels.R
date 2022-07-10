@@ -97,12 +97,16 @@ gamma_filter = function(y,m0,C0,FF,G,D,W,offset=1,parms){
 
   holder_fq=exp(-ft+qt/2)
   phi=parms$phi
-  print(qt/2)
 
-  tau1=1/(2*phi*holder_fq*(-log(phi)+qt/2))
-  tau0=(1-phi*holder_fq*tau1)/phi
+  # tau1=1/(2*phi*holder_fq*(-log(phi)+qt/2))
+  # tau0=(1-phi*holder_fq*tau1)/phi
 
-  print(c(tau0,tau1))
+  s=multiroot(f = function(x){qt - trigamma(phi*exp(x)-1)} ,
+              start = c(1),
+              parms = c())
+
+  exp(s$root) -> tau0
+  exp(ft+digamma(phi*tau0-1))/phi -> tau1
 
   # Calculating posterior
 
@@ -113,6 +117,10 @@ gamma_filter = function(y,m0,C0,FF,G,D,W,offset=1,parms){
 
   ft_star <- log(phi*tau1_star)-digamma(phi*tau0_star-1)
   qt_star <- trigamma(phi*tau0_star-1)
+
+  # holder_fq_star=exp(1-tau0_star*phi)/(phi*tau1_star)
+  # qt_star=2/(2*phi*holder_fq_star*tau1_star)+log(phi)
+  # ft_star=qt_star/2-log(holder_fq_star)
 
   mt <- at+reduc_RFF*as.vector((ft_star-ft)*(1/(qt)))
   if(length(qt)>1){
@@ -160,8 +168,8 @@ gamma_filter = function(y,m0,C0,FF,G,D,W,offset=1,parms){
 #' gamma_pred(model)
 gamma_pred=function(model,IC_prob=0.95){
   phi=model$parms$alpha
-  tau0=model$tau0
-  tau1=model$tau1
+  tau0=phi*model$tau0
+  tau1=phi*model$tau1
   list(
     'pred'     = tau1/(tau0-1),
     'var.pred' = ((tau0/(tau1-1))**2)*(tau0+phi-1)/((tau0-2)*phi),
@@ -303,22 +311,15 @@ gamma_fit <- function(y,m0 = 0, C0 = 1, FF,G,D,W, offset, IC_prob=0.95,parms=lis
   mts <- smoothed$mts
   Cts <- smoothed$Cts
 
-  result <- list(mt,Ct,
-                 ft, qt,
-                 tau0,tau1,
-                 tau0_star, tau1_star,
-                 FF, G, D,W,
-                 mts, Cts ,
-                 IC_prob,offset,
-                 y,parms)
-  names(result) <- c("mt",  "Ct",
-                     "ft", "qt",
-                     "tau0", "tau1",
-                     "tau0_star", "tau1_star",
-                     "FF", "G", "D","W",
-                     "mts", "Cts",
-                     "IC_prob",'offset',
-                     "data_out","parms")
+  result <- list('mt'=mt,'Ct'=Ct,
+                 'ft'=ft,'qt'=qt,
+                 'tau0'=tau0,'tau1'=tau1,
+                 'tau0_star'=tau0_star, 'tau1_star'=tau1_star,
+                 'FF'=FF, 'G'=G, 'D'=D,'W'=W,
+                 'pred'=pred, 'var.pred'=var.pred, 'icl.pred'=icl.pred, 'icu.pred'=icu.pred,
+                 'mts'=mts, 'Cts'=Cts ,
+                 'IC_prob'=IC_prob,'offset'=offset,
+                 'data_out'=y,'parms'=parms)
   return(result)
 
 }
@@ -606,24 +607,16 @@ poisson_fit <- function(y,m0 = 0, C0 = 1, FF,G,D,W, offset, IC_prob=0.95,parms=l
   mts <- smoothed$mts
   Cts <- smoothed$Cts
 
-  result <- list(mt,Ct,
-                 ft, qt,
-                 a,b,
-                 a.post, b.post,
-                 FF, G, D,W,
-                 pred, var.pred, icl.pred, icu.pred,
-                 mts, Cts ,
-                 IC_prob,offset,
-                 y,parms)
-  names(result) <- c("mt",  "Ct",
-                     "ft", "qt",
-                     "a", "b",
-                     "a.post", "b.post",
-                     "FF", "G", "D","W",
-                     "pred", "var.pred", "icl.pred", "icu.pred",
-                     "mts", "Cts",
-                     "IC_prob",'offset',
-                     "data_out",'parms')
+
+  result <- list('mt'=mt,'Ct'=Ct,
+                 'ft'=ft,'qt'=qt,
+                 'a'=a,'b'=b,
+                 'a.post'=a.post, 'b.post'=b.post,
+                 'FF'=FF, 'G'=G, 'D'=D,'W'=W,
+                 'pred'=pred, 'var.pred'=var.pred, 'icl.pred'=icl.pred, 'icu.pred'=icu.pred,
+                 'mts'=mts, 'Cts'=Cts ,
+                 'IC_prob'=IC_prob,'offset'=offset,
+                 'data_out'=y,'parms'=parms)
   return(result)
 
 }
@@ -768,8 +761,7 @@ multnom_filter = function(y,m0,C0,FF,G,D,W,offset=c(1,1,1),parms=list()){
 #' # A fitted model shoulb be used as argument, but you can also pass only the parameter themselves.
 #'
 #' model=list(
-#' 'ft'=log(c(1:3)),
-#' 'Qt'=diag(3),
+#' 'alpha'=c(10,2,6),
 #' 'y'=c(3,2,5)
 #' )
 #'
@@ -992,24 +984,15 @@ multnom_fit <- function(y,m0=0, C0=1, FF,G,D,W, offset, IC_prob=0.95,parms=list(
   mts <- smoothed$mts
   Cts <- smoothed$Cts
 
-  result <- list(mt,Ct,
-                 ft, Qt,
-                 alpha,alpha_star,
-                 tau,tau_star,
-                 FF, G, D,W,
-                 mts, Cts ,
-                 pred, var.pred, icl.pred, icu.pred,
-                 exp(offset),offset,
-                 y,parms)
-  names(result) <- c("mt",  "Ct",
-                     "ft", "Qt",
-                     'alpha','alpha_star',
-                     'tau','tau_star',
-                     "FF", "G", "D","W",
-                     "mts", "Cts",
-                     "pred", "var.pred", "icl.pred", "icu.pred",
-                     'offset','log_offset',
-                     "data_out",'parms')
+  result <- list('mt'=mt,'Ct'=Ct,
+                 'ft'=ft,'qt'=qt,
+                 'alpha'=alpha,'alpha_star'=alpha_star,
+                 'tau'=tau, 'tau_star'=tau_star,
+                 'FF'=FF, 'G'=G, 'D'=D,'W'=W,
+                 'pred'=pred, 'var.pred'=var.pred, 'icl.pred'=icl.pred, 'icu.pred'=icu.pred,
+                 'mts'=mts, 'Cts'=Cts ,
+                 'IC_prob'=IC_prob,'offset'=offset,
+                 'data_out'=y,'parms'=parms)
   return(result)
 }
 

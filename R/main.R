@@ -19,10 +19,10 @@
 #' y=rnorm(T,cumsum(mu))
 #'
 #' level=polynomial_block(order=1,
-#'                        values=matrix(c(rep(1,T),rep(0,T)),2,T,byrow=TRUE),
+#'                        values=c(1,0),
 #'                        D=1/0.98)
 #' variance=polynomial_block(order=1,
-#'                           values=matrix(c(rep(0,T),rep(1,T)),2,T,byrow=TRUE),
+#'                           values=c(0,1),
 #'                           D=1/1)
 #'
 #' fitted_data=fit_model(level,variance,data_out=matrix(c(y,rep(0,T)),T,2),kernel='Normal')
@@ -35,45 +35,33 @@
 #' w=(200/40)*2*pi
 #' y=rpois(T,20*(sin(w*1:T/T)+2))
 #'
-#' level=polynomial_block(order=1,values=matrix(1,1,T),D=1/0.95)
-#' season=harmonic_block(period=40,values=matrix(1,1,T),D=1/0.98)
+#' level=polynomial_block(order=1,values=1,D=1/0.95)
+#' season=harmonic_block(period=40,values=1,D=1/0.98)
 #'
 #' fitted_data=fit_model(level,season,data_out=y,kernel='Poisson')
 #' show_fit(fitted_data,smooth = TRUE)$plot
 #'
 #' # Gamma case
+#' T=200
 #' w=(200/40)*2*pi
 #' phi=2.5
 #' y= matrix(rgamma(T,phi,phi/20*(sin(w*1:T/T)+2)),T,1)
 #'
-#' level=polynomial_block(order=1,values=matrix(1,1,T),D=1/0.95)
-#' season=harmonic_block(period=40,values=matrix(1,1,T),D=1/0.98)
+#' level=polynomial_block(order=1,values=1,D=1/0.95)
+#' season=harmonic_block(period=40,values=1,D=1/0.98)
 #'
-#' final_block=block_join(level,season)
+#' fitted_data=fit_model(level,season,data_out=y,kernel='Gamma',parms=list('phi'=phi))
 #'
-#' fitted_data=fit_model(final_block,data_out=y,kernel='Gamma',parms=list('phi'=phi))
 #' show_fit(fitted_data,smooth = TRUE)$plot
-#'
-#' # Multinomial case
-#' w=(200/40)*2*pi
-#' y1= matrix(rpois(T,20*(sin(w*1:T/T)+2)),T,1)
-#' y2= matrix(rpois(T,1:200/200+1),T,1)
-#' y3= matrix(rpois(T,6),T,1)
-#' y=cbind(y1,y2,y3)
-#'
-#' level_1=polynomial_block(order=1,values=matrix(c(rep(1,T),rep(0,T)),2,T,byrow=TRUE))
-#' level_2=polynomial_block(order=2,values=matrix(c(rep(0,T),rep(1,T)),2,T,byrow=TRUE))
-#' season_2=harmonic_block(period=20,values=matrix(c(rep(0,T),rep(1,T)),2,T,byrow=TRUE))
-#'
-#'
-#' fitted_data=fit_model(level_1,level_2,season_2,data_out=y,kernel='Multinomial')
-#' show_fit(fitted_data,smooth = TRUE)$plot
-fit_model <- function(...,data_out,kernel='Poisson',offset=data_out**0,parms=list()){
+fit_model <- function(...,data_out,kernel,offset=data_out**0,parms=list()){
   if(typeof(kernel)==typeof('kernel')){
     kernel=kernel_list[[tolower(kernel)]]
   }
+  if(is.null(dim(data_out))){
+    data_out=matrix(data_out,lenght(data_out),1)
+  }
 
-  structure=block_join(...)
+  structure=block_merge(...)
   if(any(dim(data_out)!=dim(offset))){
     stop('Erro: offset does not have the same dim as data_out.')
   }
@@ -115,13 +103,13 @@ fit_model <- function(...,data_out,kernel='Poisson',offset=data_out**0,parms=lis
 
 }
 
-#' predict
+#' forecast
 #'
 #' Makes predictions for t times ahead using the fitted model.
 #'
 #' @param model <undefined class> or list: The fitted model to be use for predictions.
 #' @param t Numeric: Time window for prediction.
-#' @param offset Matrix: offset for predictions. Should have dimensions k x t, where k is the number of outcomes of the model. If offset is not specified, the last value observed by the model will be used.
+#' @param offset Matrix or scalar: offset for predictions. Should have dimensions k x t, where k is the number of outcomes of the model. If offset is not specified, the last value observed by the model will be used.
 #' @param FF Array: A 3D-array containing the regression matrix for each time. It's dimension should be n x k x t, where n is the number of latent variables, k is the number of outcomes in the model. If not specified, the last value given to the model will be used.
 #' @param D Array: A 3D-array containing the discount factor matrix for each time. It's dimension should be n x n x t, where n is the number of latent variables and T is the time series length. If not specified, the last value given to the model will be used in the first step, and 1 will be use thereafter.
 #' @param W Array: A 3D-array containing the covariance matrix of the noise for each time. It's dimension should be n x n x t, where n is the number of latent variables and T is the time series length. If not specified, 0 will be used.
@@ -140,13 +128,62 @@ fit_model <- function(...,data_out,kernel='Poisson',offset=data_out**0,parms=lis
 #'    \item Rt Array: A 3D-array with the covariance of the linear predictor matrix at each time. Dimensions are k x k x t, where k is the number of outcomes.
 #'    \item plot (if so choosed): A plotly object.
 #' }
+#' @import ggplot2
+#' @import plotly
+#' @import dplyr
+#' @import tidyr
 #' @export
 #'
 #' @examples
-predict=function(model,t=1,offset=NULL,FF=NULL,D=NULL,W=NULL,plot=TRUE,IC_prob=0.95,labels=NULL){
+#' T=200
+#' w=((T+20)/40)*2*pi
+#' y1= matrix(rpois((T+20),20*(sin(w*1:(T+20)/(T+20))+2)),(T+20),1)
+#' y2= matrix(rpois((T+20),1:(T+20)/(T+20)+1),(T+20),1)
+#' y3= matrix(rpois((T+20),6),(T+20),1)
+#' y=cbind(y1,y2,y3)
+#' y_pred=y[T:(T+20),]
+#'
+#' y=y[1:T,]
+#'
+#' level_1=polynomial_block(order=1,values=c(1,0))
+#' level_2=polynomial_block(order=2,values=c(0,1))
+#' season_2=harmonic_block(period=20,values=c(0,1))
+#'
+#'
+#' fitted_data=fit_model(level_1,level_2,season_2,data_out=y,kernel='Multinomial')
+#' show_fit(fitted_data,smooth = TRUE)$plot
+#'
+#' forecast(fitted_data,20,y=y_pred)$plot
+forecast=function(model,t=1,y=NULL,offset=NULL,FF=NULL,D=NULL,W=NULL,plot=TRUE,IC_prob=0.95,labels=NULL){
   n=dim(model$mt)[1]
   t_last=dim(model$mt)[2]
   r=dim(model$FF)[2]
+  r_out=dim(model$data_out)[2]
+
+  show_y=TRUE
+  if(is.null(y)){
+    show_y=FALSE
+    y=model$data_out[t_last,]
+  }
+  if(length(y)==1){
+    y=c(y,rep(0,r_out-1))
+  }
+  if(length(dim(y))<2){
+    y=matrix(y,t,r_out,byrow=TRUE)
+  }
+
+  if(length(dim(FF))>3){
+    stop(paste0('Error: FF should have at most 3 dimensions. Got ',length(dim(FF)),'.'))
+  }
+  if(length(dim(D))>3){
+    stop(paste0('Error: D should have at most 3 dimensions. Got ',length(dim(D)),'.'))
+  }
+  if(length(dim(W))>3){
+    stop(paste0('Error: W should have at most 3 dimensions. Got ',length(dim(W)),'.'))
+  }
+  if(length(dim(offset))>2){
+    stop(paste0('Error: D should have at most 2 dimensions. Got ',length(dim(offset)),'.'))
+  }
 
   if(t>10){
     warning('Warning: Prediction window is big, results will probabily be unreliable.')
@@ -182,21 +219,12 @@ predict=function(model,t=1,offset=NULL,FF=NULL,D=NULL,W=NULL,plot=TRUE,IC_prob=0
   #   W[,,2:t]=0
   # }
   }
-  if(!is.null(offset) & !is.null(log_offset)){
-    stop('Erro: Cannot set both offset and log_offset. Choose only one.')
-  }else{if(!is.null(offset)){
-    log_offset=log(offset)
-  }else{if(!is.null(log_offset)){
-    offset=exp(log_offset)
-  }else{
-    offset=1
-    log_offset=0
-  }}}
-  if(1==length(log_offset)){
-    log_offset=rep(log_offset,t)
-    offset=rep(offset,t)
+  if(is.null(offset)){
+    offset=model$offset[t_last,]
   }
-  print('prediction')
+  if(length(dim(offset))<2){
+    offset=matrix(offset,t,r_out,byrow=TRUE)
+  }
 
   if(dim(FF)[3]!=t){
     stop(paste0('Error: FF should have one matrix for each time or exactly 1 matrix, got ',dim(FF)[3],'!=',t,'.'))
@@ -210,17 +238,17 @@ predict=function(model,t=1,offset=NULL,FF=NULL,D=NULL,W=NULL,plot=TRUE,IC_prob=0
   if(dim(D)[3]!=t){
     stop(paste0('Error: D should have 3º dimention equal to t or 1, got ',dim(D)[3],'.'))
   }
-  if(dim(D)[1]!=n | dim(D)[2]!=n){
-    stop(paste0('Error: D should have 1º and 2º dimentions equal the number of latent variables in the model, got (',dim(D)[1],',',dim(D)[2],')!=(',n,',',n,').'))
+  if(any(dim(D)[-3]!=n)){
+    stop(paste0('Error: D should have 1º and 2º dimentions equal the number of latent variables in the model, got ',dim(D)[1],'x',dim(D)[2],')!=',n,'x',n,'.'))
   }
-  if(dim(W)[1]!=n | dim(W)[2]!=n){
-    stop(paste0('Error: W should have 1º and 2º dimentions equal the number of latent variables in the model, got (',dim(W)[1],',',dim(W)[2],')!=(',n,',',n,').'))
+  if(any(dim(W)[-3]!=n)){
+    stop(paste0('Error: W should have 1º and 2º dimentions equal the number of latent variables in the model, got ',dim(W)[1],'x',dim(W)[2],'!=',n,'x',n,'.'))
   }
   if(dim(W)[3]!=t){
     stop(paste0('Error: W should have 3º dimention equal to t or 1, got ',dim(W)[3],'.'))
   }
-  if(length(offset)!=t){
-    stop(paste0('Error: Offset should have length 1 or equal to t, got ',dim(offset)[1],'!=',n,'.'))
+  if(any(dim(offset)!=c(t,r_out))){
+    stop(paste0('Error: Offset should have dimestions ',t,'x',r_out,', or be a scalar. Got ',dim(offset)[1],'x',dim(offset)[2],'.'))
   }
   #####
 
@@ -228,8 +256,6 @@ predict=function(model,t=1,offset=NULL,FF=NULL,D=NULL,W=NULL,plot=TRUE,IC_prob=0
 
   m0=model$mt[,t_last]
   C0=model$Ct[,,t_last]
-
-  r=dim(model$FF)[2]
 
   D <- ifelse(D == 0, 1, D)
 
@@ -248,10 +274,7 @@ predict=function(model,t=1,offset=NULL,FF=NULL,D=NULL,W=NULL,plot=TRUE,IC_prob=0
   icu.pred <- matrix(NA,dim(model$icu.pred)[1],t)
 
   for(t_i in c(1:t)){
-
-    filter=model$kernel$filter(0,last_m,last_C,FF[,,t_i],G,D[,,t_i],W[,,t_i],offset[t_i])
-
-    print(filter$Rt)
+    filter=model$kernel$filter(y[t_i,],last_m,last_C,FF[,,t_i],G,D[,,t_i],W[,,t_i],offset[t_i,],parms=model$parms)
 
     last_m=filter$at
     last_C=filter$Rt
@@ -331,11 +354,12 @@ predict=function(model,t=1,offset=NULL,FF=NULL,D=NULL,W=NULL,plot=TRUE,IC_prob=0
 
     plot=ggplotly(
         ggplot(plot_data)+
-          geom_point(aes(x=time,y=Prediction,color=Serie,fill=Serie))+
-          geom_ribbon(aes(x=time,ymin=I.C.lower,ymax=I.C.upper,fill=Serie,color=Serie),alpha=0.25)+
-          geom_point(aes(x=time,y=Observation,color=Serie,fill=Serie))+
+          geom_line(aes(x=time,y=Prediction,color=Serie,fill=Serie,linetype=ifelse(time>t_last,'Forecast','One-step ahead prediction')))+
+          geom_ribbon(aes(x=time,ymin=I.C.lower,ymax=I.C.upper,fill=Serie,color=Serie,linetype='C.I.'),alpha=0.25)+
+          geom_point(aes(x=time,y=Observation,color=Serie,fill=Serie,linetype='Observed'))+
           scale_fill_hue('',na.value=NA)+
           scale_color_hue('',na.value=NA)+
+          scale_linetype_manual('',values=c('solid','dashed','solid','solid'))+
           scale_x_continuous('Time')+
           scale_y_continuous('$y_t$')+
           theme_bw()+
@@ -349,12 +373,20 @@ predict=function(model,t=1,offset=NULL,FF=NULL,D=NULL,W=NULL,plot=TRUE,IC_prob=0
 
 #' eval_past
 #'
-#' @param model
-#' @param smooth
-#' @param t_offset
-#' @param IC_prob
+#' Evaluates the predictive values for the observed values used to fit the model. Predictions can be made with smoothed values or with filtered values with a time offset.
 #'
-#' @return
+#' @param model <undefined class> or list: The fitted model to be use for evaluation.
+#' @param smooth bool: The flag indicating if smoothed values should be used. If TRUE, t_offset will not be used.
+#' @param t_offset positive integer: The relative offset for forecast. Values for time t will be calculated based on the filtered values of time t-t_offset. Will be ignored if smooth is TRUE.
+#' @param IC_prob Numeric: The credibility level for the I.C. intervals.
+#'
+#' @return A list containg:
+#' \itemize{
+#'    \item pred Matrix: A matrix with the predictive mean at each time. Dimensions are k x t, where k is the number of outcomes.
+#'    \item var.pred Array: A 3D-array with the predictive covariance matrix at each time. Dimensions are k x k x t, where k is the number of outcomes.
+#'    \item icl.pred Matrix: A matrix with the lower bound of the I.C. based on the credibility given in the arguments. Dimensions are k x t, where k is the number of outcomes.
+#'    \item icu.pred Matrix: A matrix with the upper bound of the I.C. based on the credibility given in the arguments. Dimensions are k x t, where k is the number of outcomes.
+#' }
 #' @export
 #'
 #' @examples
@@ -362,6 +394,9 @@ eval_past=function(model,smooth=FALSE,t_offset=0,IC_prob=0.95){
   if(smooth & t_offset>0){
     t_offset=0
     warning('t_offset is only used if smooth is set to TRUE.')
+  }
+  if(t_offset<0 | round(t_offset)!=t_offset){
+    stop(paste0('ERROR: t_offset should be a positive integer. Got ',t_offset,'.'))
   }
   n=dim(model$mt)[1]
   t_last=dim(model$mt)[2]
@@ -398,8 +433,9 @@ eval_past=function(model,smooth=FALSE,t_offset=0,IC_prob=0.95){
     mt=if(i<=t_offset){model$m0}else{ref_mt[,i-t_offset]}
     Ct=if(i<=t_offset){model$C0}else{ref_Ct[,,i-t_offset]}
 
-    filter=model$kernel$filter(model$data_out[i,],mt,Ct,FF[,,i]  %>% matrix(n,r),G,D[,,i],W[,,i],model$offset[i,])
+    filter=model$kernel$filter(model$data_out[i,],mt,Ct,FF[,,i]  %>% matrix(n,r),G,D[,,i],W[,,i],model$offset[i,],parms=model$parms)
     prediction=model$kernel$pred(filter,IC_prob)
+
 
     pred[,i]      <- prediction$pred
     var.pred[,,i] <- prediction$var.pred
@@ -408,5 +444,5 @@ eval_past=function(model,smooth=FALSE,t_offset=0,IC_prob=0.95){
   }
 
 
-  return(list('pred'=pred,'icl.pred'=icl.pred,'icu.pred'=icu.pred))
+  return(list('pred'=pred,'var.pred'=var.pred,'icl.pred'=icl.pred,'icu.pred'=icu.pred))
 }

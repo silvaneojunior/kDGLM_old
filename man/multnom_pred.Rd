@@ -30,8 +30,7 @@ PLACE PREDICTIVE DISTRIBUITION.
 # A fitted model shoulb be used as argument, but you can also pass only the parameter themselves.
 
 model=list(
-'ft'=log(c(1:3)),
-'Qt'=diag(3),
+'alpha'=c(10,2,6),
 'y'=c(3,2,5)
 )
 
