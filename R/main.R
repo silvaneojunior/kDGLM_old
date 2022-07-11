@@ -58,7 +58,7 @@ fit_model <- function(...,data_out,kernel,offset=data_out**0,parms=list()){
     kernel=kernel_list[[tolower(kernel)]]
   }
   if(is.null(dim(data_out))){
-    data_out=matrix(data_out,lenght(data_out),1)
+    data_out=matrix(data_out,length(data_out),1)
   }
 
   structure=block_merge(...)

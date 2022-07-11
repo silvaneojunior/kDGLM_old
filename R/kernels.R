@@ -98,15 +98,15 @@ gamma_filter = function(y,m0,C0,FF,G,D,W,offset=1,parms){
   holder_fq=exp(-ft+qt/2)
   phi=parms$phi
 
-  # tau1=1/(2*phi*holder_fq*(-log(phi)+qt/2))
-  # tau0=(1-phi*holder_fq*tau1)/phi
+  tau1=1/(2*phi*holder_fq*(-log(phi)+qt/2))
+  tau0=(1-phi*holder_fq*tau1)/phi
 
-  s=multiroot(f = function(x){qt - trigamma(phi*exp(x)-1)} ,
-              start = c(1),
-              parms = c())
-
-  exp(s$root) -> tau0
-  exp(ft+digamma(phi*tau0-1))/phi -> tau1
+  # s=multiroot(f = function(x){qt - trigamma(phi*exp(x)-1)} ,
+  #             start = c(1),
+  #             parms = c())
+  #
+  # exp(s$root) -> tau0
+  # exp(ft+digamma(phi*tau0-1))/phi -> tau1
 
   # Calculating posterior
 
@@ -115,12 +115,12 @@ gamma_filter = function(y,m0,C0,FF,G,D,W,offset=1,parms){
 
   # Compatibilizing posterior
 
-  ft_star <- log(phi*tau1_star)-digamma(phi*tau0_star-1)
-  qt_star <- trigamma(phi*tau0_star-1)
+  # ft_star <- log(phi*tau1_star)-digamma(phi*tau0_star-1)
+  # qt_star <- trigamma(phi*tau0_star-1)
 
-  # holder_fq_star=exp(1-tau0_star*phi)/(phi*tau1_star)
-  # qt_star=2/(2*phi*holder_fq_star*tau1_star)+log(phi)
-  # ft_star=qt_star/2-log(holder_fq_star)
+  holder_fq_star=exp(1-tau0_star*phi)/(phi*tau1_star)
+  qt_star=2/(2*phi*holder_fq_star*tau1_star)+log(phi)
+  ft_star=qt_star/2-log(holder_fq_star)
 
   mt <- at+reduc_RFF*as.vector((ft_star-ft)*(1/(qt)))
   if(length(qt)>1){
@@ -1116,6 +1116,15 @@ normal_filter = function(y,m0,C0,FF,G,D,W,offset=NULL,parms=list()){
               'y'=y,'parms'=parms))
 }
 
+#' Title
+#'
+#' @param filter
+#' @param IC_prob
+#'
+#' @return
+#' @export
+#'
+#' @examples
 normal_pred=function(filter,IC_prob){
   c0=-2*filter$tau[2]
   mu0=filter$tau[3]/c0
@@ -1142,6 +1151,23 @@ normal_pred=function(filter,IC_prob){
   )
 }
 
+#' Title
+#'
+#' @param y
+#' @param m0
+#' @param C0
+#' @param FF
+#' @param G
+#' @param D
+#' @param W
+#' @param offset
+#' @param IC_prob
+#' @param parms
+#'
+#' @return
+#' @export
+#'
+#' @examples
 normal_fit <- function(y,m0=0, C0=1, FF,G,D,W, offset, IC_prob=0.95,parms=list()){
 
   # Definindo quantidades
@@ -1222,6 +1248,7 @@ normal_fit <- function(y,m0=0, C0=1, FF,G,D,W, offset, IC_prob=0.95,parms=list()
                  "data_out"=y,'parms'=parms)
   return(result)
 }
+
 
 #' @export
 poisson_kernel=list('fit'=poisson_fit,
