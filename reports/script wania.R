@@ -177,3 +177,39 @@ points(post.mean,col='red')
 
 outcome=resultado$Ct[1,1,]
 plot(outcome)
+
+library(R.utils)
+# - - - - - - - - - - - - - - - - - - - - - - - - -
+# Function that takes "a long" time to run
+# - - - - - - - - - - - - - - - - - - - - - - - - -
+foo <- function() {
+  print("Tic")
+  for (kk in 1:100) {
+    print(kk)
+    Sys.sleep(0.1)
+  }
+  print("Tac")
+}
+
+
+# - - - - - - - - - - - - - - - - - - - - - - - - -
+# Evaluate code, if it takes too long, generate
+# a timeout by throwing a TimeoutException.
+# - - - - - - - - - - - - - - - - - - - - - - - - -
+res <- NULL
+tryCatch({
+  res <- withTimeout({
+    foo()
+  }, timeout = 0.75)
+}, TimeoutException = function(ex) {
+  message("Timeout. Skipping.")
+})
+
+
+# - - - - - - - - - - - - - - - - - - - - - - - - -
+# Evaluate code, if it takes too long, generate
+# a timeout returning NULL and generate a warning.
+# - - - - - - - - - - - - - - - - - - - - - - - - -
+res <- withTimeout({
+  foo()
+}, timeout = 0.75, onTimeout = "error")

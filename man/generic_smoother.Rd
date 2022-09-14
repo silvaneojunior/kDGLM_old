@@ -24,13 +24,13 @@ List: The smoothed mean (mts) and covariance (Cts) of the latent variables at ea
 Generic smoother for all models.
 }
 \examples{
-T=20
+T <- 20
 
-mt=matrix(c(cumsum(rnorm(T)+1),rep(1,T)),2,T,byrow=TRUE)
-Ct=array(diag(c(1,1)),c(2,2,T))
-G=matrix(c(1,0,1,1),2,2)
-at=G\%*\%mt
-Rt=array(G\%*\%t(G)+diag(c(0.1,0.1)),c(2,2,T))
+mt <- matrix(c(cumsum(rnorm(T) + 1), rep(1, T)), 2, T, byrow = TRUE)
+Ct <- array(diag(c(1, 1)), c(2, 2, T))
+G <- matrix(c(1, 0, 1, 1), 2, 2)
+at <- G \%*\% mt
+Rt <- array(G \%*\% t(G) + diag(c(0.1, 0.1)), c(2, 2, T))
 
-smoothed_values=generic_smoother(mt,Ct,at,Rt,G)
+smoothed_values <- generic_smoother(mt, Ct, at, Rt, G)
 }

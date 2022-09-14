@@ -16,9 +16,9 @@ The merged block as a <undefined class object>.
 An auxiliary function to merge blocks.
 }
 \examples{
-level_1=polynomial_block(order=1,values=matrix(c(rep(1,T),rep(0,T)),2,T,byrow=TRUE))
-level_2=polynomial_block(order=2,values=matrix(c(rep(0,T),rep(1,T)),2,T,byrow=TRUE))
-season_2=harmonic_block(period=20,values=matrix(c(rep(0,T),rep(1,T)),2,T,byrow=TRUE))
+level_1 <- polynomial_block(order = 1, values = matrix(c(rep(1, T), rep(0, T)), 2, T, byrow = TRUE))
+level_2 <- polynomial_block(order = 2, values = matrix(c(rep(0, T), rep(1, T)), 2, T, byrow = TRUE))
+season_2 <- harmonic_block(period = 20, values = matrix(c(rep(0, T), rep(1, T)), 2, T, byrow = TRUE))
 
-final_block=block_merge(level_1,level_2,season_2)
+final_block <- block_merge(level_1, level_2, season_2)
 }

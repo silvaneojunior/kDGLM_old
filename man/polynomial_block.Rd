@@ -11,7 +11,8 @@ polynomial_block(
   D = 1,
   W = 0,
   m0 = 0,
-  C0 = 1,
+  C0 = 1/sqrt(mean(values^2, na.rm = TRUE)),
+  by_time = TRUE,
   k = NULL
 )
 }
@@ -29,6 +30,8 @@ polynomial_block(
 \item{m0}{Vector or scalar: The prior mean for the latent variables associated with this block. If m0 is a vector, it's dimesion should be equal to the order of the polynomial block. If m0 is a scalar, it's value will be used for all latent variables.}
 
 \item{C0}{Matrix, vector or scalar: The prior covariance matrix for the latent variables associated with this block. If C0 is a matrix, it's dimesions should be nxn. If W is a vector or scalar, a covariance matrix will be created as a diagonal matrix with the values of C0 in the diagonal.}
+
+\item{by_time}{Bool: A flag indicating if values should be interpreted as time or as outcomes when passing a vector.}
 
 \item{k}{Positive integer: The number of outcomes in the model. Must be consistent with the dimension of values.}
 }
@@ -54,9 +57,9 @@ Creates the structure for a polynomial block with desired order.
 \examples{
 # Creating a first order structure for a model with 2 outcomes.
 # One block is created for each outcome, with each block being associated with only one of the outcomes.
-level_1=polynomial_block(order=1,values=c(1,0))
-level_2=polynomial_block(order=1,values=c(1,0))
+level_1 <- polynomial_block(order = 1, values = c(1, 0), by_time = FALSE)
+level_2 <- polynomial_block(order = 1, values = c(1, 0), by_time = FALSE)
 
 # Creating a block with shared effect between the oucomes
-level_3=polynomial_block(order=2,values=c(1,1))
+level_3 <- polynomial_block(order = 2, values = c(1, 1), by_time = FALSE)
 }

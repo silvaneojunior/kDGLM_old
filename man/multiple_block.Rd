@@ -20,6 +20,6 @@ The merged block as a <undefined class object>.
 An auxiliary function to repeat the same block for multiple outcomes. Useful if a regressor will be used in all outcomes, but with different effects in each one.
 }
 \examples{
-level_i=polynomial_block(order=1,values=0)
-level=multiple_block(level_i)
+level_i <- polynomial_block(order = 1, values = 0)
+level <- multiple_block(level_i)
 }

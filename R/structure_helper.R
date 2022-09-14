@@ -9,6 +9,7 @@
 #' @param W Array, Matrix, vector or  scalar: The values for the covariance matrix for the noise factor at each time. If W is a array, it's dimensions should be nxnxt, where n is the order of the polynomial block and t is the length of the outcomes. If W is a matrix, it's dimesions should be nxn and it's values will be used for each time. If W is a vector or scalar, a discount factor matrix will be created as a diagonal matrix with the values of W in the diagonal.
 #' @param m0 Vector or scalar: The prior mean for the latent variables associated with this block. If m0 is a vector, it's dimesion should be equal to the order of the polynomial block. If m0 is a scalar, it's value will be used for all latent variables.
 #' @param C0 Matrix, vector or scalar: The prior covariance matrix for the latent variables associated with this block. If C0 is a matrix, it's dimesions should be nxn. If W is a vector or scalar, a covariance matrix will be created as a diagonal matrix with the values of C0 in the diagonal.
+#' @param by_time Bool: A flag indicating if values should be interpreted as time or as outcomes when passing a vector.
 #' @param k Positive integer: The number of outcomes in the model. Must be consistent with the dimension of values.
 #'
 #' @return A list containing the following values:
@@ -30,101 +31,147 @@
 #' @examples
 #' # Creating a first order structure for a model with 2 outcomes.
 #' # One block is created for each outcome, with each block being associated with only one of the outcomes.
-#' level_1=polynomial_block(order=1,values=c(1,0))
-#' level_2=polynomial_block(order=1,values=c(1,0))
+#' level_1 <- polynomial_block(order = 1, values = c(1, 0), by_time = FALSE)
+#' level_2 <- polynomial_block(order = 1, values = c(1, 0), by_time = FALSE)
 #'
 #' # Creating a block with shared effect between the oucomes
-#' level_3=polynomial_block(order=2,values=c(1,1))
-polynomial_block <- function(order,values=1,name='Var_Poly',D=1,W=0,m0=0,C0=1,k=NULL){
-  G=diag(order)
-  if(is.null(k)){
-    byrow_flag=FALSE
-    multiple_block=FALSE
-    t=ifelse(is.null(dim(values)),1,dim(values)[2])
-    k=ifelse(is.null(dim(values)),length(values),dim(values)[1])
-    if(k==1 & length(D)>1){
-      if(length(dim(D))>1){
-        k=dim(D)[1]
-      }else{
-        k=length(D)
+#' level_3 <- polynomial_block(order = 2, values = c(1, 1), by_time = FALSE)
+polynomial_block <- function(order, values = 1, name = "Var_Poly", D = 1, W = 0, m0 = 0, C0 = 1/sqrt(mean(values**2,na.rm=TRUE)), by_time = TRUE, k = NULL) {
+  if (length(values) > 1) {
+    if (length(dim(values)) == 0) {
+      if (by_time) {
+        t <- length(values)
+        if (is.null(k)) {
+          k <- 1
+          multiple_block <- FALSE
+        } else {
+          multiple_block <- TRUE
+        }
+      } else {
+        if (!is.null(k)) {
+          warning("by_time is false, but k is not null. Ignoring k.")
+        }
+        k <- length(values)
+        multiple_block <- FALSE
+        t <- 1
+      }
+    } else {
+      if (!is.null(k)) {
+        warning("The number of outcomes is induced by values, but k is not null. Ignoring k.")
+      }
+      k <- dim(values)[2]
+      by_time <- FALSE
+      multiple_block <- FALSE
+    }
+  } else {
+    t <- 1
+    if (is.null(k) | k==1) {
+      k <- 1
+      multiple_block <- FALSE
+    } else {
+      multiple_block <- TRUE
+    }
+  }
+  if (length(D) == 1) {
+    D <- array(1, c(order, order, t)) * D
+  } else {
+    if (length(dim(D)) == 0) {
+      if (length(D) != t & t > 1) {
+        stop(paste0("Error: Time length of D is not equal to time length of values. Got ", length(D), ", expected ", t, "."))
+      } else {
+        t <- length(D)
+        D <- array(D, c(t, order, order))
+        D <- aperm(D, c(3, 2, 1))
+      }
+    } else {
+      if (t == 1) {
+        t <- dim(D)[3]
+      } else {
+        if (t != dim(D)[3]) {
+          stop(paste0("Error: Time length of D is not equal to time length of values. Got ", dim(D)[3], ", expected ", t, "."))
+        }
+      }
+      if (order != dim(D)[1]) {
+        stop(paste0("Error: Number of variables induced by D is not equal to the order of the block. Got ", dim(D)[1], ", expected ", order, "."))
       }
     }
-    if(k==1 & length(W)>1){
-      if(length(dim(W))>1){
-        k=dim(W)[1]
-      }else{
-        k=length(W)
+  }
+  if (length(W) == 1) {
+    W <- array(1, c(order, order, t)) * W
+  } else {
+    if (length(dim(W)) == 0) {
+      if (length(W) != t & t > 1) {
+        stop(paste0("Error: Time length of W is not equal to time length of values. Got ", length(W), ", expected ", t, "."))
+      } else {
+        t <- length(W)
+        W <- array(W, c(t, order, order))
+        W <- aperm(W, c(3, 2, 1))
+      }
+    } else {
+      if (t == 1) {
+        t <- dim(W)[3]
+      } else {
+        if (t != dim(W)[3]) {
+          stop(paste0("Error: Time length of W is not equal to time length of values. Got ", dim(W)[3], ", expected ", t, "."))
+        }
+      }
+      if (order != dim(W)[1]) {
+        stop(paste0("Error: Number of variables induced by W is not equal to the order of the block. Got ", dim(W)[1], ", expected ", order, "."))
       }
     }
-  }else{
-    byrow_flag=TRUE
-    multiple_block=length(dim(values))<2
-    t=ifelse(is.null(dim(values)),length(values),dim(values)[2])
-  }
-  if(t==1 & length(dim(D))==3){
-    t=dim(D)[3]
-  }
-  if(t==1 & length(dim(W))==3){
-    t=dim(W)[3]
-  }
-  #FF=matrix(c(ifelse(is.na(values),0,values),rep(0,(order-1)*t)),order,t,byrow = TRUE)
-  FF=array(0,c(order,k,t))
-  FF[1,,]=matrix(values,k,t,byrow=byrow_flag)
-
-  if(order==2){
-    G[1,2]=1
-  }else{if(order>2){
-    diag(G[1:(order-1),2:order])=1
-  }}
-  if(length(m0)<order){
-    m0=rep(m0,order)
-  }
-  if(length(C0)==1){
-    C0=diag(order)*C0
-  }
-  if(length(dim(C0))==1){
-    C0=diag(C0)
-  }
-  if(length(dim(C0))>2){
-    stop(paste0('ERROR: C0 must be a matrix, but it has ',length(dim(C0)),' dimensions.'))
-  }
-  if(any(dim(C0)!=c(order,order))){
-    stop(paste0('ERROR: C0 must have dimensions ',order,'x',order,'. Got ',dim(C0)[1],'x',dim(C0)[2],'.'))
   }
 
-  if(length(D)==1){
-    D=array(1,c(order,order,t))*D
-    D[,,apply(is.na(FF),3,any)]=1
-  }else{if(length(dim(D))==0 & length(D)>1){
-    D=array(diag(D),c(order,order,t))
-    D[,,apply(is.na(FF),3,any)]=1
-  }}
-  if(length(W)==1){
-    W=array(diag(order),c(order,order,t))*W
-    W[,,apply(is.na(FF),3,any)]=0
-  }else{if(length(dim(W))==0 & length(W)>1){
-    W=array(diag(W),c(order,order,t))
-    W[,,apply(is.na(FF),3,any)]=0
-  }}
+  # FF=matrix(c(ifelse(is.na(values),0,values),rep(0,(order-1)*t)),order,t,byrow = TRUE)
+  FF <- array(0, c(order, k, t))
+  FF[1, , ] <- matrix(values, k, t, byrow = by_time)
+  D[, , apply(is.na(FF), 3, any)] <- 1
+  W[, , apply(is.na(FF), 3, any)] <- 0
+  FF <- ifelse(is.na(FF), 0, FF)
 
-  FF=ifelse(is.na(FF),0,FF)
+  G <- diag(order)
+  if (order == 2) {
+    G[1, 2] <- 1
+  } else {
+    if (order > 2) {
+      diag(G[1:(order - 1), 2:order]) <- 1
+    }
+  }
 
-  names=list()
-  names[[name]]=c(1:order)
-  block=list('FF'=FF,
-             'G'=G,
-             'D'=D,
-             'W'=W,
-             'm0'=m0,
-             'C0'=diag(order)*C0,
-             'names'=names,
-             'order'=order,
-             'n'=order,
-             't'=t,
-             'k'=k)
+  if (length(m0) < order) {
+    m0 <- rep(m0, order)
+  }
+  if (length(C0) == 1) {
+    C0 <- diag(order) * C0
+  } else {
+    if (length(dim(C0)) == 0) {
+      C0 <- diag(C0)
+    }
+  }
+  if (length(dim(C0)) > 2) {
+    stop(paste0("Error: C0 must be a matrix, but it has ", length(dim(C0)), " dimensions."))
+  }
+  if (any(dim(C0) != c(order, order))) {
+    stop(paste0("Error: C0 must have dimensions ", order, "x", order, ". Got ", dim(C0)[1], "x", dim(C0)[2], "."))
+  }
 
-  if(multiple_block){
-    block=multiple_block(block,k,values=values)
+  names <- list()
+  names[[name]] <- c(1:order)
+  block <- list(
+    "FF" = FF,
+    "G" = G,
+    "D" = D,
+    "W" = W,
+    "m0" = m0,
+    "C0" = diag(order) * C0,
+    "names" = names,
+    "order" = order,
+    "n" = order,
+    "t" = t,
+    "k" = k
+  )
+
+  if (multiple_block) {
+    block <- multiple_block(block, k, values = FF[1,,])
   }
 
 
@@ -143,6 +190,7 @@ polynomial_block <- function(order,values=1,name='Var_Poly',D=1,W=0,m0=0,C0=1,k=
 #' @param W Array, Matrix, vector or  scalar: The values for the covariance matrix for the noise factor at each time. If W is a array, it's dimensions should be nxnxt, where n is the order of the polynomial block and t is the length of the outcomes. If W is a matrix, it's dimesions should be nxn and it's values will be used for each time. If W is a vector or scalar, a discount factor matrix will be created as a diagonal matrix with the values of W in the diagonal.
 #' @param m0 Vector or scalar: The prior mean for the latent variables associated with this block. If m0 is a vector, it's dimesion should be equal to the order of the polynomial block. If m0 is a scalar, it's value will be used for all latent variables.
 #' @param C0 Matrix, vector or scalar: The prior covariance matrix for the latent variables associated with this block. If C0 is a matrix, it's dimesions should be nxn. If W is a vector or scalar, a covariance matrix will be created as a diagonal matrix with the values of C0 in the diagonal.
+#' @param by_time Bool: A flag indicating if values should be interpreted as time or as outcomes when passing a vector.
 #' @param k Positive integer: The number of outcomes in the model. Must be consistent with the dimension of values.
 #'
 #' @return A list containing the following values:
@@ -164,172 +212,116 @@ polynomial_block <- function(order,values=1,name='Var_Poly',D=1,W=0,m0=0,C0=1,k=
 #' @examples
 #' # Creating seasonal structure for a model with 2 outcomes.
 #' # One block is created for each outcome, with each block being associated with only one of the outcomes.
-#' season_1=harmonic_block(period=3,values=c(1,0))
-#' season_2=harmonic_block(order=6,values=c(1,0))
+#' season_1 <- harmonic_block(period = 3, values = c(1, 0), by_time = FALSE)
+#' season_2 <- harmonic_block(order = 6, values = c(1, 0), by_time = FALSE)
 #'
 #' # Creating a block with shared effect between the oucomes
-#' season_3=harmonic_block(order=12,values=c(1,1))
-harmonic_block <- function(period,values=1,name='Var_Sazo',D=1,W=0,m0=0,C0=1,k=NULL){
-  w=2*pi/period
-  order=2
-  if(is.null(k)){
-    byrow_flag=FALSE
-    multiple_block=FALSE
-    t=ifelse(is.null(dim(values)),1,dim(values)[2])
-    k=ifelse(is.null(dim(values)),length(values),dim(values)[1])
-    if(k==1 & length(D)>1){
-      if(length(dim(D))>1){
-        k=dim(D)[1]
-      }else{
-        k=length(D)
-      }
-    }
-    if(k==1 & length(W)>1){
-      if(length(dim(W))>1){
-        k=dim(W)[1]
-      }else{
-        k=length(W)
-      }
-    }
-  }else{
-    byrow_flag=TRUE
-    multiple_block=length(dim(values))<2
-    t=ifelse(is.null(dim(values)),length(values),dim(values)[2])
-  }
-  if(t==1 & length(dim(D))==3){
-    t=dim(D)[3]
-  }
-  if(t==1 & length(dim(W))==3){
-    t=dim(W)[3]
-  }
-  #FF=matrix(c(ifelse(is.na(values),0,values),rep(0,(order-1)*t)),order,t,byrow = TRUE)
-  FF=array(0,c(order,k,t))
-  FF[1,,]=matrix(values,k,t)
+#' season_3 <- harmonic_block(order = 12, values = c(1, 1), by_time = FALSE)
+harmonic_block <- function(period, values = 1, name = "Var_Sazo", D = 1, W = 0, m0 = 0, C0 = 1, by_time = TRUE, k = NULL) {
+  w <- 2 * pi / period
+  order <- 2
+  block <- polynomial_block(order, values, name, D, W, m0, C0, by_time, k = NULL)
 
-  G <- matrix(c(cos(w),-sin(w),sin(w),cos(w)),order,order)
-
-  if(length(m0)<order){
-    m0=rep(m0,order)
-  }
-  if(length(C0)==1){
-    C0=diag(order)*C0
-  }
-  if(length(dim(C0))==1){
-    C0=diag(C0)
-  }
-  if(length(dim(C0))>2){
-    stop(paste0('ERROR: C0 must be a matrix, but it has ',length(dim(C0)),' dimensions.'))
-  }
-  if(any(dim(C0)!=c(order,order))){
-    stop(paste0('ERROR: C0 must have dimensions ',order,'x',order,'. Got ',dim(C0)[1],'x',dim(C0)[2],'.'))
-  }
-
-  if(length(D)==1){
-    D=array(1,c(order,order,t))*D
-    D[,,apply(is.na(FF),3,any)]=1
-  }else{if(length(dim(D))==0 & length(D)>1){
-    D=array(diag(D),c(order,order,t))
-    D[,,apply(is.na(FF),3,any)]=1
-  }}
-  if(length(W)==1){
-    W=array(diag(order),c(order,order,t))*W
-    W[,,apply(is.na(FF),3,any)]=0
-  }else{if(length(dim(W))==0 & length(W)>1){
-    W=array(diag(W),c(order,order,t))
-    W[,,apply(is.na(FF),3,any)]=0
-  }}
-  FF=ifelse(is.na(FF),0,FF)
-  names=list()
-  names[[name]]=c(1:order)
-
-  block=list('FF'=FF,
-             'G'=G,
-             'D'=D,
-             'W'=W,
-             'm0'=m0,
-             'C0'=diag(order)*C0,
-             'names'=names,
-             'period'=period,
-             'n'=order,
-             't'=t,
-             'k'=k)
-
-  if(multiple_block){
-    block=multiple_block(block,k,values=values)
+  G <- matrix(c(cos(w), -sin(w), sin(w), cos(w)), order, order)
+  block$G <- G
+  block$order <- NULL
+  block$period <- period
+  if (!is.null(k) & length(dim(values)) == 0) {
+    block <- multiple_block(block, k, values = values)
   }
   return(block)
 }
 
-transf_block <- function(lag,values,name='Var_Poly_transf',D=1,m0=0,C0=1,W=0){
-  G=diag(order)
-  t=dim(values)[2]
-  k=dim(values)[1]
+transf_block <- function(lag, values, name = "Var_Poly_transf", D = 1, m0 = 0, C0 = 1, W = 0) {
+  G <- diag(order)
+  t <- dim(values)[2]
+  k <- dim(values)[1]
 
-  x=c(1:lag)
-  mat=c()
-  for(j in c(1:lag)){
-    mat=c(mat,x**j)
+  x <- c(1:lag)
+  mat <- c()
+  for (j in c(1:lag)) {
+    mat <- c(mat, x**j)
   }
 
-  M=matrix(mat,lag,lag,byrow=TRUE)
-  pre_time=matrix(0,out_var,lag)
-  extended_values=cbind(pre_time,values)
-  pre_FF=matrix(0,(lag+1)*out_var,T_final)
-  for(t in c(1:T_final)){
-    for(out in c(1:out_var)){
-      pre_FF[out_var*(k-1)+1:out_var,t]=M%*%t(extended_values[,(t):(t+k-1)])
+  M <- matrix(mat, lag, lag, byrow = TRUE)
+  pre_time <- matrix(0, out_var, lag)
+  extended_values <- cbind(pre_time, values)
+  pre_FF <- matrix(0, (lag + 1) * out_var, T_final)
+  for (t in c(1:T_final)) {
+    for (out in c(1:out_var)) {
+      pre_FF[out_var * (k - 1) + 1:out_var, t] <- M %*% t(extended_values[, (t):(t + k - 1)])
     }
   }
 
-  for(i in c(1:out_var)){
-    placeholder=matrix(0,out_var,T_final)
-    placeholder[i,]=vac_flag
-    W=array(0,c(1,1,T_final))
-    W[,,true_indice_inter]=1
-    bloc_final=concat_bloco(bloc_final,
-                            gera_bloco_poly(order=1,
-                                            values=placeholder,
-                                            name='vac_serie_' %>% paste0(i,'_',0),
-                                            D=1/1,
-                                            m0=0,
-                                            C0=0,
-                                            W=W))
+  for (i in c(1:out_var)) {
+    placeholder <- matrix(0, out_var, T_final)
+    placeholder[i, ] <- vac_flag
+    W <- array(0, c(1, 1, T_final))
+    W[, , true_indice_inter] <- 1
+    bloc_final <- concat_bloco(
+      bloc_final,
+      gera_bloco_poly(
+        order = 1,
+        values = placeholder,
+        name = "vac_serie_" %>% paste0(i, "_", 0),
+        D = 1 / 1,
+        m0 = 0,
+        C0 = 0,
+        W = W
+      )
+    )
   }
 
 
-  FF=array(0,c(order,k,t))
-  FF[1,,]=values
-  if(order==2){
-    G[1,2]=1
-  }else{if(order>2){
-    diag(G[1:(order-1),2:order])=1
-  }}
-  if(length(m0)<order){
-    m0=rep(m0,order)
+  FF <- array(0, c(order, k, t))
+  FF[1, , ] <- values
+  if (order == 2) {
+    G[1, 2] <- 1
+  } else {
+    if (order > 2) {
+      diag(G[1:(order - 1), 2:order]) <- 1
+    }
+  }
+  if (length(m0) < order) {
+    m0 <- rep(m0, order)
   }
 
-  if(length(D)==1){
-    D=array(1,c(order,order,t))*D
-    D[,,apply(is.na(values),2,any)]=1
+  if (length(D) == 1) {
+    D <- array(1, c(order, order, t)) * D
+    D[, , apply(is.na(FF), 3, any)] <- 1
+  } else {
+    if (length(dim(D)) == 0 & length(D) > 1) {
+      D <- array(D, c(t, order, order))
+      D <- aperm(D, c(3, 2, 1))
+      D[, , apply(is.na(FF), 3, any)] <- 1
+    }
   }
-  if(length(W)==1){
-    W=array(diag(order),c(order,order,t))*W
-    W[,,apply(is.na(values),2,any)]=0
+  if (length(W) == 1) {
+    W <- array(diag(order), c(order, order, t)) * W
+    W[, , apply(is.na(FF), 3, any)] <- 0
+  } else {
+    if (length(dim(W)) == 0 & length(W) > 1) {
+      W <- array(W, c(t, order, order))
+      W <- aperm(W, c(3, 2, 1))
+      W[, , apply(is.na(FF), 3, any)] <- 0
+    }
   }
 
-  names=list()
-  names[[name]]=c(1:order)
-  return(list('FF'=FF,
-              'G'=G,
-              'D'=D,
-              'W'=W,
-              'm0'=m0,
-              'C0'=diag(order)*C0,
-              'names'=names,
-              'order'=order,
-              'n'=order,
-              't'=t,
-              'k'=k))
+  names <- list()
+  names[[name]] <- c(1:order)
+  return(list(
+    "FF" = FF,
+    "G" = G,
+    "D" = D,
+    "W" = W,
+    "m0" = m0,
+    "C0" = diag(order) * C0,
+    "names" = names,
+    "order" = order,
+    "n" = order,
+    "t" = t,
+    "k" = k
+  ))
 }
 
 
@@ -343,59 +335,59 @@ transf_block <- function(lag,values,name='Var_Poly_transf',D=1,m0=0,C0=1,W=0){
 #' @export
 #'
 #' @examples
-#' level_1=polynomial_block(order=1,values=matrix(c(rep(1,T),rep(0,T)),2,T,byrow=TRUE))
-#' level_2=polynomial_block(order=2,values=matrix(c(rep(0,T),rep(1,T)),2,T,byrow=TRUE))
-#' season_2=harmonic_block(period=20,values=matrix(c(rep(0,T),rep(1,T)),2,T,byrow=TRUE))
+#' level_1 <- polynomial_block(order = 1, values = matrix(c(rep(1, T), rep(0, T)), 2, T, byrow = TRUE))
+#' level_2 <- polynomial_block(order = 2, values = matrix(c(rep(0, T), rep(1, T)), 2, T, byrow = TRUE))
+#' season_2 <- harmonic_block(period = 20, values = matrix(c(rep(0, T), rep(1, T)), 2, T, byrow = TRUE))
 #'
-#' final_block=block_merge(level_1,level_2,season_2)
-block_merge <- function(...){
-  blocks=list(...)
+#' final_block <- block_merge(level_1, level_2, season_2)
+block_merge <- function(...) {
+  blocks <- list(...)
 
-  n=0
-  t=1
-  k=1
-  names=list()
-  for(block in blocks){
-    ref_names=block$names
-    for(name in names(ref_names)){
-      ref_names[[name]]=ref_names[[name]]+n
+  n <- 0
+  t <- 1
+  k <- 1
+  names <- list()
+  for (block in blocks) {
+    ref_names <- block$names
+    for (name in names(ref_names)) {
+      ref_names[[name]] <- ref_names[[name]] + n
     }
-    names=c(names,ref_names)
-    if(block$t>1){
-      if(block$t!=t & t>1){
-        stop(paste('Error: Blocks should have same length or length equal 1. Got',block$t,'and',t))
+    names <- c(names, ref_names)
+    if (block$t > 1) {
+      if (block$t != t & t > 1) {
+        stop(paste("Error: Blocks should have same length or length equal 1. Got", block$t, "and", t))
       }
-      t=block$t
+      t <- block$t
     }
-    n=n+block$n
-    k=max(block$k,k)
+    n <- n + block$n
+    k <- max(block$k, k)
   }
-  for(name in names(names)){
-    ref_idx=which(names(names)==name)
-    n_names=length(ref_idx)
-    if(n_names>1){
-      names(names)[ref_idx]=paste0(names(names)[ref_idx],'_',c(1:n_names))
+  for (name in names(names)) {
+    ref_idx <- which(names(names) == name)
+    n_names <- length(ref_idx)
+    if (n_names > 1) {
+      names(names)[ref_idx] <- paste0(names(names)[ref_idx], "_", c(1:n_names))
     }
   }
 
-  FF=array(0,c(n,k,t))
-  G=matrix(0,n,n)
-  D=array(0,c(n,n,t))
-  W=array(0,c(n,n,t))
-  m0=c()
-  C0=matrix(0,n,n)
-  position=1
-  for(block in blocks){
-    current_range=position:(position+block$n-1)
-    FF[current_range,,]=block$FF
-    G[current_range,current_range]=block$G
-    D[current_range,current_range,]=block$D
-    W[current_range,current_range,]=block$W
-    m0=c(m0,block$m0)
-    C0[current_range,current_range]=block$C0
-    position=position+block$n
+  FF <- array(0, c(n, k, t))
+  G <- matrix(0, n, n)
+  D <- array(0, c(n, n, t))
+  W <- array(0, c(n, n, t))
+  m0 <- c()
+  C0 <- matrix(0, n, n)
+  position <- 1
+  for (block in blocks) {
+    current_range <- position:(position + block$n - 1)
+    FF[current_range, , ] <- block$FF
+    G[current_range, current_range] <- block$G
+    D[current_range, current_range, ] <- block$D
+    W[current_range, current_range, ] <- block$W
+    m0 <- c(m0, block$m0)
+    C0[current_range, current_range] <- block$C0
+    position <- position + block$n
   }
-  return(list('FF'=FF,'G'=G,'D'=D,'W'=W,'m0'=m0,'C0'=C0,'n'=n,'t'=t,'k'=k,'names'=names))
+  return(list("FF" = FF, "G" = G, "D" = D, "W" = W, "m0" = m0, "C0" = C0, "n" = n, "t" = t, "k" = k, "names" = names))
 }
 
 #' multiple_block
@@ -410,27 +402,27 @@ block_merge <- function(...){
 #' @export
 #'
 #' @examples
-#' level_i=polynomial_block(order=1,values=0)
-#' level=multiple_block(level_i)
-multiple_block <- function(ref_block,k,values=ref_block$FF[1,1,]){
-  if(ref_block$t>1 & ref_block$t!=length(values)){
-    stop('ERROR: ref_block have time length greater than 1, but not equal to the length of values')
+#' level_i <- polynomial_block(order = 1, values = 0)
+#' level <- multiple_block(level_i)
+multiple_block <- function(ref_block, k, values = ref_block$FF[1, 1, ]) {
+  if (ref_block$t > 1 & ref_block$t != length(values)) {
+    stop("ERROR: ref_block have time length greater than 1, but not equal to the length of values")
   }
-  n=ref_block$n
-  t=length(values)
-  if(ref_block$t==1 | ref_block$k==1){
-    ref_block$FF=array(ref_block$FF,c(n,k,t))
+  n <- ref_block$n
+  t <- length(values)
+  if (ref_block$t == 1 | ref_block$k == 1) {
+    ref_block$FF <- array(ref_block$FF, c(n, k, t))
   }
-  aux_func=function(i){
-    ref_block_i=ref_block
-    ref_block_i$FF[1,-i,]=0
-    ref_block_i$FF[1,i,]=values
-    ref_block_i$k=k
-    ref_block_i$t=t
-    ref_block_i$name=paste(ref_block_i$name,i,sep='_')
+  aux_func <- function(i) {
+    ref_block_i <- ref_block
+    ref_block_i$FF[1, -i, ] <- 0
+    ref_block_i$FF[1, i, ] <- values
+    ref_block_i$k <- k
+    ref_block_i$t <- t
+    ref_block_i$name <- paste(ref_block_i$name, i, sep = "_")
     return(ref_block_i)
   }
-  block_list=lapply(1:k,aux_func)
+  block_list <- lapply(1:k, aux_func)
 
-  return(do.call(block_merge,block_list))
+  return(do.call(block_merge, block_list))
 }

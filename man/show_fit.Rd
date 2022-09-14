@@ -6,16 +6,48 @@
 \usage{
 show_fit(
   model,
-  IC_prob = 0.95,
+  pred_cred = 0.95,
   smooth = TRUE,
-  dinamic = TRUE,
+  show_plot = TRUE,
+  dynamic_plot = TRUE,
   t_offset = 0,
   labels = NULL
 )
 }
 \arguments{
-\item{labels}{}
+\item{model}{<undefined class> or list: A fitted GDLM model.}
+
+\item{pred_cred}{Numeric: The credibility value for the credibility interval.}
+
+\item{smooth}{Bool: A flag indicating if the smoothed should be used. If false, the filtered distribuition will be used.}
+
+\item{t_offset}{Integer: A integer with the amount of steps ahead should be used for prediciton. Only used if smooth is false.}
+
+\item{labels}{Character: A vector containg the names for each time series.}
+
+\item{dynamic}{Bool: A flag indicating if the created plot should be dynamic.}
+}
+\value{
+A list containg:
+\itemize{
+   \item plot ggplot or plotly object: A plot showing the predictive mean and credibility interval with the observed data.
+   \item pred Matrix: Matrix: A matrix with the predictive mean at each time. Dimensions are k x t, where k is the number of outcomes.
+   \item icl.pred Matrix: A matrix with the lower bound of the I.C. based on the credibility given in the arguments. Dimensions are k x t, where k is the number of outcomes.
+   \item icu.pred Matrix: A matrix with the upper bound of the I.C. based on the credibility given in the arguments. Dimensions are k x t, where k is the number of outcomes.
+   \item log.like Vector: A vector with the density/probability of the observed data based upon the predictive distribuition.
+}
 }
 \description{
-show_fit
+Calculate the preditive mean and some quantiles for the observed data and show a plot.
+}
+\examples{
+T <- 200
+w <- (200 / 40) * 2 * pi
+outcome <- rpois(T, 20 * (sin(w * 1:T / T) + 2))
+
+level <- polynomial_block(order = 1, values = 1, D = 1 / 0.95)
+season <- harmonic_block(period = 40, values = 1, D = 1 / 0.98)
+
+fitted_data <- fit_model(level, season, outcome = outcome, kernel = "Poisson")
+show_fit(fitted_data, smooth = TRUE)$plot
 }

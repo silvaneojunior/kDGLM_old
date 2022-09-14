@@ -9,7 +9,7 @@ plot_lat_var(
   var,
   smooth = TRUE,
   cut_off = 10,
-  IC_prob = 0.95,
+  pred_cred = 0.95,
   dinamic = TRUE,
   tranform_y = function(y) {
      y
@@ -17,8 +17,38 @@ plot_lat_var(
 )
 }
 \arguments{
+\item{model}{<undefined class> or list: A fitted GDLM model.}
+
+\item{var}{Character: The name of the variables to plot (same value passed while creating the structure). Any variable whose name partially match this variable will be ploted.}
+
+\item{smooth}{Bool: A flag indicating if the smoothed distribuition should be used. If false, the filtered distribution shall be used.}
+
+\item{cut_off}{Integer: The number of initial steps that should be skipped in the plot. Usually, the model is still learning in the initial steps, so the estimated values are not realiable.}
+
+\item{pred_cred}{Numeric: The credibility value for the credibility interval.}
+
 \item{tranform_y}{}
+
+\item{dynamic}{Bool: A flag indicating if the created plot should be dynamic.}
+}
+\value{
+A list containg:
+\itemize{
+   \item plot ggplot or plotly object: A plot showing the predictive mean and credibility interval with the observed data.
+   \item data data.frame: The data used in the plot.
+}
 }
 \description{
 plot_lat_var
+}
+\examples{
+T <- 200
+w <- (200 / 40) * 2 * pi
+outcome <- rpois(T, 20 * (sin(w * 1:T / T) + 2))
+
+level <- polynomial_block(order = 1, values = 1, D = 1 / 0.95,name='level_effect')
+season <- harmonic_block(period = 40, values = 1, D = 1 / 0.98,name='season_effect')
+
+fitted_data <- fit_model(level, season, outcome = outcome, kernel = "Poisson")
+plot_lat_var(fitted_data,'effect', smooth = TRUE)$plot
 }

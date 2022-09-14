@@ -1,0 +1,179 @@
+---
+title: "Contas para o caso Gamma"
+author: "Silvaneo Viera dos Santos Junior"
+output: pdf_document
+---
+
+## Contexto
+
+
+Modelo observacional ($\alpha$ conhecido):
+
+$$
+y_t|\alpha,\mu \sim \mathcal{G}\left(\alpha,\frac{\alpha}{\mu}\right)
+$$
+
+Priori conjugada:
+
+$$
+\begin{aligned}
+\mu \sim& \mathcal{IG}\left(\alpha_0,\beta_0\right)\\
+f(\mu)=&\frac{\beta_0^{\alpha_0}}{\Gamma(\alpha_0)}\mu^{-\alpha_0-1}\exp\left\{-\frac{\beta}{\mu}\right\}\\
+=&\frac{\beta_0^{\alpha_0}}{\Gamma(\alpha_0)}\exp\left\{(-\alpha_0-1)\ln(\mu)-\frac{\beta}{\mu}\right\}
+\end{aligned}
+$$
+
+Vetor de estatísticas suficientes:
+
+$$
+H_1=\left(\ln(\mu),\frac{1}{\mu}\right)'
+$$
+
+Priori normal:
+
+$$
+\mu \sim \mathcal{LN}\left(\mu_0,\sigma_0^2\right)
+$$
+Vetor de estatísticas suficientes:
+
+$$
+H_2=\left(\ln(\mu),\ln(\mu)^2\right)'
+$$
+
+Observações:
+
+\begin{itemize}
+  \item Se $X\sim\mathcal{LN}\left(\mu,\sigma^2\right)$, então $\frac{1}{X}\sim\mathcal{LN}\left(-\mu,\sigma^2\right)$.
+  \item Se $X\sim\mathcal{IG}\left(\alpha,\beta\right)$, então $\mathbb{E}[\ln(X)]=\mathbb{E}[-\ln(\frac{1}{X})]=-\psi(\alpha)+\ln(\beta)$.
+  \item $\psi$ é a função \emph{digamma}.
+\end{itemize}
+
+## Primeiro sistema (priori log-normal para priori inversa-gamma)
+
+Queremos encontrar $\alpha_0$ e $\beta_0$ tais que:
+
+$$
+\mathbb{E}_{\mathcal{IG}}[H_1]=\mathbb{E}_{\mathcal{LN}}[H_1]
+$$
+
+Já sabemos que:
+
+$$
+\mathbb{E}_{\mathcal{IG}}[H_1]=\left(-\psi(\alpha_0)+\ln(\beta_0),\frac{\alpha_0}{\beta_0}\right)'
+$$
+
+Ademais, temos que $\mathbb{E}_{\mathcal{LN}}[\ln(\mu)]=\mu_0$ e, como $\frac{1}{\mu}\sim\mathcal{LN}\left(-\mu_0,\sigma_0^2\right)$, então $\mathbb{E}_{\mathcal{LN}}[\frac{1}{\mu}]=\exp\left\{-\mu_0+\frac{\sigma_0^2}{2}\right\}$.
+
+O sistema obtido é:
+
+$$
+\begin{aligned}
+-\psi(\alpha_0)+\ln(\beta_0) =& \mu_0\\
+\frac{\alpha_0}{\beta_0} =& \exp\left\{-\mu_0+\frac{\sigma_0^2}{2}\right\}
+\end{aligned}
+$$
+
+Daí:
+
+$$
+\begin{aligned}
+\beta_0 = \frac{\alpha_0}{\exp\left\{-\mu_0+\frac{\sigma_0^2}{2}\right\}}=\alpha_0\exp\left\{\mu_0-\frac{\sigma_0^2}{2}\right\}\\
+-\psi(\alpha_0)+\ln(\beta_0) = -\psi(\alpha_0)+\ln(\alpha_0) + \mu_0-\frac{\sigma_0^2}{2} = \mu_0\\
+\end{aligned}
+$$
+
+Portanto, precisamos que:
+
+$$
+\begin{aligned}
+-\psi(\alpha_0)+\ln(\alpha_0) = \frac{\sigma_0^2}{2}.\\
+\end{aligned}
+$$
+
+Vamos fazer uma aproximação de segunda ordem para $\psi$, isto é, vamos usar $\psi(x)\approx \ln(x)-\frac{1}{2x}-\frac{1}{12x^2}$. Vale destacar que uma aproximação de segunda ordem é necessária, pois, para certos valores de $\sigma_0$, uma aproximação de primeira ordem não é boa o bastante, fazendo com que o ajuste do modelo fique ruim.
+
+Voltando para o sistema, encontrar $\alpha_0$ tal que:
+
+$$
+\begin{aligned}
+-\ln(\alpha_0)+\frac{1}{2\alpha_0}+\frac{1}{12\alpha_0^2}+\ln(\alpha_0) = \frac{\sigma_0^2}{2}.\\
+\end{aligned}
+$$
+Chamemos $h=\frac{1}{\alpha_0}$, então podemos reescever a equação acima como:
+
+$$
+\begin{aligned}
+\frac{1}{6}h^2+h-\sigma_0^2 = 0.\\
+\end{aligned}
+$$
+
+Por Bhaskara, obtemos que:
+
+$$
+\begin{aligned}
+h=\frac{-1\pm \sqrt{1+\frac{2}{3}\sigma_0^2}}{2\frac{1}{6}}=-3\pm 3\sqrt{1+\frac{2}{3}\sigma_0^2}.\\
+\end{aligned}
+$$
+
+Como $\alpha_0>0$, devemos tomar sempre a raiz positiva.
+
+Por fim obtemos a seguinte solução para o sistema original:
+
+$$
+\begin{aligned}
+\alpha_0=&\frac{1}{-3\pm 3\sqrt{1+\frac{2}{3}\sigma_0^2}}\\
+\beta_0 =& \alpha_0\exp\left\{\mu_0-\frac{\sigma_0^2}{2}\right\}\\
+\end{aligned}
+$$
+
+## Atualização dos parâmetros
+
+$$
+\begin{aligned}
+f(\mu|y_t)\propto& \mu^{-\alpha}\exp\left\{-\frac{\alpha y_t}{\mu}\right\} \mu^{-\alpha_0-1}\exp\left\{-\frac{\beta_0}{\mu}\right\}\\
+\propto & \mu^{-(\alpha+\alpha_0)-1}\exp\left\{-\frac{\alpha y_t+\beta_0}{\mu}\right\}
+\end{aligned}
+$$
+
+Assim:
+
+$$
+\mu|y_t \sim \mathcal{IG}\left(\alpha+\alpha_0,\alpha y+\beta_0\right)
+$$
+
+Se $\alpha_0=\alpha\alpha^{*}_0$ e $\beta_0=\alpha\beta^{*}_0$, então a atualização fica da seguinte forma:
+
+$$
+\mu|y_t \sim \mathcal{IG}\left(\alpha(\alpha^{*}_0+1),\alpha(\beta^{*}_0+y_t)\right)
+$$
+
+## Segundo sistema (posteriori inversa-gamma para posteriori log-normal)
+
+Queremos encontrar $\mu_0$ e $\sigma_0^2$ tais que:
+
+$$
+\mathbb{E}_{\mathcal{IG}}[H_2]=\mathbb{E}_{\mathcal{LN}}[H_2]
+$$
+Vale que:
+
+$$
+\mathbb{E}_{\mathcal{LN}}[H_2]=\left(\mu_0,\sigma_0^2+\mu_0^2\right)'
+$$
+
+Veja que $\mathbb{E}_{\mathcal{IG}}[\ln(\mu)]=-\psi(\alpha_0)+\ln(\beta_0)$, ademais:
+
+$$
+\begin{aligned}
+\mathbb{E}_{\mathcal{IG}}[\ln(\mu)^2]=&Var_{\mathcal{IG}}[\ln(\mu)]+\mathbb{E}_{\mathcal{IG}}[\ln(\mu)]^2\\
+=&\psi'(\alpha_0)+(-\psi(\alpha_0)+\ln(\beta_0))^2\\
+\end{aligned}
+$$
+
+Com isto, obtemos a seguinte solução para o sistema:
+
+$$
+\begin{aligned}
+\mu_0=&-\psi(\alpha_0)+\ln(\beta_0)\\
+\sigma_0^2=&\psi'(\alpha_0).
+\end{aligned}
+$$

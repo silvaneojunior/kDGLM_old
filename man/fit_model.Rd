@@ -4,19 +4,31 @@
 \alias{fit_model}
 \title{fit_model}
 \usage{
-fit_model(..., data_out, kernel, offset = data_out^0, parms = list())
+fit_model(
+  ...,
+  outcome,
+  kernel,
+  offset = outcome^0,
+  parms = list(),
+  pred_cred = 0.95,
+  smooth_flag = TRUE
+)
 }
 \arguments{
 \item{...}{<undefined class> or list: The structural block of the model.}
 
-\item{data_out}{Matrix: A matrix containing the observed data. Dimensions should be T x k, where T is the time series length and k is the number of outcomes.}
+\item{outcome}{Matrix: A matrix containing the observed data. Dimensions should be T x k, where T is the time series length and k is the number of outcomes.}
 
 \item{kernel}{String or <undefined class>: The list of functions (or it's name) used to fit the data. Should be choosed based on the distribution of the outcomes.}
 
-\item{offset}{Matrix: A matrix containing the offset value for the data. Dimesions should be the same as y.}
+\item{offset}{Matrix: A matrix containing the offset value for the data. Dimesions should be the same as outcome.}
+
+\item{pred_cred}{Numeric: A number between 0 and 1 (not included) indicanting the credibility interval for predictions. If not within the valid range of values, predicitions are not made.}
+
+\item{smooth_flag}{Bool: A flag indicating if the smoothed distribuition for the latent variables should be calculated.}
 }
 \value{
-The fitted model (an object of the <undefined class> or list). Contains the values returned in the fit function for the choosed kernel.
+The fitted model (an object of the <undefined class> or list). Contains the values returned in the fit function for the choosed kernel plus the smoothed mean and variance (if smooth_flag is true) and some additional info.
 }
 \description{
 Fit a model given it's structure and the observed data. This function can be used for any kernel.
@@ -24,44 +36,49 @@ Fit a model given it's structure and the observed data. This function can be use
 \examples{
 library(GDLM)
 
-Normal case
-T=200
-mu=rnorm(T,0,0.1)
-y=rnorm(T,cumsum(mu))
+# Normal case
+T <- 200
+mu <- rnorm(T, 0, 0.1)
+outcome <- rnorm(T, cumsum(mu))
 
-level=polynomial_block(order=1,
-                       values=c(1,0),
-                       D=1/0.98)
-variance=polynomial_block(order=1,
-                          values=c(0,1),
-                          D=1/1)
+level <- polynomial_block(
+  order = 1,
+  values = c(1, 0),
+  D = 1 / 0.98
+)
+variance <- polynomial_block(
+  order = 1,
+  values = c(0, 1),
+  D = 1 / 1
+)
 
-fitted_data=fit_model(level,variance,data_out=matrix(c(y,rep(0,T)),T,2),kernel='Normal')
-show_fit(fitted_data,smooth = TRUE)$plot
+fitted_data <- fit_model(level, variance, outcome = matrix(c(outcome, rep(0, T)), T, 2), kernel = "Normal")
+show_fit(fitted_data, smooth = TRUE)$plot
 
-plot(fitted_data$mt[1,])
-lines(fitted_data$mts[1,])
+plot(fitted_data$mt[1, ])
+lines(fitted_data$mts[1, ])
 
 # Poisson case
-w=(200/40)*2*pi
-y=rpois(T,20*(sin(w*1:T/T)+2))
+T <- 200
+w <- (200 / 40) * 2 * pi
+outcome <- rpois(T, 20 * (sin(w * 1:T / T) + 2))
 
-level=polynomial_block(order=1,values=1,D=1/0.95)
-season=harmonic_block(period=40,values=1,D=1/0.98)
+level <- polynomial_block(order = 1, values = 1, D = 1 / 0.95)
+season <- harmonic_block(period = 40, values = 1, D = 1 / 0.98)
 
-fitted_data=fit_model(level,season,data_out=y,kernel='Poisson')
-show_fit(fitted_data,smooth = TRUE)$plot
+fitted_data <- fit_model(level, season, outcome = outcome, kernel = "Poisson")
+show_fit(fitted_data, smooth = TRUE)$plot
 
 # Gamma case
-T=200
-w=(200/40)*2*pi
-phi=2.5
-y= matrix(rgamma(T,phi,phi/20*(sin(w*1:T/T)+2)),T,1)
+T <- 200
+w <- (200 / 40) * 2 * pi
+phi <- 2.5
+outcome <- matrix(rgamma(T, phi, phi / (20 * (sin(w * 1:T / T) + 2))), T, 1)
 
-level=polynomial_block(order=1,values=1,D=1/0.95)
-season=harmonic_block(period=40,values=1,D=1/0.98)
+level <- polynomial_block(order = 1, values = 1, D = 1 / 0.95)
+season <- harmonic_block(period = 40, values = 1, D = 1 / 0.98)
 
-fitted_data=fit_model(level,season,data_out=y,kernel='Gamma',parms=list('phi'=phi))
+fitted_data <- fit_model(level, season, outcome = outcome, kernel = "Gamma", parms = list("phi" = phi))
 
-show_fit(fitted_data,smooth = TRUE)$plot
+show_fit(fitted_data, smooth = TRUE)$plot
 }

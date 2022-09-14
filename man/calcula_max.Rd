@@ -7,8 +7,11 @@
 calcula_max(pre_max)
 }
 \arguments{
-\item{pre_max}{}
+\item{pre_max}{Numeric: A vector/matrix from which to calculate the axis limits and gradation.}
+}
+\value{
+A list contaning the gradation for the axis, the number of ticks in the axis and the maximum value.
 }
 \description{
-calcula_max
+Auxiliary function to calculate the axis limits and gradation for plots.
 }

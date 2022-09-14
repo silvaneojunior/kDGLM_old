@@ -4,7 +4,7 @@
 \alias{eval_past}
 \title{eval_past}
 \usage{
-eval_past(model, smooth = FALSE, t_offset = 0, IC_prob = 0.95)
+eval_past(model, smooth = FALSE, t_offset = 0, pred_cred = 0.95)
 }
 \arguments{
 \item{model}{<undefined class> or list: The fitted model to be use for evaluation.}
@@ -13,7 +13,7 @@ eval_past(model, smooth = FALSE, t_offset = 0, IC_prob = 0.95)
 
 \item{t_offset}{positive integer: The relative offset for forecast. Values for time t will be calculated based on the filtered values of time t-t_offset. Will be ignored if smooth is TRUE.}
 
-\item{IC_prob}{Numeric: The credibility level for the I.C. intervals.}
+\item{pred_cred}{Numeric: The credibility level for the I.C. intervals.}
 }
 \value{
 A list containg:
@@ -26,4 +26,23 @@ A list containg:
 }
 \description{
 Evaluates the predictive values for the observed values used to fit the model. Predictions can be made with smoothed values or with filtered values with a time offset.
+}
+\examples{
+T <- 200
+w <- ((T + 20) / 40) * 2 * pi
+y1 <- matrix(rpois((T + 20), 20 * (sin(w * 1:(T + 20) / (T + 20)) + 2)), (T + 20), 1)
+y2 <- matrix(rpois((T + 20), 1:(T + 20) / (T + 20) + 1), (T + 20), 1)
+y3 <- matrix(rpois((T + 20), 6), (T + 20), 1)
+y <- cbind(y1, y2, y3)
+y_pred <- y[T:(T + 20), ]
+
+y <- y[1:T, ]
+
+level <- polynomial_block(order = 1, values = 1,k=2)
+season_2 <- harmonic_block(period = 20, values = c(0, 1),by_time = FALSE)
+
+
+fitted_data <- fit_model(level, season_2, outcome = y, kernel = "Multinomial")
+
+past=eval_past(fitted_data,smooth=TRUE)
 }

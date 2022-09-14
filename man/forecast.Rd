@@ -7,13 +7,13 @@
 forecast(
   model,
   t = 1,
-  y = NULL,
+  outcome = NULL,
   offset = NULL,
   FF = NULL,
   D = NULL,
   W = NULL,
   plot = TRUE,
-  IC_prob = 0.95,
+  pred_cred = 0.95,
   labels = NULL
 )
 }
@@ -32,7 +32,7 @@ forecast(
 
 \item{plot}{Bool: A flag indicating if a plot should be produced.}
 
-\item{IC_prob}{Numeric: The credibility level for the I.C. intervals.}
+\item{pred_cred}{Numeric: The credibility level for the I.C. intervals.}
 
 \item{labels}{Vector: A string vector with the names for the series of prediction. If none is given, will use generic names.}
 }
@@ -52,23 +52,23 @@ A list containing:
 Makes predictions for t times ahead using the fitted model.
 }
 \examples{
-T=200
-w=((T+20)/40)*2*pi
-y1= matrix(rpois((T+20),20*(sin(w*1:(T+20)/(T+20))+2)),(T+20),1)
-y2= matrix(rpois((T+20),1:(T+20)/(T+20)+1),(T+20),1)
-y3= matrix(rpois((T+20),6),(T+20),1)
-y=cbind(y1,y2,y3)
-y_pred=y[T:(T+20),]
+T <- 200
+w <- ((T + 20) / 40) * 2 * pi
+y1 <- matrix(rpois((T + 20), 20 * (sin(w * 1:(T + 20) / (T + 20)) + 2)), (T + 20), 1)
+y2 <- matrix(rpois((T + 20), 1:(T + 20) / (T + 20) + 1), (T + 20), 1)
+y3 <- matrix(rpois((T + 20), 6), (T + 20), 1)
+outcome <- cbind(y1, y2, y3)
+y_pred <- outcome[T:(T + 20), ]
 
-y=y[1:T,]
+outcome <- outcome[1:T, ]
 
-level_1=polynomial_block(order=1,values=c(1,0))
-level_2=polynomial_block(order=2,values=c(0,1))
-season_2=harmonic_block(period=20,values=c(0,1))
+level_1 <- polynomial_block(order = 1, values = c(1, 0))
+level_2 <- polynomial_block(order = 2, values = c(0, 1))
+season_2 <- harmonic_block(period = 20, values = c(0, 1))
 
 
-fitted_data=fit_model(level_1,level_2,season_2,data_out=y,kernel='Multinomial')
-show_fit(fitted_data,smooth = TRUE)$plot
+fitted_data <- fit_model(level_1, level_2, season_2, outcome = outcome, kernel = "Multinomial")
+show_fit(fitted_data, smooth = TRUE)$plot
 
-forecast(fitted_data,20,y=y_pred)$plot
+forecast(fitted_data, 20, outcome = y_pred)$plot
 }
