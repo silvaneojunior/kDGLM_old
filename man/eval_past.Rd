@@ -42,7 +42,7 @@ level <- polynomial_block(order = 1, values = 1,k=2)
 season_2 <- harmonic_block(period = 20, values = c(0, 1),by_time = FALSE)
 
 
-fitted_data <- fit_model(level, season_2, outcome = y, kernel = "Multinomial")
+fitted_data <- fit_model(level, season_2, outcome = y, family = "Multinomial")
 
 past=eval_past(fitted_data,smooth=TRUE)
 }

@@ -4,12 +4,12 @@
 \alias{poisson_pred}
 \title{poisson_pred}
 \usage{
-poisson_pred(model, pred_cred = 0.95)
+poisson_pred(conj_param, outcome = NULL, parms = list(), pred_cred = 0.95)
 }
 \arguments{
-\item{model}{List: contaning the parameters of the conjugated distribuition for the linear predictor (may be based on the prior, filtered or smoothed distribuition).}
-
 \item{pred_cred}{Numeric: the desired credibility for the credibility interval}
+
+\item{model}{List: contaning the parameters of the conjugated distribuition for the linear predictor (may be based on the prior, filtered or smoothed distribuition).}
 }
 \value{
 A list containing the following values:

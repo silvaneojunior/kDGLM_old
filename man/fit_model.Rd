@@ -7,7 +7,7 @@
 fit_model(
   ...,
   outcome,
-  kernel,
+  family,
   offset = outcome^0,
   parms = list(),
   pred_cred = 0.95,
@@ -19,7 +19,7 @@ fit_model(
 
 \item{outcome}{Matrix: A matrix containing the observed data. Dimensions should be T x k, where T is the time series length and k is the number of outcomes.}
 
-\item{kernel}{String or <undefined class>: The list of functions (or it's name) used to fit the data. Should be choosed based on the distribution of the outcomes.}
+\item{family}{String or <undefined class>: The list of functions (or it's name) used to fit the data. Should be choosed based on the distribution of the outcomes.}
 
 \item{offset}{Matrix: A matrix containing the offset value for the data. Dimesions should be the same as outcome.}
 
@@ -28,15 +28,15 @@ fit_model(
 \item{smooth_flag}{Bool: A flag indicating if the smoothed distribuition for the latent variables should be calculated.}
 }
 \value{
-The fitted model (an object of the <undefined class> or list). Contains the values returned in the fit function for the choosed kernel plus the smoothed mean and variance (if smooth_flag is true) and some additional info.
+The fitted model (an object of the <undefined class> or list). Contains the values returned in the fit function for the choosed family plus the smoothed mean and variance (if smooth_flag is true) and some additional info.
 }
 \description{
-Fit a model given it's structure and the observed data. This function can be used for any kernel.
+Fit a model given it's structure and the observed data. This function can be used for any supported family (see vignette).
 }
 \examples{
 library(GDLM)
 
-# Normal case
+# Normal with unkown variance case
 T <- 200
 mu <- rnorm(T, 0, 0.1)
 outcome <- rnorm(T, cumsum(mu))
@@ -44,19 +44,18 @@ outcome <- rnorm(T, cumsum(mu))
 level <- polynomial_block(
   order = 1,
   values = c(1, 0),
-  D = 1 / 0.98
+  D = 1 / 0.98,
+  by_time=FALSE
 )
 variance <- polynomial_block(
   order = 1,
   values = c(0, 1),
-  D = 1 / 1
+  D = 1 / 1,
+  by_time=FALSE
 )
 
-fitted_data <- fit_model(level, variance, outcome = matrix(c(outcome, rep(0, T)), T, 2), kernel = "Normal")
+fitted_data <- fit_model(level, variance, outcome = outcome, family = "normal_gamma")
 show_fit(fitted_data, smooth = TRUE)$plot
-
-plot(fitted_data$mt[1, ])
-lines(fitted_data$mts[1, ])
 
 # Poisson case
 T <- 200
@@ -66,8 +65,24 @@ outcome <- rpois(T, 20 * (sin(w * 1:T / T) + 2))
 level <- polynomial_block(order = 1, values = 1, D = 1 / 0.95)
 season <- harmonic_block(period = 40, values = 1, D = 1 / 0.98)
 
-fitted_data <- fit_model(level, season, outcome = outcome, kernel = "Poisson")
+fitted_data <- fit_model(level, season, outcome = outcome, family = "Poisson")
 show_fit(fitted_data, smooth = TRUE)$plot
+
+
+# Multinomial case
+T=200
+y1=rpois(T,exp(5+(-T:T/T)*5))
+y2=rpois(T,exp(6+(-T:T/T)*5+sin((-T:T)*(2*pi/12))))
+y3=rpois(T,exp(5))
+
+y=cbind(y1,y2,y3)
+
+level=polynomial_block(2,k=2)
+season=harmonic_block(12,values=c(0,1),by_time = FALSE)
+
+fitted_data=fit_model(level,season,outcome=y,family='Multinomial',pred_cred = 0.95)
+
+show_fit(fitted_data,smooth = TRUE)$plot
 
 # Gamma case
 T <- 200
@@ -78,7 +93,7 @@ outcome <- matrix(rgamma(T, phi, phi / (20 * (sin(w * 1:T / T) + 2))), T, 1)
 level <- polynomial_block(order = 1, values = 1, D = 1 / 0.95)
 season <- harmonic_block(period = 40, values = 1, D = 1 / 0.98)
 
-fitted_data <- fit_model(level, season, outcome = outcome, kernel = "Gamma", parms = list("phi" = phi))
+fitted_data <- fit_model(level, season, outcome = outcome, family = "Gamma", parms = list("phi" = phi))
 
 show_fit(fitted_data, smooth = TRUE)$plot
 }

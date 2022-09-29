@@ -8,7 +8,6 @@ show_fit(
   model,
   pred_cred = 0.95,
   smooth = TRUE,
-  show_plot = TRUE,
   dynamic_plot = TRUE,
   t_offset = 0,
   labels = NULL
@@ -30,11 +29,8 @@ show_fit(
 \value{
 A list containg:
 \itemize{
+   \item data tibble object: A data frame containing the observations, predictions and credibility intervals at each time.
    \item plot ggplot or plotly object: A plot showing the predictive mean and credibility interval with the observed data.
-   \item pred Matrix: Matrix: A matrix with the predictive mean at each time. Dimensions are k x t, where k is the number of outcomes.
-   \item icl.pred Matrix: A matrix with the lower bound of the I.C. based on the credibility given in the arguments. Dimensions are k x t, where k is the number of outcomes.
-   \item icu.pred Matrix: A matrix with the upper bound of the I.C. based on the credibility given in the arguments. Dimensions are k x t, where k is the number of outcomes.
-   \item log.like Vector: A vector with the density/probability of the observed data based upon the predictive distribuition.
 }
 }
 \description{
@@ -48,6 +44,6 @@ outcome <- rpois(T, 20 * (sin(w * 1:T / T) + 2))
 level <- polynomial_block(order = 1, values = 1, D = 1 / 0.95)
 season <- harmonic_block(period = 40, values = 1, D = 1 / 0.98)
 
-fitted_data <- fit_model(level, season, outcome = outcome, kernel = "Poisson")
+fitted_data <- fit_model(level, season, outcome = outcome, family = "Poisson")
 show_fit(fitted_data, smooth = TRUE)$plot
 }

@@ -1,21 +1,21 @@
 #' fit_model
 #'
-#' Fit a model given it's structure and the observed data. This function can be used for any kernel.
+#' Fit a model given it's structure and the observed data. This function can be used for any supported family (see vignette).
 #'
 #' @param ... <undefined class> or list: The structural block of the model.
 #' @param outcome Matrix: A matrix containing the observed data. Dimensions should be T x k, where T is the time series length and k is the number of outcomes.
-#' @param kernel String or <undefined class>: The list of functions (or it's name) used to fit the data. Should be choosed based on the distribution of the outcomes.
+#' @param family String or <undefined class>: The list of functions (or it's name) used to fit the data. Should be choosed based on the distribution of the outcomes.
 #' @param offset Matrix: A matrix containing the offset value for the data. Dimesions should be the same as outcome.
 #' @param pred_cred Numeric: A number between 0 and 1 (not included) indicanting the credibility interval for predictions. If not within the valid range of values, predicitions are not made.
 #' @param smooth_flag Bool: A flag indicating if the smoothed distribuition for the latent variables should be calculated.
 #'
-#' @return The fitted model (an object of the <undefined class> or list). Contains the values returned in the fit function for the choosed kernel plus the smoothed mean and variance (if smooth_flag is true) and some additional info.
+#' @return The fitted model (an object of the <undefined class> or list). Contains the values returned in the fit function for the choosed family plus the smoothed mean and variance (if smooth_flag is true) and some additional info.
 #' @export
 #'
 #' @examples
 #' library(GDLM)
 #'
-#' # Normal case
+#' # Normal with unkown variance case
 #' T <- 200
 #' mu <- rnorm(T, 0, 0.1)
 #' outcome <- rnorm(T, cumsum(mu))
@@ -23,19 +23,18 @@
 #' level <- polynomial_block(
 #'   order = 1,
 #'   values = c(1, 0),
-#'   D = 1 / 0.98
+#'   D = 1 / 0.98,
+#'   by_time=FALSE
 #' )
 #' variance <- polynomial_block(
 #'   order = 1,
 #'   values = c(0, 1),
-#'   D = 1 / 1
+#'   D = 1 / 1,
+#'   by_time=FALSE
 #' )
 #'
-#' fitted_data <- fit_model(level, variance, outcome = matrix(c(outcome, rep(0, T)), T, 2), kernel = "Normal")
+#' fitted_data <- fit_model(level, variance, outcome = outcome, family = "normal_gamma")
 #' show_fit(fitted_data, smooth = TRUE)$plot
-#'
-#' plot(fitted_data$mt[1, ])
-#' lines(fitted_data$mts[1, ])
 #'
 #' # Poisson case
 #' T <- 200
@@ -45,8 +44,24 @@
 #' level <- polynomial_block(order = 1, values = 1, D = 1 / 0.95)
 #' season <- harmonic_block(period = 40, values = 1, D = 1 / 0.98)
 #'
-#' fitted_data <- fit_model(level, season, outcome = outcome, kernel = "Poisson")
+#' fitted_data <- fit_model(level, season, outcome = outcome, family = "Poisson")
 #' show_fit(fitted_data, smooth = TRUE)$plot
+#'
+#'
+#' # Multinomial case
+#' T=200
+#' y1=rpois(T,exp(5+(-T:T/T)*5))
+#' y2=rpois(T,exp(6+(-T:T/T)*5+sin((-T:T)*(2*pi/12))))
+#' y3=rpois(T,exp(5))
+#'
+#' y=cbind(y1,y2,y3)
+#'
+#' level=polynomial_block(2,k=2)
+#' season=harmonic_block(12,values=c(0,1),by_time = FALSE)
+#'
+#' fitted_data=fit_model(level,season,outcome=y,family='Multinomial',pred_cred = 0.95)
+#'
+#' show_fit(fitted_data,smooth = TRUE)$plot
 #'
 #' # Gamma case
 #' T <- 200
@@ -57,12 +72,12 @@
 #' level <- polynomial_block(order = 1, values = 1, D = 1 / 0.95)
 #' season <- harmonic_block(period = 40, values = 1, D = 1 / 0.98)
 #'
-#' fitted_data <- fit_model(level, season, outcome = outcome, kernel = "Gamma", parms = list("phi" = phi))
+#' fitted_data <- fit_model(level, season, outcome = outcome, family = "Gamma", parms = list("phi" = phi))
 #'
 #' show_fit(fitted_data, smooth = TRUE)$plot
-fit_model <- function(..., outcome, kernel, offset = outcome**0, parms = list(), pred_cred=0.95, smooth_flag = TRUE) {
-  if (typeof(kernel) == typeof("kernel")) {
-    kernel <- kernel_list[[tolower(kernel)]]
+fit_model <- function(..., outcome, family, offset = outcome**0, parms = list(), pred_cred=0.95, smooth_flag = TRUE) {
+  if (typeof(family) == typeof("family")) {
+    family <- kernel_list[[tolower(family)]]
   }
   if (is.null(dim(outcome))) {
     outcome <- matrix(outcome, length(outcome), 1)
@@ -88,7 +103,7 @@ fit_model <- function(..., outcome, kernel, offset = outcome**0, parms = list(),
   # if (dim(outcome)[2] != structure$k) {
   #   stop(paste0("Error: outcome does not have the same number of outcomes as structure: got ", dim(outcome)[2], " from outcome, expected ", structure$k))
   # }
-  model <- kernel$fit(
+  model <- analytic_filter(
     outcome = outcome,
     m0 = structure$m0,
     C0 = structure$C0,
@@ -98,16 +113,16 @@ fit_model <- function(..., outcome, kernel, offset = outcome**0, parms = list(),
     W = structure$W,
     offset = offset,
     parms = parms,
-    kernel_filter = kernel$filter
+    family = family
   )
   if (smooth_flag) {
-    smoothed <- kernel$smoother(model$mt, model$Ct, model$at, model$Rt, model$G)
+    smoothed <- family$smoother(model$mt, model$Ct, model$at, model$Rt, model$G)
     model$mts <- smoothed$mts
     model$Cts <- smoothed$Cts
   }
   if (is.numeric(pred_cred)) {
     if(0<pred_cred & 1>pred_cred){
-      prediction <- kernel$pred(model, pred_cred)
+      prediction <- family$pred(model$conj_prior_param,model$outcome,parms=parms, pred_cred=pred_cred)
 
       model$pred <- prediction$pred
       model$var.pred <- prediction$var.pred
@@ -120,7 +135,7 @@ fit_model <- function(..., outcome, kernel, offset = outcome**0, parms = list(),
   model$m0 <- structure$m0
   model$C0 <- structure$C0
   model$names <- structure$names
-  model$kernel <- kernel
+  model$family <- family
 
   return(model)
 }
@@ -167,12 +182,12 @@ fit_model <- function(..., outcome, kernel, offset = outcome**0, parms = list(),
 #'
 #' outcome <- outcome[1:T, ]
 #'
-#' level_1 <- polynomial_block(order = 1, values = c(1, 0))
-#' level_2 <- polynomial_block(order = 2, values = c(0, 1))
-#' season_2 <- harmonic_block(period = 20, values = c(0, 1))
+#' level_1 <- polynomial_block(order = 1, values = c(1, 0),by_time = FALSE)
+#' level_2 <- polynomial_block(order = 2, values = c(0, 1),by_time = FALSE)
+#' season_2 <- harmonic_block(period = 20, values = c(0, 1),by_time = FALSE)
 #'
 #'
-#' fitted_data <- fit_model(level_1, level_2, season_2, outcome = outcome, kernel = "Multinomial")
+#' fitted_data <- fit_model(level_1, level_2, season_2, outcome = outcome, family = "Multinomial")
 #' show_fit(fitted_data, smooth = TRUE)$plot
 #'
 #' forecast(fitted_data, 20, outcome = y_pred)$plot
@@ -254,29 +269,17 @@ forecast <- function(model, t = 1, outcome = NULL, offset = NULL, FF = NULL, D =
     offset <- matrix(offset, t, r_out, byrow = TRUE)
   }
 
-  if (dim(FF)[3] != t) {
-    stop(paste0("Error: FF should have one matrix for each time or exactly 1 matrix, got ", dim(FF)[3], "!=", t, "."))
+  if (any(dim(FF)!=c(n,r,t))) {
+    stop(paste0("Error: FF has wrong dimesions. Expected ",paste(n,r,t,sep='x'),". Got ",paste(dim(FF),colapse='x')))
   }
-  if (dim(FF)[2] != r) {
-    stop(paste0("Error: FF should have one column for each serie or exactly 1 column, got ", dim(FF)[2], "!=", r, "."))
+  if (any(dim(D)!=c(n,n,t))) {
+    stop(paste0("Error: D has wrong dimesions. Expected ",paste(n,n,t,sep='x'),". Got ",paste(dim(D),colapse='x')))
   }
-  if (dim(FF)[1] != n) {
-    stop(paste0("Error: FF should have one line for each latent variable in the model, got ", dim(FF)[1], "!=", n, "."))
-  }
-  if (dim(D)[3] != t) {
-    stop(paste0("Error: D should have 3º dimention equal to t or 1, got ", dim(D)[3], "."))
-  }
-  if (any(dim(D)[-3] != n)) {
-    stop(paste0("Error: D should have 1º and 2º dimentions equal the number of latent variables in the model, got ", dim(D)[1], "x", dim(D)[2], ")!=", n, "x", n, "."))
-  }
-  if (any(dim(W)[-3] != n)) {
-    stop(paste0("Error: W should have 1º and 2º dimentions equal the number of latent variables in the model, got ", dim(W)[1], "x", dim(W)[2], "!=", n, "x", n, "."))
-  }
-  if (dim(W)[3] != t) {
-    stop(paste0("Error: W should have 3º dimention equal to t or 1, got ", dim(W)[3], "."))
+  if (any(dim(W)!=c(n,n,t))) {
+    stop(paste0("Error: W has wrong dimesions. Expected ",paste(n,n,t,sep='x'),". Got ",paste(dim(W),colapse='x')))
   }
   if (any(dim(offset) != c(t, r_out))) {
-    stop(paste0("Error: Offset should have dimestions ", t, "x", r_out, ", or be a scalar. Got ", dim(offset)[1], "x", dim(offset)[2], "."))
+    stop(paste0("Error: W has wrong dimesions. Expected ",paste(t,r_out,sep='x')," or a scalar. Got ",paste(dim(offset),colapse='x')))
   }
   #####
 
@@ -291,27 +294,19 @@ forecast <- function(model, t = 1, outcome = NULL, offset = NULL, FF = NULL, D =
   last_C <- C0
 
   # Definindo objetos
-  at <- matrix(0, nrow = n, ncol = t)
-  Rt <- array(0, dim = c(n, n, t))
-  ft <- matrix(0, nrow = t, ncol = r)
-  Qt <- array(0, dim = c(r, r, t))
-
   pred <- matrix(NA, dim(model$pred)[1], t)
   var.pred <- array(NA, c(dim(model$var.pred)[1], dim(model$var.pred)[2], t))
   icl.pred <- matrix(NA, dim(model$icl.pred)[1], t)
   icu.pred <- matrix(NA, dim(model$icu.pred)[1], t)
 
+
   for (t_i in c(1:t)) {
-    filter <- model$kernel$filter(outcome[t_i, ], last_m, last_C, FF[, , t_i], G, D[, , t_i], W[, , t_i], offset[t_i, ], parms = model$parms)
-
-    last_m <- filter$at
-    last_C <- filter$Rt
-    Rt[, , t_i] <- filter$Rt
-    at[, t_i] <- filter$at
-    ft[t_i, ] <- filter$ft
-    Qt[, , t_i] <- filter$Qt
-
-    prediction <- model$kernel$pred(filter, pred_cred)
+    next_step <- one_step_evolve(last_m, last_C, FF[, , t_i] %>% matrix(n, r), G, D[, , t_i], W[, , t_i])
+    last_m=next_step$at
+    last_C=next_step$Rt
+    next_step <- model$family$offset(next_step$ft,next_step$Qt,model$offset[t_i, ])
+    conj_distr <- model$family$conj_prior(next_step$ft,next_step$Qt)
+    prediction <- model$family$pred(conj_distr,outcome[t_i, ,drop=FALSE],model$parms, pred_cred)
 
     pred[, t_i] <- prediction$pred
     var.pred[, , t_i] <- prediction$var.pred
@@ -319,7 +314,7 @@ forecast <- function(model, t = 1, outcome = NULL, offset = NULL, FF = NULL, D =
     icu.pred[, t_i] <- prediction$icu.pred
   }
 
-  return_list <- list("pred" = pred, "var.pred" = var.pred, "icl.pred" = icl.pred, "icu.pred" = icu.pred, "at" = at, "Rt" = Rt)
+  return_list <- list("pred" = pred, "var.pred" = var.pred, "icl.pred" = icl.pred, "icu.pred" = icu.pred)
   if (plot) {
     r <- dim(pred)[1]
     if (is.null(labels)) {
@@ -327,53 +322,33 @@ forecast <- function(model, t = 1, outcome = NULL, offset = NULL, FF = NULL, D =
     }
 
     pred <- cbind(t_last + c(1:t), t(pred) %>% as.data.frame())
-    names(pred) <- c("time", labels)
+    names(pred) <- c("Time", labels)
     pred <- pred %>% pivot_longer(2:(r + 1))
-    names(pred) <- c("time", "Serie", "Prediction")
+    names(pred) <- c("Time", "Serie", "Prediction")
 
     obs <- pred
     obs$Prediction <- NULL
     obs$Observation <- NA
 
     icl.pred <- cbind(t_last + c(1:t), t(icl.pred) %>% as.data.frame())
-    names(icl.pred) <- c("time", labels)
+    names(icl.pred) <- c("Time", labels)
     icl.pred <- icl.pred %>% pivot_longer(2:(r + 1))
-    names(icl.pred) <- c("time", "Serie", "I.C.lower")
+    names(icl.pred) <- c("Time", "Serie", "C.I.lower")
 
     icu.pred <- cbind(t_last + c(1:t), t(icu.pred) %>% as.data.frame())
-    names(icu.pred) <- c("time", labels)
+    names(icu.pred) <- c("Time", labels)
     icu.pred <- icu.pred %>% pivot_longer(2:(r + 1))
-    names(icu.pred) <- c("time", "Serie", "I.C.upper")
+    names(icu.pred) <- c("Time", "Serie", "C.I.upper")
 
     plot_data <- obs %>%
-      inner_join(pred, c("time", "Serie")) %>%
-      inner_join(icl.pred, c("time", "Serie")) %>%
-      inner_join(icu.pred, c("time", "Serie"))
+      inner_join(pred, c("Time", "Serie")) %>%
+      inner_join(icl.pred, c("Time", "Serie")) %>%
+      inner_join(icu.pred, c("Time", "Serie")) %>%
+      mutate(Serie=as.factor(Serie))
 
-    obs <- cbind(c(1:t_last), model$outcome %>% as.data.frame())
-    names(obs) <- c("time", labels)
-    obs <- obs %>% pivot_longer(2:(r + 1))
-    names(obs) <- c("time", "Serie", "Observation")
+    plot_data2 <- eval_past(model, smooth = TRUE, pred_cred=pred_cred)
+    levels(plot_data2$Serie)=labels
 
-    pred <- cbind(c(1:t_last), t(model$pred) %>% as.data.frame())
-    names(pred) <- c("time", labels)
-    pred <- pred %>% pivot_longer(2:(r + 1))
-    names(pred) <- c("time", "Serie", "Prediction")
-
-    icl.pred <- cbind(c(1:t_last), t(model$icl.pred) %>% as.data.frame())
-    names(icl.pred) <- c("time", labels)
-    icl.pred <- icl.pred %>% pivot_longer(2:(r + 1))
-    names(icl.pred) <- c("time", "Serie", "I.C.lower")
-
-    icu.pred <- cbind(c(1:t_last), t(model$icu.pred) %>% as.data.frame())
-    names(icu.pred) <- c("time", labels)
-    icu.pred <- icu.pred %>% pivot_longer(2:(r + 1))
-    names(icu.pred) <- c("time", "Serie", "I.C.upper")
-
-    plot_data2 <- obs %>%
-      inner_join(pred, c("time", "Serie")) %>%
-      inner_join(icl.pred, c("time", "Serie")) %>%
-      inner_join(icu.pred, c("time", "Serie"))
 
     max_value <- calcula_max(plot_data2$Observation - min(plot_data2$Observation))[[3]] + min(plot_data2$Observation)
     min_value <- -calcula_max(-(plot_data2$Observation - max(plot_data2$Observation)))[[3]] + max(plot_data2$Observation)
@@ -381,13 +356,13 @@ forecast <- function(model, t = 1, outcome = NULL, offset = NULL, FF = NULL, D =
     plot_data <- rbind(plot_data2, plot_data)
 
     plot <- ggplotly(
-      ggplot(plot_data) +
-        geom_line(aes(x = time, outcome = Prediction, color = Serie, fill = Serie, linetype = ifelse(time > t_last, "Forecast", "One-step ahead prediction"))) +
-        geom_ribbon(aes(x = time, ymin = I.C.lower, ymax = I.C.upper, fill = Serie, color = Serie, linetype = "C.I."), alpha = 0.25) +
-        geom_point(aes(x = time, outcome = Observation, color = Serie, fill = Serie, linetype = "Observed")) +
+      ggplot(plot_data,aes(x=Time,color=Serie,fill=Serie, linetype = ifelse(Time > t_last, "Forecast", "One-step ahead prediction"))) +
+        geom_line(aes(y = Prediction)) +
+        geom_ribbon(aes(ymin = C.I.lower, ymax = C.I.upper,linetype='C.I.'), alpha = 0.25) +
+        geom_point(aes(y = Observation)) +
         scale_fill_hue("", na.value = NA) +
         scale_color_hue("", na.value = NA) +
-        scale_linetype_manual("", values = c("solid", "dashed", "solid", "solid")) +
+        scale_linetype_manual("", values = c("solid","dashed","solid")) +
         scale_x_continuous("Time") +
         scale_y_continuous("$y_t$") +
         theme_bw() +
@@ -432,7 +407,7 @@ forecast <- function(model, t = 1, outcome = NULL, offset = NULL, FF = NULL, D =
 #' season_2 <- harmonic_block(period = 20, values = c(0, 1),by_time = FALSE)
 #'
 #'
-#' fitted_data <- fit_model(level, season_2, outcome = y, kernel = "Multinomial")
+#' fitted_data <- fit_model(level, season_2, outcome = y, family = "Multinomial")
 #'
 #' past=eval_past(fitted_data,smooth=TRUE)
 eval_past <- function(model, smooth = FALSE, t_offset = 0, pred_cred = 0.95) {
@@ -446,7 +421,7 @@ eval_past <- function(model, smooth = FALSE, t_offset = 0, pred_cred = 0.95) {
   n <- dim(model$mt)[1]
   t_last <- dim(model$mt)[2]
   r <- dim(model$FF)[2]
-  k <- dim(model$pred)[1]
+  k <- dim(model$outcome)[2]
 
   FF <- model$FF
   G <- diag(n)
@@ -473,8 +448,6 @@ eval_past <- function(model, smooth = FALSE, t_offset = 0, pred_cred = 0.95) {
     }
   }
 
-  at <- array(0, c(n, t_last))
-  Rt <- array(0, c(n, n, t_last))
   for (i in c(1:t_last)) {
     mt <- if (i <= t_offset) {
       model$m0
@@ -486,9 +459,12 @@ eval_past <- function(model, smooth = FALSE, t_offset = 0, pred_cred = 0.95) {
     } else {
       ref_Ct[, , i - t_offset]
     }
+    #model$family$filter(model$outcome[i, ], mt, Ct, FF[, , i] %>% matrix(n, r), G, D[, , i], W[, , i], model$offset[i, ], parms = model$parms)
 
-    filter <- model$kernel$filter(model$outcome[i, ], mt, Ct, FF[, , i] %>% matrix(n, r), G, D[, , i], W[, , i], model$offset[i, ], parms = model$parms)
-    prediction <- model$kernel$pred(filter, pred_cred)
+    next_step <- one_step_evolve(mt, Ct, FF[, , i] %>% matrix(n, r), G, D[, , i], W[, , i])
+    next_step <- model$family$offset(next_step$ft,next_step$Qt,model$offset[i, ])
+    conj_distr <- model$family$conj_prior(next_step$ft,next_step$Qt)
+    prediction <- model$family$pred(conj_distr,model$outcome[i, ,drop=FALSE],model$parms, pred_cred)
 
     pred[, i] <- prediction$pred
     var.pred[, , i] <- prediction$var.pred
@@ -496,7 +472,25 @@ eval_past <- function(model, smooth = FALSE, t_offset = 0, pred_cred = 0.95) {
     icu.pred[, i] <- prediction$icu.pred
     log.like[i] <- prediction$log.like
   }
-  return(list("pred" = pred, "var.pred" = var.pred, "icl.pred" = icl.pred, "icu.pred" = icu.pred, 'log.like'=log.like))
+  data_list=list('obs'=matrix(model$outcome,t_last,k),"pred" = pred %>% as.matrix %>% t, "icl.pred" = icl.pred %>% as.matrix %>% t, "icu.pred" = icu.pred %>% as.matrix %>% t)
+  data_name=c('Observation','Prediction','C.I.lower','C.I.upper')
+  data_raw=lapply(1:4,function(i){
+    data=cbind(as.character(1:t_last)%>% as.data.frame,data_list[[i]]) %>% as.data.frame %>%
+      pivot_longer(1:k+1) %>%
+      mutate(name=as.factor(name))
+    names(data)=c('Time','Serie',data_name[i])
+    levels(data$Serie)=paste0('Serie_',1:k)
+    data
+  })
+  data=do.call(function(...){
+    data_list=list(...)
+    data=data_list[[1]]
+    for(i in 2:4){
+      data=data %>% left_join(data_list[[i]],by=c('Time','Serie'))
+    }
+    data
+  }, data_raw) %>% mutate(Time=as.numeric(Time),Serie=as.factor(Serie))
+  return(data)
 }
 
 #' @export

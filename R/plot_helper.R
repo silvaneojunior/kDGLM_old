@@ -44,11 +44,8 @@ calcula_max <- function(pre_max) {
 #'
 #' @return A list containg:
 #' \itemize{
+#'    \item data tibble object: A data frame containing the observations, predictions and credibility intervals at each time.
 #'    \item plot ggplot or plotly object: A plot showing the predictive mean and credibility interval with the observed data.
-#'    \item pred Matrix: Matrix: A matrix with the predictive mean at each time. Dimensions are k x t, where k is the number of outcomes.
-#'    \item icl.pred Matrix: A matrix with the lower bound of the I.C. based on the credibility given in the arguments. Dimensions are k x t, where k is the number of outcomes.
-#'    \item icu.pred Matrix: A matrix with the upper bound of the I.C. based on the credibility given in the arguments. Dimensions are k x t, where k is the number of outcomes.
-#'    \item log.like Vector: A vector with the density/probability of the observed data based upon the predictive distribuition.
 #' }
 #' @export
 #'
@@ -65,73 +62,30 @@ calcula_max <- function(pre_max) {
 #' level <- polynomial_block(order = 1, values = 1, D = 1 / 0.95)
 #' season <- harmonic_block(period = 40, values = 1, D = 1 / 0.98)
 #'
-#' fitted_data <- fit_model(level, season, outcome = outcome, kernel = "Poisson")
+#' fitted_data <- fit_model(level, season, outcome = outcome, family = "Poisson")
 #' show_fit(fitted_data, smooth = TRUE)$plot
-show_fit <- function(model, pred_cred = 0.95, smooth = TRUE, show_plot = TRUE, dynamic_plot = TRUE, t_offset = 0, labels = NULL) {
+show_fit <- function(model, pred_cred = 0.95, smooth = TRUE, dynamic_plot = TRUE, t_offset = 0, labels = NULL) {
   n <- dim(model$mt)[1]
   t_last <- dim(model$mt)[2]
   eval <- eval_past(model, smooth = smooth, t_offset = t_offset, pred_cred=pred_cred)
-  pred <- eval$pred
-  r <- dim(pred)[1]
-
 
   max_value <- calcula_max(model$outcome - min(model$outcome))[[3]] + min(model$outcome)
   min_value <- -calcula_max(-(model$outcome - max(model$outcome)))[[3]] + max(model$outcome)
 
-  icl.pred <- eval$icl.pred# %>% is.na %>% ifelse(min_value,eval$icl.pred)
-  icu.pred <- eval$icu.pred# %>% is.na %>% ifelse(max_value,eval$icu.pred)
-  log.like <- eval$log.like
-
-  obs <- model$outcome
-  if (is.null(labels)) {
-    labels <- c("Serie_" %>% paste0(1:r))
+  plt <- ggplot(eval, aes(x = Time, fill = Serie, color = Serie)) +
+    geom_ribbon(aes(ymin = C.I.lower, ymax = C.I.upper, linetype = "Fitted values"), alpha = 0.25) +
+    geom_line(aes(y = Prediction, linetype = "Fitted values")) +
+    geom_point(aes(y = Observation), alpha = 0.5) +
+    scale_fill_hue("", na.value = NA) +
+    scale_color_hue("", na.value = NA) +
+    scale_y_continuous(name = "$y_t$") +
+    scale_x_continuous("Time") +
+    theme_bw() +
+    coord_cartesian(ylim = c(min_value, max_value))
+  if (dynamic_plot) {
+    plt <- ggplotly(plt)
   }
-
-  obs <- cbind(c(1:t_last), obs[, 1:r] %>% as.data.frame())
-  names(obs) <- c("time", labels)
-  obs <- obs %>% pivot_longer(2:(r + 1))
-  names(obs) <- c("time", "Serie", "Observation")
-
-  pred <- cbind(c(1:t_last), t(pred) %>% as.data.frame())
-  names(pred) <- c("time", labels)
-  pred <- pred %>% pivot_longer(2:(r + 1))
-  names(pred) <- c("time", "Serie", "Prediction")
-
-  icl.pred <- cbind(c(1:t_last), t(icl.pred) %>% as.data.frame())
-  names(icl.pred) <- c("time", labels)
-  icl.pred <- icl.pred %>% pivot_longer(2:(r + 1))
-  names(icl.pred) <- c("time", "Serie", "I.C.lower")
-
-  icu.pred <- cbind(c(1:t_last), t(icu.pred) %>% as.data.frame())
-  names(icu.pred) <- c("time", labels)
-  icu.pred <- icu.pred %>% pivot_longer(2:(r + 1))
-  names(icu.pred) <- c("time", "Serie", "I.C.upper")
-
-  plot_data <- obs %>%
-    inner_join(pred, c("time", "Serie")) %>%
-    inner_join(icl.pred, c("time", "Serie")) %>%
-    inner_join(icu.pred, c("time", "Serie"))
-
-
-  outcome=list( "data" = plot_data)
-
-  if(show_plot){
-    plt <- ggplot(plot_data, aes(x = time, fill = Serie, color = Serie)) +
-      geom_ribbon(aes(ymin = I.C.lower, ymax = I.C.upper, linetype = "Fitted values"), alpha = 0.25) +
-      geom_line(aes(y = Prediction, linetype = "Fitted values")) +
-      geom_point(aes(y = Observation), alpha = 0.5) +
-      scale_fill_hue("", na.value = NA) +
-      scale_color_hue("", na.value = NA) +
-      scale_y_continuous(name = "$y_t$") +
-      scale_x_continuous("Time") +
-      theme_bw() +
-      coord_cartesian(ylim = c(min_value, max_value))
-    if (dynamic_plot) {
-      plt <- ggplotly(plt)
-    }
-    outcome$plot=plt
-  }
-  return(outcome)
+  return(list('data'=eval,'plot'=plt))
 }
 
 #' plot_lat_var
@@ -142,12 +96,11 @@ show_fit <- function(model, pred_cred = 0.95, smooth = TRUE, show_plot = TRUE, d
 #' @param cut_off Integer: The number of initial steps that should be skipped in the plot. Usually, the model is still learning in the initial steps, so the estimated values are not realiable.
 #' @param pred_cred Numeric: The credibility value for the credibility interval.
 #' @param dynamic Bool: A flag indicating if the created plot should be dynamic.
-#' @param tranform_y
 #'
 #' @return A list containg:
 #' \itemize{
 #'    \item plot ggplot or plotly object: A plot showing the predictive mean and credibility interval with the observed data.
-#'    \item data data.frame: The data used in the plot.
+#'    \item data tibble: A data frame containg the data used in the plot.
 #' }
 #' @export
 #'
@@ -164,11 +117,9 @@ show_fit <- function(model, pred_cred = 0.95, smooth = TRUE, show_plot = TRUE, d
 #' level <- polynomial_block(order = 1, values = 1, D = 1 / 0.95,name='level_effect')
 #' season <- harmonic_block(period = 40, values = 1, D = 1 / 0.98,name='season_effect')
 #'
-#' fitted_data <- fit_model(level, season, outcome = outcome, kernel = "Poisson")
+#' fitted_data <- fit_model(level, season, outcome = outcome, family = "Poisson")
 #' plot_lat_var(fitted_data,'effect', smooth = TRUE)$plot
-plot_lat_var <- function(model, var, smooth = TRUE, cut_off = 10, pred_cred = 0.95, dinamic = TRUE, tranform_y = function(y) {
-                           y
-                         }) {
+plot_lat_var <- function(model, var, smooth = TRUE, cut_off = 10, pred_cred = 0.95, dynamic = TRUE) {
   if (!any(grepl(var, names(model$names)))) {
     stop(paste0("Error: Invalid selected variable. Got ", var, ", expected one of the following:\n", names(model$names)))
   }
@@ -213,10 +164,6 @@ plot_lat_var <- function(model, var, smooth = TRUE, cut_off = 10, pred_cred = 0.
 
   lim_i <- m1 + qnorm((1 - pred_cred) / 2) * std_mat
   lim_s <- m1 + qnorm(1 - (1 - pred_cred) / 2) * std_mat
-
-  m1 <- m1 %>% tranform_y()
-  lim_i <- lim_i %>% tranform_y()
-  lim_s <- lim_s %>% tranform_y()
 
   m1 <- as.data.frame(m1)
   lim_i <- as.data.frame(lim_i)
@@ -268,7 +215,7 @@ plot_lat_var <- function(model, var, smooth = TRUE, cut_off = 10, pred_cred = 0.
     geom_ribbon(aes(ymin = lim_i, ymax = lim_s, fill = paste(name, IC_label), color = paste(name, IC_label)), alpha = 0.25) +
     geom_line(aes(y = media)) +
     coord_cartesian(ylim = c(min_value, max_value))
-  if (dinamic) {
+  if (dynamic) {
     plt <- ggplotly(plt)
   }
   return(list("plot" = plt, "data" = plot_data))
