@@ -240,18 +240,18 @@ harmonic_block <- function(period, values = 1, name = "Var_Sazo", D = 1, W = 0, 
 #' @examples
 #' # EXAMPLE
 AR_block <- function(order, values = 1, name = "Var_AR", D = 1, W = 0, m0 = 0, C0 = 1, by_time = TRUE, k = NULL) {
-  block <- polynomial_block(2*order, values, name, D, W, m0, C0, by_time)
+  block <- polynomial_block(2 * order, values, name, D, W, m0, C0, by_time)
 
-  if(order==1){
+  if (order == 1) {
     G <- diag(2)
-    G[1,1]=NA
-  }else{
-    G <- matrix(0, 2*order, 2*order)
-    G[1,1:order]=NA
-    G[2:order,-(order:(2*order))]=diag(order-1)
-    G[(order+1):(2*order),(order+1):(2*order)]=diag(order)
-    index=sort(c(c(1:order),c(1:order)))
-    G=G[index+c(0,order),index+c(0,order)]
+    G[1, 1] <- NA
+  } else {
+    G <- matrix(0, 2 * order, 2 * order)
+    G[1, 1:order] <- NA
+    G[2:order, -(order:(2 * order))] <- diag(order - 1)
+    G[(order + 1):(2 * order), (order + 1):(2 * order)] <- diag(order)
+    index <- sort(c(c(1:order), c(1:order)))
+    G <- G[index + c(0, order), index + c(0, order)]
   }
   block$G <- G
   block$order <- order

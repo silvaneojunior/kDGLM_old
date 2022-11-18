@@ -1,6 +1,6 @@
 # usethis::use_mit_license()
 
-# styler::style_pkg()
+styler::style_pkg()
 devtools::document()
 devtools::install('.', upgrade='never')
 

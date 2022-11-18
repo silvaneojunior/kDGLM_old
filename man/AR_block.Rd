@@ -34,8 +34,6 @@ AR_block(
 \item{by_time}{Bool: A flag indicating if values should be interpreted as time or as outcomes when passing a vector.}
 
 \item{k}{Positive integer: The number of outcomes in the model. Must be consistent with the dimension of values.}
-
-\item{phi}{Vector: DESCRIPTION.}
 }
 \value{
 A list containing the following values:
@@ -48,7 +46,6 @@ A list containing the following values:
    \item C0 Matrix: The prior covariance matrix for the latent vector.
    \item names list: A list containg the variables indexes by their name.
    \item period Positive integer: Same as argument.
-   \item phi Vector: Same as argument.
    \item n Positive integer: The number of latent variables associated with this block (2).
    \item t Positive integer: The number of time steps associated with this block. If 1, the block is compatible with blocks of any time length, but if t is greater than 1, this block can only be used with blocks of the same time length.
    \item k Positive integer: The number of outcomes associated with this block. This block can only be used with blocks with the same outcome length.

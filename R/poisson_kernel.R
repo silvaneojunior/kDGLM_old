@@ -11,14 +11,14 @@
 #' @export
 convert_Gamma_Normal <- function(ft, Qt, parms) {
   # diag(Qt)=ifelse(diag(Qt)<0,0,diag(Qt))
-  if(length(ft)>1){
-    Qt=diag(Qt)
-    ft=c(ft)
+  if (length(ft) > 1) {
+    Qt <- diag(Qt)
+    ft <- c(ft)
   }
   h <- -3 + 3 * sqrt(1 + 2 * Qt / 3)
   alpha <- (1 / h)
   beta <- alpha * exp(-ft - 0.5 * Qt)
-  return(c(alpha,beta))
+  return(c(alpha, beta))
 }
 
 convert_Gamma_Normal_ord_1 <- function(ft, Qt, parms) {
@@ -60,18 +60,18 @@ convert_Gamma_Normal_true <- function(ft, Qt, parms) {
 #' @return The parameters of the Normal distribuition of the linear predictor.
 #' @export
 convert_Normal_Gamma <- function(conj_prior, parms) {
-  if(is.null(dim(conj_prior))){
-    r=length(conj_prior)/2
-  }else{
-    r=dim(conj_prior)[2]/2
+  if (is.null(dim(conj_prior))) {
+    r <- length(conj_prior) / 2
+  } else {
+    r <- dim(conj_prior)[2] / 2
   }
-  alpha=conj_prior[1:r]
-  beta=conj_prior[(r+1):(2*r)]
+  alpha <- conj_prior[1:r]
+  beta <- conj_prior[(r + 1):(2 * r)]
   ft <- digamma(alpha) - log(beta)
   Qt <- trigamma(alpha)
-  if(length(alpha)>1){
-    Qt=diag(Qt)
-    ft=matrix(ft,r,1)
+  if (length(alpha) > 1) {
+    Qt <- diag(Qt)
+    ft <- matrix(ft, r, 1)
   }
   # print(Qt)
   return(list("ft" = ft, "Qt" = Qt))
@@ -88,16 +88,16 @@ convert_Normal_Gamma <- function(conj_prior, parms) {
 #' @return The parameters of the posterior distribution.
 #' @export
 update_Gamma <- function(conj_prior, y, parms) {
-  if(is.null(dim(conj_prior))){
-    r=length(conj_prior)/2
-  }else{
-    r=dim(conj_prior)[2]/2
+  if (is.null(dim(conj_prior))) {
+    r <- length(conj_prior) / 2
+  } else {
+    r <- dim(conj_prior)[2] / 2
   }
-  alpha=conj_prior[1:r]
-  beta=conj_prior[(r+1):(2*r)]
+  alpha <- conj_prior[1:r]
+  beta <- conj_prior[(r + 1):(2 * r)]
   alpha <- alpha + y
   beta <- beta + 1
-  return(c(alpha,beta))
+  return(c(alpha, beta))
 }
 
 #' convert_Gamma_Normal_LB
@@ -114,7 +114,7 @@ convert_Gamma_Normal_LB <- function(ft, Qt, parms) {
   h <- -3 + 3 * sqrt(1 + 2 * Qt / 3)
   alpha <- (1 / h)
   beta <- alpha * exp(-ft + 0.5 * Qt)
-  return(c(alpha,beta))
+  return(c(alpha, beta))
 }
 
 #' poisson_pred
@@ -147,13 +147,13 @@ convert_Gamma_Normal_LB <- function(ft, Qt, parms) {
 #'
 #' poisson_pred(conj_param)
 poisson_pred <- function(conj_param, outcome = NULL, parms = list(), pred_cred = 0.95) {
-  if(is.null(dim(conj_param))){
-    r=length(conj_param)/2
-  }else{
-    r=dim(conj_param)[2]/2
+  if (is.null(dim(conj_param))) {
+    r <- length(conj_param) / 2
+  } else {
+    r <- dim(conj_param)[2] / 2
   }
   a <- conj_param[1:r] %>% t()
-  b <- conj_param[(1+r):(2*r)] %>% t()
+  b <- conj_param[(1 + r):(2 * r)] %>% t()
   if (any(b < 10**-40)) {
     # b=ifelse(b >= 10**-40,b,NA)
     warning("The beta parameter for the predictive distribution is very low (<1e-40) at some times. Predicition for those times are unviable.")
@@ -194,13 +194,13 @@ poisson_pred <- function(conj_param, outcome = NULL, parms = list(), pred_cred =
 #'
 #' poisson_log_like(conj_param, rpois(3, 1))
 poisson_log_like <- function(conj_param, outcome, parms = list()) {
-  if(is.null(dim(conj_param))){
-    r=length(conj_param)/2
-  }else{
-    r=dim(conj_param)[2]/2
+  if (is.null(dim(conj_param))) {
+    r <- length(conj_param) / 2
+  } else {
+    r <- dim(conj_param)[2] / 2
   }
   a <- conj_param[1:r] %>% t()
-  b <- conj_param[(1+r):(2*r)] %>% t()
+  b <- conj_param[(1 + r):(2 * r)] %>% t()
 
   if (any(b < 10**-40)) {
     b <- ifelse(b >= 10**-40, b, 10**-40)
@@ -221,7 +221,7 @@ poisson_kernel <- list(
   "link_function" = log,
   "inv_link_function" = exp,
   "param_names" = function(y) {
-    c(paste0("alpha_",1:dim(y)[2]),paste("beta_",1:dim(y)[2]))
+    c(paste0("alpha_", 1:dim(y)[2]), paste("beta_", 1:dim(y)[2]))
   },
   "multi_var" = FALSE
 )

@@ -31,15 +31,15 @@ generic_smoother <- function(mt, Ct, at, Rt, G) {
   var_index <- matrix(apply(Ct, 3, diag), n, T) != 0
 
   for (t in (T - 1):1) {
-    mt_now=mt[,t]
-    G_now=G
-    G_diff=rep(0,n)
-    if(any(is.na(G))){
-      for(index_col in (1:n)[colSums(is.na(G))>0]){
-        index_row=(1:n)[is.na(G_now[,index_col])]
-        G_now[index_row,index_col]=mt_now[index_col+1]
-        G_now[index_row,index_col+1]=mt_now[index_col]
-        G_diff[index_col]=-mt_now[index_col]*mt_now[index_col+1]
+    mt_now <- mt[, t]
+    G_now <- G
+    G_diff <- rep(0, n)
+    if (any(is.na(G))) {
+      for (index_col in (1:n)[colSums(is.na(G)) > 0]) {
+        index_row <- (1:n)[is.na(G_now[, index_col])]
+        G_now[index_row, index_col] <- mt_now[index_col + 1]
+        G_now[index_row, index_col + 1] <- mt_now[index_col]
+        G_diff[index_col] <- -mt_now[index_col] * mt_now[index_col + 1]
       }
     }
 
@@ -93,7 +93,7 @@ generic_smoother <- function(mt, Ct, at, Rt, G) {
 #'    \item log.like.null vector: The log-likelyhood of the main model at each time.
 #'    \item log.like.alt vector: The log-likelyhood of the alternative model at each time. Only used if monitoring.
 #' }
-analytic_filter <- function(outcome, m0 = 0, C0 = 1, FF, G, D, W, offset=outcome*0+1, family, parms = list(), p_monit = NA, c_monit = 1) {
+analytic_filter <- function(outcome, m0 = 0, C0 = 1, FF, G, D, W, offset = outcome * 0 + 1, family, parms = list(), p_monit = NA, c_monit = 1) {
 
   # Definindo quantidades
   T <- nrow(outcome)
@@ -132,7 +132,7 @@ analytic_filter <- function(outcome, m0 = 0, C0 = 1, FF, G, D, W, offset=outcome
   } else {
     p_monit
   }
-  threshold <- log(c_monit) + log(p) - log(1-p)
+  threshold <- log(c_monit) + log(p) - log(1 - p)
 
   for (t in 1:T) {
     FF_step <- matrix(FF[, , t], n, k)
@@ -197,10 +197,10 @@ analytic_filter <- function(outcome, m0 = 0, C0 = 1, FF, G, D, W, offset=outcome
       D[, , t] <- D[, , t] * D_mult$alt_model
       W[, , t] <- W[, , t] * W_add$alt_model
       monit_win <- -5
-      model=models$alt_model
+      model <- models$alt_model
       alt.flags[t] <- 1
-    } else{
-      model=models$null_model
+    } else {
+      model <- models$null_model
       if (bayes_factor < 0) {
         monit_win <- monit_win + 1
       } else {
@@ -210,25 +210,24 @@ analytic_filter <- function(outcome, m0 = 0, C0 = 1, FF, G, D, W, offset=outcome
 
     conj_prior_param[t, ] <- conj_prior
     if (na.flag) {
-
       conj_post_param[t, ] <- conj_prior
       norm_post <- next_step
-      mt_step = last_m
-      Ct_step = last_C
+      mt_step <- last_m
+      Ct_step <- last_C
       at[, t] <- model$at_step
       Rt[, , t] <- model$Rt_step
 
       ft[, t] <- next_step$ft
       Qt[, , t] <- next_step$Qt
     } else {
-      if((family$multi_var | k==1) | TRUE){
-        mt_step=model$at_step
-        Ct_step=model$Rt_step
+      if ((family$multi_var | k == 1) | TRUE) {
+        mt_step <- model$at_step
+        Ct_step <- model$Rt_step
         at[, t] <- mt_step
         Rt[, , t] <- Ct_step
 
-        ft_step=t(FF_step) %*% mt_step
-        Qt_step=t(FF_step) %*% Ct_step %*% FF_step
+        ft_step <- t(FF_step) %*% mt_step
+        Qt_step <- t(FF_step) %*% Ct_step %*% FF_step
         next_step <- family$offset(ft_step, Qt_step, offset_step)
         ft_step <- next_step$ft
         Qt_step <- next_step$Qt
@@ -252,22 +251,22 @@ analytic_filter <- function(outcome, m0 = 0, C0 = 1, FF, G, D, W, offset=outcome
         At <- Ct_step %*% FF_step %*% ginv(Qt_step)
         mt_step <- mt_step + At %*% (ft_star - ft_step)
         Ct_step <- Ct_step + At %*% (Qt_star - Qt_step) %*% t(At)
-      }else{
-        mt_step=model$at_step
-        Ct_step=model$Rt_step
+      } else {
+        mt_step <- model$at_step
+        Ct_step <- model$Rt_step
         at[, t] <- mt_step
         Rt[, , t] <- Ct_step
 
-        ft_step=t(FF_step) %*% mt_step
-        Qt_step=t(FF_step) %*% Ct_step %*% FF_step
+        ft_step <- t(FF_step) %*% mt_step
+        Qt_step <- t(FF_step) %*% Ct_step %*% FF_step
         next_step <- family$offset(ft_step, Qt_step, offset_step)
         ft[, t] <- next_step$ft
         Qt[, , t] <- next_step$Qt
 
-        for(index in 1:r){
-          FF_sample=FF_step[,index,drop=FALSE]
-          ft_step=t(FF_sample) %*% mt_step
-          Qt_step=t(FF_sample) %*% Ct_step %*% FF_sample
+        for (index in 1:r) {
+          FF_sample <- FF_step[, index, drop = FALSE]
+          ft_step <- t(FF_sample) %*% mt_step
+          Qt_step <- t(FF_sample) %*% Ct_step %*% FF_sample
           next_step <- family$offset(ft_step, Qt_step, offset_step[index])
 
           ft_step <- next_step$ft
@@ -284,8 +283,8 @@ analytic_filter <- function(outcome, m0 = 0, C0 = 1, FF, G, D, W, offset=outcome
           mt_step <- mt_step + At %*% (ft_star - ft_step)
           Ct_step <- Ct_step + At %*% (Qt_star - Qt_step) %*% t(At)
         }
-        ft_step=t(FF_step) %*% mt_step
-        Qt_step=t(FF_step) %*% Ct_step %*% FF_step
+        ft_step <- t(FF_step) %*% mt_step
+        Qt_step <- t(FF_step) %*% Ct_step %*% FF_step
         next_step <- family$offset(ft_step, Qt_step, offset_step)
 
         ft_step <- next_step$ft
@@ -315,18 +314,18 @@ analytic_filter <- function(outcome, m0 = 0, C0 = 1, FF, G, D, W, offset=outcome
 }
 
 one_step_evolve <- function(m0, C0, FF, G, D, W) {
-  n=dim(G)[1]
-  G_now=G
-  G_diff=rep(0,n)
-  if(any(is.na(G))){
-    for(index_col in (1:n)[colSums(is.na(G))>0]){
-      index_row=(1:n)[is.na(G_now[,index_col])]
-      G_now[index_row,index_col]=m0[index_col+1]
-      G_now[index_row,index_col+1]=m0[index_col]
-      G_diff[index_row]=G_diff[index_row]-m0[index_col]*m0[index_col+1]
+  n <- dim(G)[1]
+  G_now <- G
+  G_diff <- rep(0, n)
+  if (any(is.na(G))) {
+    for (index_col in (1:n)[colSums(is.na(G)) > 0]) {
+      index_row <- (1:n)[is.na(G_now[, index_col])]
+      G_now[index_row, index_col] <- m0[index_col + 1]
+      G_now[index_row, index_col + 1] <- m0[index_col]
+      G_diff[index_row] <- G_diff[index_row] - m0[index_col] * m0[index_col + 1]
     }
   }
-  at <- (G_now %*% m0)+G_diff
+  at <- (G_now %*% m0) + G_diff
   Pt <- G_now %*% C0 %*% (t(G_now))
   Rt <- as.matrix(D * Pt) + W
 
@@ -380,5 +379,5 @@ logit_offset <- function(ft, Qt, offset) {
 }
 
 log_offset_half <- function(ft, Qt, offset) {
-  list("ft" = ft + matrix(c(0,log(offset)),2,dim(ft)[2]), "Qt" = Qt)
+  list("ft" = ft + matrix(c(0, log(offset)), 2, dim(ft)[2]), "Qt" = Qt)
 }

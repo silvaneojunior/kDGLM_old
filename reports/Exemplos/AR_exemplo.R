@@ -11,7 +11,7 @@ S=0.001
 x=x+rnorm(T,0,sqrt(S))
 plot(x)
 
-devtools::load_all()
+# devtools::load_all()
 
 block1=AR_block(2,values=c(1,0),by_time=FALSE,W=diag(c(0.1,0,0,0)))#,D=diag(c(1/0.99,1,1,1)),m0=c(0,0.1,0,0.1))
 block2=polynomial_block(1,values=c(0,1),by_time=FALSE)

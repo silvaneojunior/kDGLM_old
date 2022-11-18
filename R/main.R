@@ -75,9 +75,9 @@
 #' fitted_data <- fit_model(level, season, outcome = outcome, family = "Gamma", parms = list("phi" = phi))
 #'
 #' show_fit(fitted_data, smooth = TRUE)$plot
-fit_model <- function(..., outcome, family, offset = outcome*0+1, parms = list(), pred_cred = 0.95, smooth_flag = TRUE, p_monit = NA, c_monit = 1) {
+fit_model <- function(..., outcome, family, offset = outcome * 0 + 1, parms = list(), pred_cred = 0.95, smooth_flag = TRUE, p_monit = NA, c_monit = 1) {
   if (typeof(family) == typeof("family")) {
-    if(tolower(family)=='fgamma'){
+    if (tolower(family) == "fgamma") {
       warning("This family is numerically unstable. Be careful with it's usage.")
     }
     family <- kernel_list[[tolower(family)]]
@@ -470,9 +470,9 @@ eval_past <- function(model, smooth = FALSE, t_offset = 0, pred_cred = 0.95, lab
       ref_Ct[, , i - t_offset]
     }
     # model$family$filter(model$outcome[i, ], mt, Ct, FF[, , i] %>% matrix(n, r), G, D[, , i], W[, , i], model$offset[i, ], parms = model$parms)
-    next_step=list('at'=mt,'Rt'=Ct)
+    next_step <- list("at" = mt, "Rt" = Ct)
     for (t in c(1:t_offset)) {
-      next_step <- one_step_evolve(next_step$at, next_step$Rt, FF[, , i] %>% matrix(n, r), G, D[, , i]**(t==1), W[, , i])
+      next_step <- one_step_evolve(next_step$at, next_step$Rt, FF[, , i] %>% matrix(n, r), G, D[, , i]**(t == 1), W[, , i])
     }
     # next_step <- one_step_evolve(mt, Ct, FF[, , i] %>% matrix(n, r), G, D[, , i], W[, , i])
     next_step <- model$family$offset(next_step$ft, next_step$Qt, model$offset[i, ])
@@ -611,15 +611,15 @@ FFBS_sampling <- function(model, sample_size) {
     Rt <- model$Rt[, , t + 1]
     Ct <- model$Ct[, , t]
 
-    mt_now=mt[,t]
-    G_now=G
-    G_diff=rep(0,n)
-    if(any(is.na(G))){
-      for(index_col in (1:n)[colSums(is.na(G))>0]){
-        index_row=(1:n)[is.na(G_now[,index_col])]
-        G_now[index_row,index_col]=mt_now[index_col+1]
-        G_now[index_row,index_col+1]=mt_now[index_col]
-        G_diff[index_col]=-mt_now[index_col]*mt_now[index_col+1]
+    mt_now <- mt[, t]
+    G_now <- G
+    G_diff <- rep(0, n)
+    if (any(is.na(G))) {
+      for (index_col in (1:n)[colSums(is.na(G)) > 0]) {
+        index_row <- (1:n)[is.na(G_now[, index_col])]
+        G_now[index_row, index_col] <- mt_now[index_col + 1]
+        G_now[index_row, index_col + 1] <- mt_now[index_col]
+        G_diff[index_col] <- -mt_now[index_col] * mt_now[index_col + 1]
       }
     }
     simple_Rt_inv <- Ct %*% t(G_now) %*% ginv(Rt)
