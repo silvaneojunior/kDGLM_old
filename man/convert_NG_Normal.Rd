@@ -13,6 +13,9 @@ convert_NG_Normal(ft, Qt, parms = list())
 
 \item{parms}{list: A list of extra known parameters of the distribuition. Not used in this kernel.}
 }
+\value{
+The parameters of the conjugated distribuition of the linear predictor.
+}
 \description{
 Calculate the parameters of the Normal-Gamma that best approximates the given Normal distribuition.
 The approximation is the best in the sense that it minimizes the KL divergence from the Normal to the Normal-Gamma.

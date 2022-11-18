@@ -4,12 +4,16 @@
 \alias{normal_pred}
 \title{normal_pred}
 \usage{
-normal_pred(conj_param, outcome, parms = list(), pred_cred = 0.95)
+normal_pred(conj_param, outcome = NULL, parms = list(), pred_cred = 0.95)
 }
 \arguments{
-\item{pred_cred}{Numeric: the desired credibility for the credibility interval.}
+\item{conj_param}{List or data.frame: The parameters of the conjugated distribuitions of the linear predictor.}
 
-\item{model}{List: contaning the parameters of the conjugated distribuition for the linear predictor (may be based on the prior, filtered or smoothed distribuition).}
+\item{outcome}{Vector or matrix (optional): The observed values at the current time. Not used in this function.}
+
+\item{parms}{List: A list of extra parameters for the model. For this function, it must contain the observational covariance matrix, Sigma.}
+
+\item{pred_cred}{Numeric: the desired credibility for the credibility interval.}
 }
 \value{
 A list containing the following values:
@@ -22,18 +26,11 @@ A list containing the following values:
 }
 \description{
 Calculate the values for the predictive distribuition given the values of the parameter of the conjugated distribuition of the linear predictor.
+The data is assumed to have Normal distribuition with known variance and it's mean having distribuition Normal.
+In this scenario, the marginal distribuition of the data is also Normal.
 }
 \examples{
-# A fitted model shoulb be used as argument, but you can also pass only the parameter themselves.
 
-model <- list(
-  "tau0" = 0.5,
-  "tau1" = -1 / 2,
-  "tau2" = 0,
-  "tau3" = -2.0,
-  "Qt" = matrix(1, 1, 1),
-  "outcome" = 0
-)
-
-normal_pred(model)
+#
+#
 }

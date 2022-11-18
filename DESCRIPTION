@@ -15,6 +15,7 @@ Collate:
     'poisson_kernel.R'
     'multnom_kernel.R'
     'gamma_kernel.R'
+    'full_gamma_kernel.R'
     'normal_kernel.R'
     'normal_gamma_kernel.R'
     'structure_helper.R'

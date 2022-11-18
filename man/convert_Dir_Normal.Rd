@@ -13,6 +13,9 @@ convert_Dir_Normal(ft, Qt, parms = list())
 
 \item{parms}{list: A list of extra known parameters of the distribuition. Not used in this kernel.}
 }
+\value{
+The parameters of the conjugated distribuition of the linear predictor.
+}
 \description{
 Calculate the parameters of the Dirichlet that best approximates the given log-Normal distribuition.
 The approximation is the best in the sense that it minimizes the KL divergence from the log-Normal to the Dirichlet.

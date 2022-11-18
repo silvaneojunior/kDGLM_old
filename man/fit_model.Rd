@@ -8,10 +8,12 @@ fit_model(
   ...,
   outcome,
   family,
-  offset = outcome^0,
+  offset = outcome * 0 + 1,
   parms = list(),
   pred_cred = 0.95,
-  smooth_flag = TRUE
+  smooth_flag = TRUE,
+  p_monit = NA,
+  c_monit = 1
 )
 }
 \arguments{
@@ -28,7 +30,7 @@ fit_model(
 \item{smooth_flag}{Bool: A flag indicating if the smoothed distribuition for the latent variables should be calculated.}
 }
 \value{
-The fitted model (an object of the <undefined class> or list). Contains the values returned in the fit function for the choosed family plus the smoothed mean and variance (if smooth_flag is true) and some additional info.
+The fitted model (an object of the <undefined class> or list). Contains the values of the estimated parameter and some extra info regarding the quality of the fit.
 }
 \description{
 Fit a model given it's structure and the observed data. This function can be used for any supported family (see vignette).
@@ -45,13 +47,13 @@ level <- polynomial_block(
   order = 1,
   values = c(1, 0),
   D = 1 / 0.98,
-  by_time=FALSE
+  by_time = FALSE
 )
 variance <- polynomial_block(
   order = 1,
   values = c(0, 1),
   D = 1 / 1,
-  by_time=FALSE
+  by_time = FALSE
 )
 
 fitted_data <- fit_model(level, variance, outcome = outcome, family = "normal_gamma")
@@ -70,19 +72,19 @@ show_fit(fitted_data, smooth = TRUE)$plot
 
 
 # Multinomial case
-T=200
-y1=rpois(T,exp(5+(-T:T/T)*5))
-y2=rpois(T,exp(6+(-T:T/T)*5+sin((-T:T)*(2*pi/12))))
-y3=rpois(T,exp(5))
+T <- 200
+y1 <- rpois(T, exp(5 + (-T:T / T) * 5))
+y2 <- rpois(T, exp(6 + (-T:T / T) * 5 + sin((-T:T) * (2 * pi / 12))))
+y3 <- rpois(T, exp(5))
 
-y=cbind(y1,y2,y3)
+y <- cbind(y1, y2, y3)
 
-level=polynomial_block(2,k=2)
-season=harmonic_block(12,values=c(0,1),by_time = FALSE)
+level <- polynomial_block(2, k = 2)
+season <- harmonic_block(12, values = c(0, 1), by_time = FALSE)
 
-fitted_data=fit_model(level,season,outcome=y,family='Multinomial',pred_cred = 0.95)
+fitted_data <- fit_model(level, season, outcome = y, family = "Multinomial", pred_cred = 0.95)
 
-show_fit(fitted_data,smooth = TRUE)$plot
+show_fit(fitted_data, smooth = TRUE)$plot
 
 # Gamma case
 T <- 200

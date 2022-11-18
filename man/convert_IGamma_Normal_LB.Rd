@@ -13,6 +13,9 @@ convert_IGamma_Normal_LB(ft, Qt, parms)
 
 \item{parms}{list: A list of extra known parameters of the distribuition. Not used in this function.}
 }
+\value{
+The parameters of the conjugated distribuition of the linear predictor.
+}
 \description{
 Calculate the parameters of the Inverse-Gamma that approximates the given log-Normal distribuition following the approach proposed in ref: Migon.
 }

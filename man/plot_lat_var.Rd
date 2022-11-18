@@ -41,9 +41,9 @@ T <- 200
 w <- (200 / 40) * 2 * pi
 outcome <- rpois(T, 20 * (sin(w * 1:T / T) + 2))
 
-level <- polynomial_block(order = 1, values = 1, D = 1 / 0.95,name='level_effect')
-season <- harmonic_block(period = 40, values = 1, D = 1 / 0.98,name='season_effect')
+level <- polynomial_block(order = 1, values = 1, D = 1 / 0.95, name = "level_effect")
+season <- harmonic_block(period = 40, values = 1, D = 1 / 0.98, name = "season_effect")
 
 fitted_data <- fit_model(level, season, outcome = outcome, family = "Poisson")
-plot_lat_var(fitted_data,'effect', smooth = TRUE)$plot
+plot_lat_var(fitted_data, "effect", smooth = TRUE)$plot
 }

@@ -67,7 +67,7 @@ calcula_max <- function(pre_max) {
 show_fit <- function(model, pred_cred = 0.95, smooth = TRUE, dynamic_plot = TRUE, t_offset = 0, labels = NULL) {
   n <- dim(model$mt)[1]
   t_last <- dim(model$mt)[2]
-  eval <- eval_past(model, smooth = smooth, t_offset = t_offset, pred_cred=pred_cred)
+  eval <- eval_past(model, smooth = smooth, t_offset = t_offset, pred_cred = pred_cred, labels = labels)
 
   max_value <- calcula_max(model$outcome - min(model$outcome))[[3]] + min(model$outcome)
   min_value <- -calcula_max(-(model$outcome - max(model$outcome)))[[3]] + max(model$outcome)
@@ -82,10 +82,16 @@ show_fit <- function(model, pred_cred = 0.95, smooth = TRUE, dynamic_plot = TRUE
     scale_x_continuous("Time") +
     theme_bw() +
     coord_cartesian(ylim = c(min_value, max_value))
+
+  if (any(model$alt.flags == 1)) {
+    plt <- plt +
+      geom_vline(data = data.frame(xintercept = (1:t_last)[model$alt.flags == 1], linetype = "Detected changes"), aes(xintercept = xintercept, linetype = linetype)) +
+      scale_linetype_manual("", values = c("dashed", "solid"))
+  }
   if (dynamic_plot) {
     plt <- ggplotly(plt)
   }
-  return(list('data'=eval,'plot'=plt))
+  return(list("data" = eval, "plot" = plt))
 }
 
 #' plot_lat_var
@@ -114,11 +120,11 @@ show_fit <- function(model, pred_cred = 0.95, smooth = TRUE, dynamic_plot = TRUE
 #' w <- (200 / 40) * 2 * pi
 #' outcome <- rpois(T, 20 * (sin(w * 1:T / T) + 2))
 #'
-#' level <- polynomial_block(order = 1, values = 1, D = 1 / 0.95,name='level_effect')
-#' season <- harmonic_block(period = 40, values = 1, D = 1 / 0.98,name='season_effect')
+#' level <- polynomial_block(order = 1, values = 1, D = 1 / 0.95, name = "level_effect")
+#' season <- harmonic_block(period = 40, values = 1, D = 1 / 0.98, name = "season_effect")
 #'
 #' fitted_data <- fit_model(level, season, outcome = outcome, family = "Poisson")
-#' plot_lat_var(fitted_data,'effect', smooth = TRUE)$plot
+#' plot_lat_var(fitted_data, "effect", smooth = TRUE)$plot
 plot_lat_var <- function(model, var, smooth = TRUE, cut_off = 10, pred_cred = 0.95, dynamic = TRUE) {
   if (!any(grepl(var, names(model$names)))) {
     stop(paste0("Error: Invalid selected variable. Got ", var, ", expected one of the following:\n", names(model$names)))

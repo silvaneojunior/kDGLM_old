@@ -13,6 +13,9 @@ convert_dummy_prior(ft, Qt, parms)
 
 \item{parms}{list: A list of extra known parameters of the distribuition. Not used in this function.}
 }
+\value{
+The parameters of the conjugated distribuition (which is Normal) of the linear predictor.
+}
 \description{
 Calculate the parameters of the Normal that best approximates the given Normal distribuition.
 The approximation is the best in the sense that it minimizes the KL divergence from the Normal to the Normal.

@@ -13,6 +13,9 @@ update_Dir(conj_prior, y, parms = list())
 
 \item{parms}{list: A list of extra known parameters of the distribuition. Not used in this kernel.}
 }
+\value{
+The parameters of the posterior distribution.
+}
 \description{
 Calculate posterior parameter for the Dirichlet, assuming that the observed values came from a Multinomial model from which the number of trials is known and the prior distribuition for the probabilities of each category have joint distribuition Dirichlet.
 }

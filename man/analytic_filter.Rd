@@ -2,7 +2,7 @@
 % Please edit documentation in R/kernels.R
 \name{analytic_filter}
 \alias{analytic_filter}
-\title{normal_gamma_fit}
+\title{analytic_filter}
 \usage{
 analytic_filter(
   outcome,
@@ -12,9 +12,11 @@ analytic_filter(
   G,
   D,
   W,
-  offset,
+  offset = outcome * 0 + 1,
   family,
-  parms = list()
+  parms = list(),
+  p_monit = NA,
+  c_monit = 1
 )
 }
 \arguments{
@@ -34,26 +36,37 @@ analytic_filter(
 
 \item{offset}{Matrix: The offset of the model. It's dimension should be the same as outcome.}
 
-\item{family}{function: the method for filtering.}
+\item{family}{list: a list containing the functions to be used in the filtering process.}
 
 \item{parms}{list: a list contaning extra arguments. In this model, extra parameters are not used.}
+
+\item{p_monit}{numeric (optional): The prior probability of changes in the latent space variables that are not part of it's dinamic.}
+
+\item{c_monit}{numeric (optional, if p_monit is not specified): The relative cost of false alarm in the monitoring compared to the cost of not detecting anormalities.}
 }
 \value{
 A list containing the following values:
 \itemize{
    \item mt Matrix: The filtered mean of the latent variables for each time. Dimensions are n x T.
    \item Ct Array: A 3D-array containing the filtered covariance matrix of the latent variable for each time. Dimensions are n x n x T.
+   \item at Matrix: The one-step-ahead mean of the latent variables at each time. Dimensions are n x T.
+   \item Rt Array: A 3D-array containing the one-step-ahead covariance matrix for latent variables at each time. Dimensions are n x n x T.
    \item ft Matrix: The one-step-ahead linear predictor for each time. Dimensions are m x T.
-   \item qt Array: A 3D-array containing the one-step-ahead covariance matrix for the linear predictor for each time. Dimensions are m x T.
+   \item Qt Array: A 3D-array containing the one-step-ahead covariance matrix for the linear predictor for each time. Dimensions are m x m x T.
+   \item conj_prior_param Data.frame: A data frame contaning the conjugated prior parameters of the linear predictor  at each time.
+   \item conj_post_param Data.frame: A data frame contaning the conjugated posterior parameters of the linear predictor  at each time.
    \item FF Array: The same as the argument (same values).
    \item G Matrix: The same as the argument (same values).
-   \item D Array: The same as the argument (same values).
+   \item D Array: The same as the argument (same values) when there is no monitoring. When monitoring for anormalities, the value in times where anormalities were detected is increased.
    \item W Array: The same as the argument (same values).
-   \item offset Vector: The same as the argument (same values).
    \item outcome Matrix: The same as the argument outcome (same values).
-   \item parms: The same as the argument.
+   \item offset Vector: The same as the argument (same values).
+   \item parms list: The same as the argument.
+   \item alt.flags vector: A list of 0's and 1's indicating where anomalies were detected (represented as 1).
+   \item log.like.null vector: The log-likelyhood of the main model at each time.
+   \item log.like.alt vector: The log-likelyhood of the alternative model at each time. Only used if monitoring.
 }
 }
 \description{
-Fit the  normal model given the observed value and the model parameters.
+Fit the model given the observed value and the model parameters.
 }

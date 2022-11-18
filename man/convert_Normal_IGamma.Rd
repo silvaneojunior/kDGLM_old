@@ -11,6 +11,9 @@ convert_Normal_IGamma(conj_prior, parms)
 
 \item{parms}{list: A list of extra known parameters of the distribuition. Not used in this function.}
 }
+\value{
+The parameters of the Normal distribuition of the linear predictor.
+}
 \description{
 Calculate the parameters of the log-Normal that best approximates the given Inverse-Gamma distribuition.
 The approximation is the best in the sense that it minimizes the KL divergence from the Inverse-Gamma to the log-Normal

@@ -62,9 +62,9 @@ y_pred <- outcome[T:(T + 20), ]
 
 outcome <- outcome[1:T, ]
 
-level_1 <- polynomial_block(order = 1, values = c(1, 0),by_time = FALSE)
-level_2 <- polynomial_block(order = 2, values = c(0, 1),by_time = FALSE)
-season_2 <- harmonic_block(period = 20, values = c(0, 1),by_time = FALSE)
+level_1 <- polynomial_block(order = 1, values = c(1, 0), by_time = FALSE)
+level_2 <- polynomial_block(order = 2, values = c(0, 1), by_time = FALSE)
+season_2 <- harmonic_block(period = 20, values = c(0, 1), by_time = FALSE)
 
 
 fitted_data <- fit_model(level_1, level_2, season_2, outcome = outcome, family = "Multinomial")

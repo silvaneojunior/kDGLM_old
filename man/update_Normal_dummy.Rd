@@ -13,6 +13,9 @@ update_Normal_dummy(conj_prior, y, parms)
 
 \item{parms}{list: A list of extra known parameters of the distribuition. For this kernel, parms should containg the covariance matrix parameter (Sigma) for the observational Normal model.}
 }
+\value{
+The parameters of the posterior distribution.
+}
 \description{
 Calculate posterior parameter for the Normal, assuming that the observed values came from a Normal model from which the covariance is known and the prior distribuition for the mean vector have Normal distribuition
 }

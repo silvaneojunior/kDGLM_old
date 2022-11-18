@@ -7,9 +7,13 @@
 poisson_pred(conj_param, outcome = NULL, parms = list(), pred_cred = 0.95)
 }
 \arguments{
-\item{pred_cred}{Numeric: the desired credibility for the credibility interval}
+\item{conj_param}{List or data.frame: The parameters of the conjugated distribuitions of the linear predictor.}
 
-\item{model}{List: contaning the parameters of the conjugated distribuition for the linear predictor (may be based on the prior, filtered or smoothed distribuition).}
+\item{outcome}{Vector or matrix (optional): The observed values at the current time. Not used in this function.}
+
+\item{parms}{List (optional): A list of extra parameters for the model. Not used in this function.}
+
+\item{pred_cred}{Numeric: the desired credibility for the credibility interval.}
 }
 \value{
 A list containing the following values:
@@ -18,20 +22,19 @@ A list containing the following values:
    \item var.pred vector/matrix: the variance of the predictive distribuition of a next observation. Same type and shape as the parameter in model.
    \item icl.pred vector/matrix: the percentile of 100*((1-pred_cred)/2)% of the predictive distribuition of a next observation. Same type and shape as the parameter in model.
    \item icu.pred vector/matrix: the percentile of 100*(1-(1-pred_cred)/2)% of the predictive distribuition of a next observation. Same type and shape as the parameter in model.
-   \item log.like vector/matrix: the log likelyhood of the observed data based on the predictive distribuition.
 }
 }
 \description{
 Calculate the values for the predictive distribuition given the values of the parameter of the conjugated distribuition of the linear predictor.
-It's worth noting that, since the conjugated distribuition of the linear predictior is Gamma (see Ref. Raíra), then the predictive distribuition is Negative Binomial.
+The data is assumed to have Poisson distribuition with it's mean having distribuition Gamma with shape parameter a e rate parameter b.
+In this scenario, the marginal distribuition of the data is Negative Binomial with a as the dispersion parameter and b/(b+1) as the probability.
 }
 \examples{
-# A fitted model shoulb be used as argument, but you can also pass only the parameter themselves.
 
-model <- list(
+conj_param <- data.frame(
   "a" = c(1:3),
   "b" = c(3:1)
 )
 
-poisson_pred(model)
+poisson_pred(conj_param)
 }

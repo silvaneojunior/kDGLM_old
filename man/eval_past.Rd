@@ -4,7 +4,7 @@
 \alias{eval_past}
 \title{eval_past}
 \usage{
-eval_past(model, smooth = FALSE, t_offset = 0, pred_cred = 0.95)
+eval_past(model, smooth = FALSE, t_offset = 0, pred_cred = 0.95, labels = NULL)
 }
 \arguments{
 \item{model}{<undefined class> or list: The fitted model to be use for evaluation.}
@@ -38,11 +38,11 @@ y_pred <- y[T:(T + 20), ]
 
 y <- y[1:T, ]
 
-level <- polynomial_block(order = 1, values = 1,k=2)
-season_2 <- harmonic_block(period = 20, values = c(0, 1),by_time = FALSE)
+level <- polynomial_block(order = 1, values = 1, k = 2)
+season_2 <- harmonic_block(period = 20, values = c(0, 1), by_time = FALSE)
 
 
 fitted_data <- fit_model(level, season_2, outcome = y, family = "Multinomial")
 
-past=eval_past(fitted_data,smooth=TRUE)
+past <- eval_past(fitted_data, smooth = TRUE)
 }

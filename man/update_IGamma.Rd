@@ -13,6 +13,9 @@ update_IGamma(conj_prior, y, parms)
 
 \item{parms}{list: A list of extra known parameters of the distribuition. For this kernel, parms should containg the shape parameter (phi) for the observational gamma model.}
 }
+\value{
+The parameters of the posterior distribution.
+}
 \description{
 Calculate posterior parameter for the Inverser-Gamma, assuming that the observed values came from a Gamma model from which the shape parameter (phi) is known and the mean (mu) have prior distribuition Inverse-Gamma.
 }

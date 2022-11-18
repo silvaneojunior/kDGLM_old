@@ -7,9 +7,13 @@
 normal_gamma_pred(conj_param, outcome = NULL, parms = list(), pred_cred = 0.95)
 }
 \arguments{
-\item{pred_cred}{Numeric: the desired credibility for the credibility interval.}
+\item{conj_param}{List or data.frame: The parameters of the conjugated distribuition (Normal-Gamma) of the linear predictor.}
 
-\item{model}{List: contaning the parameters of the conjugated distribuition for the linear predictor (may be based on the prior, filtered or smoothed distribuition).}
+\item{outcome}{Vector or matrix (optional): The observed values at the current time.}
+
+\item{parms}{List (optional): A list of extra parameters for the model. Not used in this function.}
+
+\item{pred_cred}{Numeric: the desired credibility for the credibility interval.}
 }
 \value{
 A list containing the following values:
@@ -22,18 +26,17 @@ A list containing the following values:
 }
 \description{
 Calculate the values for the predictive distribuition given the values of the parameter of the conjugated distribuition of the linear predictor.
+The data is assumed to have Normal distribuition with it's mean and precision having joint distribuition Normal-Gamma with parameters mu0, c0, alpha, beta.
+In this scenario, the marginal distribuition of the data is t-student with 2*alpha degrees of freedoom, mu0 as the location parameter and (beta/alpha)*(1+1/c0) as the scale parameter.
 }
 \examples{
-# A fitted model shoulb be used as argument, but you can also pass only the parameter themselves.
 
-model <- list(
-  "tau0" = 0.5,
-  "tau1" = -1 / 2,
-  "tau2" = 0,
-  "tau3" = -2.0,
-  "Qt" = matrix(1, 1, 1),
-  "outcome" = 0
+conj_param <- data.frame(
+  "mu0" = rep(0, 3),
+  "c0" = rep(1, 3),
+  "alpha" = rep(3, 3),
+  "beta" = rep(3, 3)
 )
 
-normal_gamma_pred(model)
+normal_gamma_pred(conj_param)
 }

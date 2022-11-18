@@ -7,9 +7,13 @@
 gamma_pred(conj_param, outcome = NULL, parms = list(), pred_cred = 0.95)
 }
 \arguments{
-\item{pred_cred}{Numeric: the desired credibility for the credibility interval.}
+\item{conj_param}{List or data.frame: The parameters of the conjugated distribuitions of the linear predictor.}
 
-\item{model}{List: contaning the parameters of the conjugated distribuition for the linear predictor (may be based on the prior, filtered or smoothed distribuition).}
+\item{outcome}{Vector or matrix (optional): The observed values at the current time. Not used in this function.}
+
+\item{parms}{List: A list of extra parameters for the model. For this function, it must contain the shape parameter phi of the observational model.}
+
+\item{pred_cred}{Numeric: the desired credibility for the credibility interval.}
 }
 \value{
 A list containing the following values:
@@ -18,22 +22,19 @@ A list containing the following values:
    \item var.pred vector/matrix: the variance of the predictive distribuition of a next observation. Same type and shape as the parameter in model.
    \item icl.pred vector/matrix: the percentile of 100*((1-pred_cred)/2)% of the predictive distribuition of a next observation. Same type and shape as the parameter in model.
    \item icu.pred vector/matrix: the percentile of 100*(1-(1-pred_cred)/2)% of the predictive distribuition of a next observation. Same type and shape as the parameter in model.
-   \item log.like vector/matrix: the log likelyhood of the observed data based on the predictive distribuition.
 }
 }
 \description{
 Calculate the values for the predictive distribuition given the values of the parameter of the conjugated distribuition of the linear predictor.
-It's worth noting that the credibility interval is calculated as +-2 standard deviations.
+The data is assumed to have Gamma distribuition with known shape parameter phi and it's mean having distribuition Inverse-Gamma with shape parameter a e rate parameter b.
+In this scenario, the marginal distribuition of the data is Beta prime with parameters phi, alpha, beta / phi.
 }
 \examples{
-# A fitted model shoulb be used as argument, but you can also pass only the parameter themselves.
 
-model <- list(
-  "outcome" = 2,
-  "tau0" = 3,
-  "tau1" = 4,
-  "parms" = list("alpha" = 1)
+conj_param <- data.frame(
+  "alpha" = c(1:3),
+  "beta" = c(3:1)
 )
 
-gamma_pred(model)
+gamma_pred(conj_param, parms = list("phi" = 1))
 }

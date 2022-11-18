@@ -7,33 +7,31 @@
 multnom_pred(conj_param, outcome, parms = list(), pred_cred = 0.95)
 }
 \arguments{
-\item{pred_cred}{Numeric: the desired credibility for the credibility interval}
+\item{conj_param}{List or data.frame: The parameters of the conjugated distribuitions of the linear predictor.}
 
-\item{model}{List: contaning the parameters of the conjugated distribuition for the linear predictor (may be based on the prior, filtered or smoothed distribuition).}
+\item{outcome}{Vector or matrix: The observed values at the current time. The value passed is used to compute N.}
+
+\item{parms}{List (optional): A list of extra parameters for the model. Not used in this function.}
+
+\item{pred_cred}{Numeric: the desired credibility for the credibility interval.}
 }
 \value{
 A list containing the following values:
 \itemize{
-   \item pred vector: the mean of the predictive distribuition of a next observation. Same type and shape as the parameter in model.
-   \item var.pred vector: the variance of the predictive distribuition of a next observation. Same type and shape as the parameter in model.
-   \item icl.pred vector: the percentile of 100*((1-pred_cred)/2)% of the predictive distribuition of a next observation. Same type and shape as the parameter in model.
-   \item icu.pred vector: the percentile of 100*(1-(1-pred_cred)/2)% of the predictive distribuition of a next observation. Same type and shape as the parameter in model.
-   \item log.like vector/matrix: the log likelyhood of the observed data based on the predictive distribuition.
+   \item pred vector/matrix: the mean of the predictive distribuition of a next observation. Same type and shape as the parameter in model.
+   \item var.pred vector/matrix: the variance of the predictive distribuition of a next observation. Same type and shape as the parameter in model.
+   \item icl.pred vector/matrix: the percentile of 100*((1-pred_cred)/2)% of the predictive distribuition of a next observation. Same type and shape as the parameter in model.
+   \item icu.pred vector/matrix: the percentile of 100*(1-(1-pred_cred)/2)% of the predictive distribuition of a next observation. Same type and shape as the parameter in model.
 }
 }
 \description{
-This function is a temporary placeholder.
 Calculate the values for the predictive distribuition given the values of the parameter of the conjugated distribuition of the linear predictor.
-PLACE PREDICTIVE DISTRIBUITION.
+The data is assumed to have Multinomial distribuition with known number of trial N and the probability vector having distribuition Dirichlet with parameters alpha_i.
+In this scenario, the marginal distribuition of the data is Dirichlet-Multinomial with parameters N and alpha_i.
 }
 \examples{
-# MUST BE MADE.
-# A fitted model shoulb be used as argument, but you can also pass only the parameter themselves.
 
-model <- list(
-  "alpha" = c(10, 2, 6),
-  "outcome" = c(3, 2, 5)
-)
+conj_param <- matrix(c(1:15), 5, 3, byrow = TRUE)
 
-multnom_pred(model)
+multnom_pred(conj_param, matrix(5, 5, 3))
 }

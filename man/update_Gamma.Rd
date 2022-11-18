@@ -13,6 +13,9 @@ update_Gamma(conj_prior, y, parms)
 
 \item{parms}{list: A list of extra known parameters of the distribuition. Not used in this kernel.}
 }
+\value{
+The parameters of the posterior distribution.
+}
 \description{
 Calculate posterior parameter for the Gamma, assuming that the observed values came from a Poisson model from which the rate parameter (lambda) have prior distribuition Gamma.
 }
