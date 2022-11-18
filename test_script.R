@@ -1,8 +1,9 @@
 # usethis::use_mit_license()
 
-styler::style_pkg()
-devtools::document()
+# styler::style_pkg()
+# devtools::document()
 devtools::install('.', upgrade='never')
+devtools::install_github('silvaneojunior/GDLM')
 
 #################################################################################
 ############################## Teste monitoramento ##############################
