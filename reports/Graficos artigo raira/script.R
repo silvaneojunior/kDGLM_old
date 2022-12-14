@@ -1,8 +1,8 @@
 library(tidyverse)
 devtools::load_all()
+source('reports/Graficos artigo raira/plot_zoom.R')
 
 library(extrafont)
-font_import()
 loadfonts(device = "win")
 
 # Tamanho da fonte
@@ -21,11 +21,11 @@ y <- data
 year <- seq(as.Date("1926/10/1"), by = "month", length.out = dim(y)[1])
 year_label <- seq(as.Date("1930/1/1"), by = "10 years", length.out = 8)
 
-level=polynomial_block(order=1,value=c(1,0),D=1/0.85,by_time = F)
+level=polynomial_block(order=1,value=c(1,0),D=1/0.98,by_time = F)
 volatility1=polynomial_block(order=1,value=c(0,1),D=1/1,by_time = F)
-volatility2=AR_block(order=1,value=c(0,1),D=1/1,W=diag(c(0.1,0)),by_time = F)
+volatility2=AR_block(order=1,value=c(0,1),D=diag(c(1,1/0.98)),W=diag(c(0.1,0)),by_time = F)
 
-fitted_data=fit_model(level,volatility1,volatility2,outcome=y,family='Normal_Gamma_cor')
+fitted_data=fit_model(level,volatility1,volatility2,outcome=y[,1],family='Normal_Gamma_cor')
 
 acf(fitted_data$mts[3,])
 fitted_data$mts[4,T]
@@ -130,6 +130,30 @@ ggplot()+
 
 ggsave(
   'C:\\Jupyter\\Mestrado\\Pacote\\GDLM\\reports\\Graficos artigo raira\\NG-mean-zoomed.png',
+  scale = 1,
+  units='px',
+  width=base.w*mult_scale,
+  height=base.h*mult_scale,
+  dpi = 300
+)
+
+ggplot()+
+  geom_line(aes(x=year,y=fitted_data$mt[4,],linetype='On-line'))+
+  geom_line(aes(x=year,y=fitted_data$mts[4,],linetype='Smoothed'))+
+  geom_ribbon(aes(x=year,
+                  ymin=fitted_data$mts[4,]-1.96*sqrt(fitted_data$Cts[4,4,]),
+                  ymax=fitted_data$mts[4,]+1.96*sqrt(fitted_data$Cts[4,4,]),
+                  linetype='Smoothed'),alpha=0.25)+
+  scale_linetype_manual('',values=c('dotdash','solid'))+
+  coord_cartesian(ylim=c(0,1.5))+
+  scale_x_date('Year',breaks=seq(as.Date("1930/1/1"), by = "1 years", length.out = 70),labels=function(x){substr(x,1,4)},expand=c(0,0),limits=c(as.Date("1990-01-01"),NA))+
+  scale_y_continuous('Estimated value')+
+  labs(title='AR coefficient')+
+  theme_bw()+
+  theme(text=element_text(size=font_size,family=family_font))
+
+ggsave(
+  'C:\\Jupyter\\Mestrado\\Pacote\\GDLM\\reports\\Graficos artigo raira\\NG-AR.png',
   scale = 1,
   units='px',
   width=base.w*mult_scale,

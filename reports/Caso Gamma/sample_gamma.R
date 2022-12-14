@@ -29,7 +29,7 @@ T=length(outcome)
 phi=1/2
 mu=mean(outcome)
 
-sample_size=2000
+sample_size=5000
 tau_0=1
 k_0=1
 
@@ -47,11 +47,12 @@ gamma_densi=dgamma(gamma_sample,(T/2),(T/2)/phi_i,log=TRUE)
 alpha_prop=(T/2)
 beta_prop=(T/2)/phi_i
 
-level=polynomial_block(1,D=1/0.95)
+volatility1=polynomial_block(order=1,value=1,D=1/1,by_time = F)
+volatility2=AR_block(order=1,value=1,D=1/1,W=diag(c(0.1,0)),by_time = F)
 
 for(i in 1:sample_size){
   cat(paste0(i,'                          \r'))
-  fitted_model=fit_model(level,outcome=outcome,parms=list('phi'=phi_i),family='gamma',pred_cred=-1,smooth_flag = FALSE)
+  fitted_model=fit_model(volatility1,volatility2,outcome=outcome,parms=list('phi'=phi_i),family='gamma',pred_cred=-1,smooth_flag = FALSE)
   sample=FFBS_sampling(fitted_model,1)
   mu_i=sample$param
 
@@ -101,26 +102,50 @@ print(mean(pred_sample[1,sample_index]))
 print(quantile(pred_sample[1,sample_index],0.975))
 print(quantile(pred_sample[1,sample_index],0.025))
 
+
+level=polynomial_block(order=1,value=c(1,0),D=1/0.95,by_time = F)
+volatility1=polynomial_block(order=1,value=c(0,1),D=1/1,by_time = F)
+volatility2=AR_block(order=1,value=c(0,1),D=diag(c(1,1/0.99)),W=diag(c(0.1,0)),by_time = F)
+
+outcome=read.csv('data/m-ibmln.txt',header=FALSE) %>% as.matrix %>% as.numeric
+y=outcome
+outcome=(y-mean(y))**2
+a=mean(outcome)
+outcome=outcome/a
+
+fitted_data=fit_model(level,volatility1,volatility2,outcome=outcome,family='FGamma2')
+sample=FFBS_sampling(fitted_data,sample_size)
+
+pred2=rep(NA,T)
+icu2=rep(NA,T)
+icl2=rep(NA,T)
+for(t in 1:T){
+  sample_gamma=a*rgamma(sample_size,shape=sample$param[1,t,],rate=sample$param[1,t,]/sample$param[2,t,])
+  pred2[t]=mean(sample_gamma)
+  icu2[t]=quantile(sample_gamma,0.975)
+  icl2[t]=quantile(sample_gamma,0.025)
+}
+
 year <- seq(as.Date("1926/10/1"), by = "month", length.out = length(outcome)+12)
 year_label <- seq(as.Date("1930/1/1"), by = "10 years", length.out = 8)
 
 font_size=16
 (ggplot()+
-    geom_line(aes(x=1:T,y=mt_sample[,sample_index] %>% rowMeans,linetype='Point estimation'))+
+    geom_line(aes(x=1:T,y=exp(sample$ft[2,,]) %>% rowMeans,linetype='Point estimation'))+
     geom_ribbon(aes(x=1:T,
-                    ymax=mt_sample[,sample_index] %>% apply(1,function(x){quantile(x,0.975)}),
-                    ymin=mt_sample[,sample_index] %>% apply(1,function(x){quantile(x,0.025)})),
+                    ymax=exp(sample$ft[2,,]) %>% apply(1,function(x){quantile(x,0.975)}),
+                    ymin=exp(sample$ft[2,,]) %>% apply(1,function(x){quantile(x,0.025)})),
                 alpha=0.25,fill='black')+
     scale_x_continuous('Date',breaks=c(0:14)*12*10+1+3+36,labels=function(x){substr(year[x],1,4)},expand=c(0,0),limits=c(39,NA))+
-    scale_y_continuous('Estimated value',expand=c(0,0,0.01,0),limits=c(NA,0.03))+
+    scale_y_continuous('Estimated value',expand=c(0,0,0.01,0),limits=c(NA,NA))+
     scale_linetype_manual('',values=c('solid'))+
     # coord_cartesian(ylim=c(0,0.1),xlim=c(700,800))+
     theme_bw()+
     theme(text=element_text(size=font_size)))+
-  labs(title='Level')
+  labs(title=TeX('Precision estimation'))
 
 ggsave(
-  'C:\\Jupyter\\Mestrado\\Pacote\\GDLM\\reports\\Graficos artigo raira\\gamma_mt.png',
+  'C:\\Jupyter\\Mestrado\\Pacote\\GDLM\\reports\\Graficos artigo raira\\gamma_mu.png',
   scale = 1,
   units='px',
   width=800*4,
@@ -128,28 +153,49 @@ ggsave(
   dpi = 300
 )
 
-
 (ggplot()+
-    geom_line(aes(x=1:T,y=mu_sample[,sample_index] %>% rowMeans,linetype='Point estimation'))+
+    geom_line(aes(x=1:T,y=exp(sample$mt[4,,]) %>% rowMeans,linetype='Point estimation'))+
     geom_ribbon(aes(x=1:T,
-                    ymax=mu_sample[,sample_index] %>% apply(1,function(x){quantile(x,0.975)}),
-                    ymin=mu_sample[,sample_index] %>% apply(1,function(x){quantile(x,0.025)})),
+                    ymax=exp(sample$mt[4,,]) %>% apply(1,function(x){quantile(x,0.975)}),
+                    ymin=exp(sample$mt[4,,]) %>% apply(1,function(x){quantile(x,0.025)})),
                 alpha=0.25,fill='black')+
-    geom_line(aes(x=2:T,y=exp(-fitted_data$mts[2,]+fitted_data$Cts[2,2,]/2),linetype='Normal-gamma'))+
-    geom_ribbon(aes(x=2:T,
-                    ymin=qlnorm(0.025,-fitted_data$mts[2,],sqrt(fitted_data$Cts[2,2,])),
-                    ymax=qlnorm(0.975,-fitted_data$mts[2,],sqrt(fitted_data$Cts[2,2,])),
-                    linetype='Normal-gamma'),alpha=0.25,fill='blue')+
     scale_x_continuous('Date',breaks=c(0:14)*12*10+1+3+36,labels=function(x){substr(year[x],1,4)},expand=c(0,0),limits=c(39,NA))+
-    scale_y_continuous('Estimated value',expand=c(0,0,0.01,0),limits=c(NA,0.03))+
-    scale_linetype_manual('',values=c('solid','dashed'))+
+    scale_y_continuous('Estimated value',expand=c(0,0,0.01,0),limits=c(NA,NA))+
+    scale_linetype_manual('',values=c('solid'))+
     # coord_cartesian(ylim=c(0,0.1),xlim=c(700,800))+
     theme_bw()+
     theme(text=element_text(size=font_size)))+
-  labs(title='Estimation of \\mu' %>% TeX)
+  labs(title=TeX('AR coefficient'))
 
 ggsave(
-  'C:\\Jupyter\\Mestrado\\Pacote\\GDLM\\reports\\Graficos artigo raira\\gamma_mu.png',
+  'C:\\Jupyter\\Mestrado\\Pacote\\GDLM\\reports\\Graficos artigo raira\\gamma_AR.png',
+  scale = 1,
+  units='px',
+  width=800*4,
+  height=600*4,
+  dpi = 300
+)
+
+year <- seq(as.Date("1926/10/1"), by = "month", length.out = length(outcome)+12)
+year_label <- seq(as.Date("1930/1/1"), by = "10 years", length.out = 8)
+
+font_size=16
+(ggplot()+
+    geom_line(aes(x=1:T,y=exp(sample$ft[1,,]) %>% rowMeans,linetype='Point estimation'))+
+    geom_ribbon(aes(x=1:T,
+                    ymax=exp(sample$ft[1,,]) %>% apply(1,function(x){quantile(x,0.975)}),
+                    ymin=exp(sample$ft[1,,]) %>% apply(1,function(x){quantile(x,0.025)})),
+                alpha=0.25,fill='black')+
+    scale_x_continuous('Date',breaks=c(0:14)*12*10+1+3+36,labels=function(x){substr(year[x],1,4)},expand=c(0,0),limits=c(39,NA))+
+    scale_y_continuous('Estimated value',expand=c(0,0,0.01,0))+
+    scale_linetype_manual('',values=c('solid'))+
+    coord_cartesian(ylim=c(0,5))+
+    theme_bw()+
+    theme(text=element_text(size=font_size)))+
+  labs(title=TeX('Shape parameter estimation'))
+
+ggsave(
+  'C:\\Jupyter\\Mestrado\\Pacote\\GDLM\\reports\\Graficos artigo raira\\gamma_phi.png',
   scale = 1,
   units='px',
   width=800*4,
@@ -163,12 +209,12 @@ zoom_factor=2
 font_size=16
 
 (ggplot()+
-  geom_line(aes(x=1:T,y=pred_sample[,sample_index] %>% rowMeans,linetype='Predictive\nmean'))+
+  geom_line(aes(x=1:T,y=pred2,linetype='Predictive\nmean'))+
   geom_ribbon(aes(x=1:T,
-                  ymax=pred_sample[,sample_index] %>% apply(1,function(x){quantile(x,0.975)}),
-                  ymin=pred_sample[,sample_index] %>% apply(1,function(x){quantile(x,0.025)})),
+                  ymax=icu2,
+                  ymin=icl2),
               alpha=0.25,color=NA,fill='black')+
-  geom_point(aes(x=1:T,y=outcome,shape='Observation'))+
+  geom_point(aes(x=1:T,y=a*outcome,shape='Observation'))+
   scale_x_continuous('Date',breaks=c(0:6)*12*10+1+3+36,labels=function(x){substr(year[x],1,4)},expand=c(0,0),limits=c(39,NA))+
   scale_y_continuous('Squared returns',expand=c(0,0,0.01,0))+
     scale_linetype_manual('',values='dotdash')+

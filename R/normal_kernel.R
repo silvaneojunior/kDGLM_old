@@ -49,11 +49,18 @@ update_Normal_dummy <- function(conj_prior, y, parms) {
   ft <- conj_prior[1:r]
   Qt <- conj_prior[(r + 1):(r * r + r)] %>% matrix(r, r)
 
-  Tau0 <- ginv(Qt)
-  Tau1 <- ginv(parms$Sigma)
+  Sigma=parms$Sigma
 
-  Qt <- ginv(Tau0 + Tau1)
-  ft <- Qt %*% (Tau0 %*% ft + Tau1 %*% y)
+  if(all(diag(Sigma)==0)){
+    Qt=Sigma*0
+    ft=y
+  }else{
+    Tau0 <- ginv(Qt)
+    Tau1 <- ginv(parms$Sigma)
+
+    Qt <- ginv(Tau0 + Tau1)
+    ft <- Qt %*% (Tau0 %*% ft + Tau1 %*% y)
+  }
   return(do.call(c, list(ft, Qt)))
 }
 

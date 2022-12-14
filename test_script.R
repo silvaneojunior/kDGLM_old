@@ -5,6 +5,10 @@
 devtools::install('.', upgrade='never')
 devtools::install_github('silvaneojunior/GDLM')
 
+install.packages('vctrs',clean = TRUE)
+
+remove.packages('vctrs')
+
 #################################################################################
 ############################## Teste monitoramento ##############################
 #################################################################################

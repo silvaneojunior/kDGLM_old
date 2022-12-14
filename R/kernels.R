@@ -296,7 +296,6 @@ analytic_filter <- function(outcome, m0 = 0, C0 = 1, FF, G, D, W, offset = outco
         conj_post_param[t, ] <- conj_post
       }
     }
-
     mt[, t] <- last_m <- mt_step
     Ct[, , t] <- last_C <- Ct_step
   }

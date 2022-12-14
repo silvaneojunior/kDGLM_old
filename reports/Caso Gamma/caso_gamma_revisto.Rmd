@@ -3,8 +3,8 @@ title: "Caso Gamma revisto"
 author: "Silvaneo Viera dos Santos Junior"
 date: "`r Sys.Date()`"
 output:
-  pdf_document: default
-  html_document: default
+  pdf_document:
+    keep_tex:  true
 subtitle: Relatório
 header-includes:
   - \usepackage{cancel}

@@ -310,7 +310,7 @@ forecast <- function(model, t = 1, outcome = NULL, offset = NULL, FF = NULL, D =
 
 
   for (t_i in c(1:t)) {
-    next_step <- one_step_evolve(last_m, last_C, FF[, , t_i] %>% matrix(n, r), G, D[, , t_i], W[, , t_i])
+    next_step <- one_step_evolve(last_m, last_C, FF[, , t_i] %>% matrix(n, r), G, D[, , t_i]**0, W[, , t_i]+C0*D[, , t_i])
     last_m <- next_step$at
     last_C <- next_step$Rt
     next_step <- model$family$offset(next_step$ft, next_step$Qt, model$offset[t_i, ])
@@ -668,5 +668,7 @@ kernel_list <- list(
   "normal" = normal_kernel,
   "gamma" = gamma_kernel,
   "gamma_lb" = gamma_lb_kernel,
-  "fgamma" = Fgamma_kernel
+  "fgamma" = Fgamma_kernel,
+  "fgamma2" = Fgamma2_kernel,
+  "fgamma3" = Fgamma3_kernel
 )
