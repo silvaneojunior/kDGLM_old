@@ -2,8 +2,8 @@
 #'
 #' Fit a model given it's structure and the observed data. This function can be used for any supported family (see vignette).
 #'
-#' @param ... <undefined class> or list: The structural block of the model.
-#' @param outcome Matrix: A matrix containing the observed data. Dimensions should be T x k, where T is the time series length and k is the number of outcomes.
+#' @param ... dlm_block object: The structural blocks of the model.
+#' @param outcomes List: The observed data. It should contain objects of the class dlm_distr.
 #' @param family String or <undefined class>: The list of functions (or it's name) used to fit the data. Should be choosed based on the distribution of the outcomes.
 #' @param offset Matrix: A matrix containing the offset value for the data. Dimesions should be the same as outcome.
 #' @param pred_cred Numeric: A number between 0 and 1 (not included) indicanting the credibility interval for predictions. If not within the valid range of values, predicitions are not made.
@@ -15,38 +15,22 @@
 #' @examples
 #' library(GDLM)
 #'
-#' # Normal with unkown variance case
-#' T <- 200
-#' mu <- rnorm(T, 0, 0.1)
-#' outcome <- rnorm(T, cumsum(mu))
-#'
-#' level <- polynomial_block(
-#'   order = 1,
-#'   values = c(1, 0),
-#'   D = 1 / 0.98,
-#'   by_time = FALSE
-#' )
-#' variance <- polynomial_block(
-#'   order = 1,
-#'   values = c(0, 1),
-#'   D = 1 / 1,
-#'   by_time = FALSE
-#' )
-#'
-#' fitted_data <- fit_model(level, variance, outcome = outcome, family = "normal_gamma")
-#' show_fit(fitted_data, smooth = TRUE)$plot
-#'
 #' # Poisson case
 #' T <- 200
 #' w <- (200 / 40) * 2 * pi
-#' outcome <- rpois(T, 20 * (sin(w * 1:T / T) + 2))
+#' data <- rpois(T, 20 * (sin(w * 1:T / T) + 2))
 #'
-#' level <- polynomial_block(order = 1, values = 1, D = 1 / 0.95)
-#' season <- harmonic_block(period = 40, values = 1, D = 1 / 0.98)
+#' level <- polynomial_block(rate = 1, D = 1 / 0.95)
+#' season <- harmonic_block(rate = 1, period = 40, D = 1 / 0.98)
 #'
-#' fitted_data <- fit_model(level, season, outcome = outcome, family = "Poisson")
+#' outcome <- Poisson(lambda = "rate", outcome = data)
+#'
+#' fitted_data <- fit_model(level, season, outcomes = outcome)
+#' summary(fitted_data)
+#'
 #' show_fit(fitted_data, smooth = TRUE)$plot
 #'
+#' ##################################################################
 #'
 #' # Multinomial case
 #' T <- 200
@@ -56,95 +40,141 @@
 #'
 #' y <- cbind(y1, y2, y3)
 #'
-#' level <- polynomial_block(2, k = 2)
-#' season <- harmonic_block(12, values = c(0, 1), by_time = FALSE)
+#' level <- polynomial_block(p1 = 1) + polynomial_block(p2 = 1)
+#' season <- harmonic_block(p2 = 1, period = 12)
+#' outcome <- Multinom(p = c("p1", "p2"), outcome = y)
 #'
-#' fitted_data <- fit_model(level, season, outcome = y, family = "Multinomial", pred_cred = 0.95)
+#' fitted_data <- fit_model(level, season, outcomes = outcome)
+#' summary(fitted_data)
 #'
 #' show_fit(fitted_data, smooth = TRUE)$plot
+#'
+#' ##################################################################
+#'
+#' # Normal case
+#' T <- 200
+#' mu <- rnorm(T, 0, 0.1)
+#' data <- rnorm(T, cumsum(mu))
+#'
+#' level <- polynomial_block(
+#'   mu = 1,
+#'   D = 1 / 0.95
+#' )
+#' variance <- polynomial_block(
+#'   sigma2 = 1
+#' )
+#'
+#' # Known variance
+#' outcome <- Normal(mu = "mu", sigma2 = 1, outcome = data)
+#'
+#' fitted_data <- fit_model(level, outcomes = outcome)
+#' summary(fitted_data)
+#'
+#' show_fit(fitted_data, smooth = TRUE)$plot
+#'
+#' # Unknown variance
+#' outcome <- Normal(mu = "mu", sigma2 = "sigma2", outcome = data)
+#'
+#' fitted_data <- fit_model(level, variance, outcomes = outcome)
+#' summary(fitted_data)
+#'
+#' show_fit(fitted_data, smooth = TRUE)$plot
+#'
+#' ##################################################################
 #'
 #' # Gamma case
 #' T <- 200
 #' w <- (200 / 40) * 2 * pi
 #' phi <- 2.5
-#' outcome <- matrix(rgamma(T, phi, phi / (20 * (sin(w * 1:T / T) + 2))), T, 1)
+#' data <- matrix(rgamma(T, phi, phi / (20 * (sin(w * 1:T / T) + 2))), T, 1)
 #'
-#' level <- polynomial_block(order = 1, values = 1, D = 1 / 0.95)
-#' season <- harmonic_block(period = 40, values = 1, D = 1 / 0.98)
+#' level <- polynomial_block(mu = 1, D = 1 / 0.95)
+#' season <- harmonic_block(mu = 1, period = 40, D = 1 / 0.98)
+#' scale <- polynomial_block(phi = 1, D = 1 / 1)
 #'
-#' fitted_data <- fit_model(level, season, outcome = outcome, family = "Gamma", parms = list("phi" = phi))
+#' # Known shape
+#' outcome <- Gamma(phi = phi, mu = "mu", outcome = data)
+#'
+#' fitted_data <- fit_model(level, season, outcomes = outcome)
+#' summary(fitted_data)
 #'
 #' show_fit(fitted_data, smooth = TRUE)$plot
-fit_model <- function(..., outcome, family, offset = outcome * 0 + 1, parms = list(), pred_cred = 0.95, smooth_flag = TRUE, p_monit = NA, c_monit = 1) {
-  if (typeof(family) == typeof("family")) {
-    if (tolower(family) == "fgamma") {
-      warning("This family is numerically unstable. Be careful with it's usage.")
-    }
-    family <- kernel_list[[tolower(family)]]
+#'
+#' # Unknown shape
+#' outcome <- Gamma(phi = "phi", mu = "mu", outcome = data)
+#'
+#' fitted_data <- fit_model(level, season, scale, outcomes = outcome)
+#' summary(fitted_data)
+#'
+#' show_fit(fitted_data, smooth = TRUE)$plot
+fit_model <- function(..., outcomes, pred_cred = 0.95, smooth_flag = TRUE, p_monit = NA, c_monit = 1) {
+  if (class(outcomes) == "dlm_distr") {
+    outcomes <- list(outcomes)
   }
-  if (is.null(dim(outcome))) {
-    outcome <- matrix(outcome, length(outcome), 1)
+
+  if (is.null(names(outcomes))) {
+    names(outcomes) <- paste0("Serie_", 1:length(outcomes))
+  } else if (any(names(outcomes) == "")) {
+    val_r <- sum(names(outcomes) == "")
+    names(outcomes)[names(outcomes) == ""] <- paste0("Serie_", 1:val_r)
   }
-  if (is.null(dim(offset))) {
-    offset <- matrix(offset, length(offset), 1)
+
+  t <- sapply(outcomes, function(x) {
+    x$t
+  })
+  if (min(t) != max(t)) {
+    stop(paste0("Error: outcomes does not have the same time length."))
   }
-  if (typeof(outcome) == typeof(list())) {
-    outcome <- as.matrix(outcome)
-  }
+  t <- max(t)
 
   structure <- block_merge(...)
-  if (any(dim(outcome) != dim(offset))) {
-    stop("Erro: offset does not have the same dim as outcome.")
-  }
 
   if (structure$t == 1) {
-    structure$t <- dim(outcome)[1]
-    structure$D <- array(structure$D, c(structure$n, structure$n, structure$t))
-    structure$W <- array(structure$W, c(structure$n, structure$n, structure$t))
-    structure$FF <- array(structure$FF, c(structure$n, structure$k, structure$t))
+    structure$t <- t
+    structure$D <- array(structure$D, c(structure$n, structure$n, structure$t), dimnames = dimnames(structure$D))
+    structure$W <- array(structure$W, c(structure$n, structure$n, structure$t), dimnames = dimnames(structure$W))
+    structure$FF <- array(structure$FF, c(structure$n, structure$k, structure$t), dimnames = dimnames(structure$FF))
   }
-  if (dim(outcome)[1] != structure$t) {
-    stop(paste0("Error: outcome does not have the same time length as structure: got ", dim(outcome)[1], " from outcome, expected ", structure$t))
+  if (t != structure$t) {
+    stop(paste0("Error: outcome does not have the same time length as structure: got ", n_outcomes, " from outcome, expected ", structure$t))
   }
-  # if (dim(outcome)[2] != structure$k) {
-  #   stop(paste0("Error: outcome does not have the same number of outcomes as structure: got ", dim(outcome)[2], " from outcome, expected ", structure$k))
-  # }
   model <- analytic_filter(
-    outcome = outcome,
+    outcomes = outcomes,
     m0 = structure$m0,
     C0 = structure$C0,
     FF = structure$FF,
     G = structure$G,
     D = structure$D,
     W = structure$W,
-    offset = offset,
-    parms = parms,
-    family = family,
     p_monit = p_monit,
     c_monit = c_monit
   )
   if (smooth_flag) {
-    smoothed <- family$smoother(model$mt, model$Ct, model$at, model$Rt, model$G)
+    smoothed <- generic_smoother(model$mt, model$Ct, model$at, model$Rt, model$G)
     model$mts <- smoothed$mts
     model$Cts <- smoothed$Cts
   }
-  if (is.numeric(pred_cred)) {
-    if (0 < pred_cred & 1 > pred_cred) {
-      prediction <- family$pred(model$conj_prior_param, model$outcome, parms = parms, pred_cred = pred_cred)
+  for (outcome_name in names(model$outcomes)) {
+    outcome <- model$outcomes[[outcome_name]]
+    if (is.numeric(pred_cred)) {
+      if (0 < pred_cred & 1 > pred_cred) {
+        prediction <- outcome$family$pred(outcome$conj_prior_param, outcome$outcome, pred_cred = pred_cred, parms = outcome$parms)
 
-      model$pred <- prediction$pred
-      model$var.pred <- prediction$var.pred
-      model$icl.pred <- prediction$icl.pred
-      model$icu.pred <- prediction$icu.pred
+        model$outcomes[[outcome_name]]$pred <- prediction$pred
+        model$outcomes[[outcome_name]]$var.pred <- prediction$var.pred
+        model$outcomes[[outcome_name]]$icl.pred <- prediction$icl.pred
+        model$outcomes[[outcome_name]]$icu.pred <- prediction$icu.pred
+      }
     }
+    model$outcomes[[outcome_name]]$log.like <- sum(outcome$family$log.like(outcome$conj_prior_param, outcome$outcome, parms = outcome$parms))
   }
-
-  model$log.like <- sum(family$log.like(model$conj_prior_param, model$outcome, parms = parms))
-
   model$m0 <- structure$m0
   model$C0 <- structure$C0
   model$names <- structure$names
-  model$family <- family
+  model$smooth <- smooth_flag
+  model$pred_cred <- pred_cred
+  model$t <- t
+  class(model) <- "fitted_dlm"
 
   return(model)
 }
@@ -161,7 +191,6 @@ fit_model <- function(..., outcome, family, offset = outcome * 0 + 1, parms = li
 #' @param W Array: A 3D-array containing the covariance matrix of the noise for each time. It's dimension should be n x n x t, where n is the number of latent variables and T is the time series length. If not specified, 0 will be used.
 #' @param plot Bool: A flag indicating if a plot should be produced.
 #' @param pred_cred Numeric: The credibility level for the I.C. intervals.
-#' @param labels Vector: A string vector with the names for the series of prediction. If none is given, will use generic names.
 #'
 #'
 #' @return A list containing:
@@ -200,7 +229,7 @@ fit_model <- function(..., outcome, family, offset = outcome * 0 + 1, parms = li
 #' show_fit(fitted_data, smooth = TRUE)$plot
 #'
 #' forecast(fitted_data, 20, outcome = y_pred)$plot
-forecast <- function(model, t = 1, outcome = NULL, offset = NULL, FF = NULL, D = NULL, W = NULL, plot = TRUE, pred_cred = 0.95, labels = NULL) {
+forecast <- function(model, t = 1, outcome = NULL, offset = NULL, FF = NULL, D = NULL, W = NULL, plot = TRUE, pred_cred = 0.95) {
   n <- dim(model$mt)[1]
   t_last <- dim(model$mt)[2]
   r <- dim(model$FF)[2]
@@ -310,11 +339,15 @@ forecast <- function(model, t = 1, outcome = NULL, offset = NULL, FF = NULL, D =
 
 
   for (t_i in c(1:t)) {
-    next_step <- one_step_evolve(last_m, last_C, FF[, , t_i] %>% matrix(n, r), G, D[, , t_i]**0, W[, , t_i]+C0*D[, , t_i])
+    next_step <- one_step_evolve(last_m, last_C, FF[, , t_i] %>% matrix(n, r), G, D[, , t_i]**0, W[, , t_i] + C0 * D[, , t_i])
     last_m <- next_step$at
     last_C <- next_step$Rt
     next_step <- model$family$offset(next_step$ft, next_step$Qt, model$offset[t_i, ])
-    conj_distr <- model$family$conj_prior(next_step$ft, next_step$Qt)
+
+    ft_canom <- outcome$convert_mat_canom %*% next_step$ft
+    Qt_canom <- outcome$convert_mat_canom %*% next_step$Qt %*% t(outcome$convert_mat_canom)
+
+    conj_distr <- model$family$conj_prior(ft_canom, Qt_canom)
     prediction <- model$family$pred(conj_distr, outcome[t_i, , drop = FALSE], model$parms, pred_cred)
 
     pred[, t_i] <- prediction$pred
@@ -412,14 +445,15 @@ forecast <- function(model, t = 1, outcome = NULL, offset = NULL, FF = NULL, D =
 #'
 #' y <- y[1:T, ]
 #'
-#' level <- polynomial_block(order = 1, values = 1, k = 2)
-#' season_2 <- harmonic_block(period = 20, values = c(0, 1), by_time = FALSE)
+#' level <- polynomial_block(p1 = 1) + polynomial_block(p2 = 1)
+#' season_2 <- harmonic_block(p2 = 1, period = 20)
 #'
+#' outcome <- Multinom(p = c("p1", "p2"), outcome = y)
 #'
-#' fitted_data <- fit_model(level, season_2, outcome = y, family = "Multinomial")
+#' fitted_data <- fit_model(level, season_2, outcomes = outcome)
 #'
 #' past <- eval_past(fitted_data, smooth = TRUE)
-eval_past <- function(model, smooth = FALSE, t_offset = 0, pred_cred = 0.95, labels = NULL) {
+eval_past <- function(model, smooth = FALSE, t_offset = 0, pred_cred = 0.95) {
   if (smooth & t_offset > 0) {
     t_offset <- 0
     warning("t_offset is only used if smooth is set to TRUE.")
@@ -430,7 +464,9 @@ eval_past <- function(model, smooth = FALSE, t_offset = 0, pred_cred = 0.95, lab
   n <- dim(model$mt)[1]
   t_last <- dim(model$mt)[2]
   r <- dim(model$FF)[2]
-  k <- dim(model$outcome)[2]
+  k <- sum(sapply(model$outcomes, function(x) {
+    x$r
+  }))
 
   FF <- model$FF
   G <- diag(n)
@@ -438,7 +474,7 @@ eval_past <- function(model, smooth = FALSE, t_offset = 0, pred_cred = 0.95, lab
   var.pred <- array(NA, c(k, k, t_last))
   icl.pred <- matrix(NA, k, t_last)
   icu.pred <- matrix(NA, k, t_last)
-  log.like <- rep(NA, t_last)
+  log.like <- rep(0, t_last)
 
   if (smooth) {
     ref_mt <- model$mts
@@ -472,28 +508,60 @@ eval_past <- function(model, smooth = FALSE, t_offset = 0, pred_cred = 0.95, lab
     # model$family$filter(model$outcome[i, ], mt, Ct, FF[, , i] %>% matrix(n, r), G, D[, , i], W[, , i], model$offset[i, ], parms = model$parms)
     next_step <- list("at" = mt, "Rt" = Ct)
     for (t in c(1:t_offset)) {
-      next_step <- one_step_evolve(next_step$at, next_step$Rt, FF[, , i] %>% matrix(n, r), G, D[, , i]**(t == 1), W[, , i])
+      next_step <- one_step_evolve(next_step$at, next_step$Rt, G, D[, , i]**(t == 1), W[, , i])
     }
     # next_step <- one_step_evolve(mt, Ct, FF[, , i] %>% matrix(n, r), G, D[, , i], W[, , i])
-    next_step <- model$family$offset(next_step$ft, next_step$Qt, model$offset[i, ])
-    conj_distr <- model$family$conj_prior(next_step$ft, next_step$Qt)
-    prediction <- model$family$pred(conj_distr, model$outcome[i, , drop = FALSE], model$parms, pred_cred)
+    k_acum <- 0
+    for (outcome in model$outcomes) {
+      k_cur <- outcome$r
 
-    pred[, i] <- prediction$pred
-    var.pred[, , i] <- prediction$var.pred
-    icl.pred[, i] <- prediction$icl.pred
-    icu.pred[, i] <- prediction$icu.pred
-    log.like[i] <- sum(model$family$log.like(conj_distr, model$outcome[i, , drop = FALSE], model$parms))
+      pred_index <- match(outcome$var_names, model$var_names)
+      k_i <- length(pred_index)
+      FF_step <- matrix(FF[, pred_index, i], n, k_i)
+      lin_pred <- calc_lin_pred(next_step$at, next_step$Rt, FF_step)
+
+      cur_step <- outcome$family$offset(lin_pred$ft, lin_pred$Qt, outcome$offset[i, ])
+
+      ft_canom <- outcome$convert_mat_canom %*% cur_step$ft
+      Qt_canom <- outcome$convert_mat_canom %*% cur_step$Qt %*% t(outcome$convert_mat_canom)
+
+      conj_distr <- outcome$family$conj_prior(ft_canom, Qt_canom)
+      prediction <- outcome$family$pred(conj_distr, outcome$outcome[i, , drop = FALSE], pred_cred, parms = outcome$parms)
+
+      pred[(k_acum + 1):(k_acum + k_cur), i] <- prediction$pred
+      var.pred[(k_acum + 1):(k_acum + k_cur), , i] <- prediction$var.pred
+      icl.pred[(k_acum + 1):(k_acum + k_cur), i] <- prediction$icl.pred
+      icu.pred[(k_acum + 1):(k_acum + k_cur), i] <- prediction$icu.pred
+      log.like[i] <- log.like[i] + sum(outcome$family$log.like(conj_distr, outcome$outcome[i, , drop = FALSE], parms = outcome$parms))
+      k_acum <- k_acum + k_cur
+    }
   }
-  data_list <- list("obs" = matrix(model$outcome, t_last, k), "pred" = pred %>% as.matrix() %>% t(), "icl.pred" = icl.pred %>% as.matrix() %>% t(), "icu.pred" = icu.pred %>% as.matrix() %>% t())
+
+  k_acum <- 0
+  out_names <- rep(NA, k)
+  output <- matrix(NA, t_last, k)
+  for (outcome_name in names(model$outcomes)) {
+    k_cur <- model$outcomes[[outcome_name]]$r
+    if (k_cur > 1) {
+      out_names[(k_acum + 1):(k_acum + k_cur)] <- paste0(outcome_name, "_", 1:k_cur)
+    } else {
+      out_names[(k_acum + 1):(k_acum + k_cur)] <- outcome_name
+    }
+    output[, (k_acum + 1):(k_acum + k_cur)] <- model$outcomes[[outcome_name]]$outcome
+
+    k_acum <- k_acum + k_cur
+  }
+
+  data_list <- list("obs" = output, "pred" = pred %>% as.matrix() %>% t(), "icl.pred" = icl.pred %>% as.matrix() %>% t(), "icu.pred" = icu.pred %>% as.matrix() %>% t())
   data_name <- c("Observation", "Prediction", "C.I.lower", "C.I.upper")
+
   data_raw <- lapply(1:4, function(i) {
     data <- cbind(as.character(1:t_last) %>% as.data.frame(), data_list[[i]]) %>%
       as.data.frame() %>%
       pivot_longer(1:k + 1) %>%
       mutate(name = as.factor(name))
     names(data) <- c("Time", "Serie", data_name[i])
-    levels(data$Serie) <- paste0("Serie_", 1:k)
+    levels(data$Serie) <- out_names
     data
   })
   data <- do.call(function(...) {
@@ -504,15 +572,12 @@ eval_past <- function(model, smooth = FALSE, t_offset = 0, pred_cred = 0.95, lab
     }
     data
   }, data_raw) %>% mutate(Time = as.numeric(Time), Serie = as.factor(Serie))
-  if (!is.null(labels)) {
-    levels(data$Serie) <- labels
-  }
   return(data)
 }
 
-#' FFBS_sampling
+#' dlm_sampling
 #'
-#' @param model <undefined class>: A fitted model from which to sample.
+#' @param model fitted_dlm: A fitted model from which to sample.
 #' @param sample_size integer: The number of samples to draw.
 #'
 #' @return A list containing the following values:
@@ -526,40 +591,26 @@ eval_past <- function(model, smooth = FALSE, t_offset = 0, pred_cred = 0.95, lab
 #' @examples
 #'
 #' T <- 200
-#' w <- (200 / 50) * 2 * pi
-#' S <- exp(2 * (sin(w * 1:T / T))) * exp(-20 * (1:T / T) * ((1:T / T) - 1)) / 20
-#' mu <- 20 * 1:T / T
-#' outcome <- rnorm(T, mu, sqrt(1 / S))
+#' mu <- rnorm(T, 0, 0.1)
+#' data <- rnorm(T, cumsum(mu))
 #'
 #' level <- polynomial_block(
-#'   order = 2,
-#'   values = c(1, 0),
-#'   D = 1 / 1,
-#'   by_time = FALSE
+#'   mu = 1,
+#'   D = 1 / 0.95
 #' )
-#' variance1 <- polynomial_block(
-#'   order = 3,
-#'   values = c(0, 1),
-#'   D = 1 / 1,
-#'   C0 = diag(c(1, 0.1, 0.01)),
-#'   by_time = FALSE
+#' variance <- polynomial_block(
+#'   sigma2 = 1
 #' )
-#' variance2 <- harmonic_block(
-#'   period = 50,
-#'   values = c(0, 1),
-#'   D = 1 / 1,
-#'   by_time = FALSE
-#' )
+#' # Unknown variance
+#' outcome <- Normal(mu = "mu", sigma2 = "sigma2", outcome = data)
 #'
-#' fitted_data <- fit_model(level, variance1, variance2,
-#'   outcome = outcome,
-#'   family = "normal_gamma"
-#' )
+#' fitted_data <- fit_model(level, variance, outcomes = outcome)
+#' summary(fitted_data)
 #'
 #' show_fit(fitted_data, smooth = TRUE)$plot
 #'
-#' sample <- FFBS_sampling(fitted_data, 2000)
-FFBS_sampling <- function(model, sample_size) {
+#' sample <- dlm_sampling(fitted_data, 2000)
+dlm_sampling <- function(model, sample_size) {
   G <- model$G
   at <- model$at
   mt <- model$mt
@@ -567,7 +618,14 @@ FFBS_sampling <- function(model, sample_size) {
   T_len <- dim(mt)[2]
   n <- dim(mt)[1]
   k <- dim(FF)[2]
-  inv_link <- model$family$inv_link_function
+  outcomes <- list()
+  for (outcome_name in names(model$outcomes)) {
+    outcomes[[outcome_name]] <- list(
+      inv_link = model$outcomes[[outcome_name]]$family$inv_link_function,
+      offset = model$outcomes[[outcome_name]]$family$offset,
+      l = length(model$outcomes[[outcome_name]]$var_names)
+    )
+  }
   alt_chol_local <- if (n == 1) {
     sqrt
   } else {
@@ -589,18 +647,34 @@ FFBS_sampling <- function(model, sample_size) {
     }
   )
   mt_sample_i <- t(Ct_chol) %*% mt_sample[, T_len, ] + mt[, T_len]
-  ft_sample_i <- t(FF[, , T_len]) %*% mt_sample_i
-
-  ft_sample_i <- model$family$offset(ft_sample_i, diag(k) * 0, if (na.flag) {
-    1
+  if (any(is.na(FF[, , T_len]))) {
+    FF_step <- FF[, , T_len]
+    ft_sample_i <- matrix(NA, k, sample_size)
+    for (j in 1:sample_size) {
+      ft_sample_i[, j] <- calc_lin_pred(mt_sample_i[, j], Ct_chol * 0, FF_step)$ft
+    }
   } else {
-    offset_step
-  })$ft
-  param_sample_i <- inv_link(ft_sample_i)
+    ft_sample_i <- t(FF[, , T_len]) %*% mt_sample_i
+  }
 
-  l <- dim(param_sample_i)[1]
-  param_sample <- array(NA, c(l, T_len, sample_size))
-  param_sample[, T_len, ] <- param_sample_i
+  var_names <- colnames(FF)
+  for (outcome_name in names(outcomes)) {
+    pred_index <- match(model$outcome[[outcome_name]]$var_names, var_names)
+    k_i <- length(pred_index)
+
+    outcomes[[outcome_name]]$k_i <- k_i
+    outcomes[[outcome_name]]$pred_index <- pred_index
+
+    ft_sample_i_out <- outcomes[[outcome_name]]$offset(ft_sample_i[outcomes[[outcome_name]]$pred_index, ], diag(k) * 0, if (na.flag) {
+      1
+    } else {
+      offset_step
+    })$ft
+    param_sample_i <- outcomes[[outcome_name]]$inv_link(ft_sample_i_out)
+
+    outcomes[[outcome_name]]$param_sample <- array(NA, c(outcomes[[outcome_name]]$l, T_len, sample_size))
+    outcomes[[outcome_name]]$param_sample[, T_len, ] <- param_sample_i
+  }
   mt_sample[, T_len, ] <- mt_sample_i
   ft_sample[, T_len, ] <- ft_sample_i
 
@@ -635,40 +709,33 @@ FFBS_sampling <- function(model, sample_size) {
       }
     )
     mt_sample_i <- t(Ct_chol) %*% mt_sample[, t, ] + mts
-    ft_sample_i <- t(FF[, , t]) %*% mt_sample_i
-
-    ft_sample_i <- model$family$offset(ft_sample_i, diag(k) * 0, if (na.flag) {
-      1
+    if (any(is.na(FF[, , t]))) {
+      FF_step <- FF[, , t]
+      ft_sample_i <- matrix(NA, k, sample_size)
+      for (j in 1:sample_size) {
+        ft_sample_i[, j] <- calc_lin_pred(mt_sample_i[, j], Ct_chol * 0, FF_step)$ft
+      }
     } else {
-      offset_step
-    })$ft
-    param_sample_i <- inv_link(ft_sample_i)
+      ft_sample_i <- t(FF[, , t]) %*% mt_sample_i
+    }
 
-    param_sample[, t, ] <- param_sample_i
+    for (outcome_name in names(outcomes)) {
+      ft_sample_i_out <- outcomes[[outcome_name]]$offset(ft_sample_i[outcomes[[outcome_name]]$pred_index, ], diag(k) * 0, if (na.flag) {
+        1
+      } else {
+        offset_step
+      })$ft
+      param_sample_i <- outcomes[[outcome_name]]$inv_link(ft_sample_i_out)
+      outcomes[[outcome_name]]$param_sample[, t, ] <- param_sample_i
+    }
     mt_sample[, t, ] <- mt_sample_i
     ft_sample[, t, ] <- ft_sample_i
   }
   return(list(
     "mt" = mt_sample,
     "ft" = ft_sample,
-    "param" = param_sample
+    "param" = lapply(outcomes, function(x) {
+      x$param_sample
+    })
   ))
 }
-
-#' @export
-kernel_list <- list(
-  "poisson" = poisson_kernel,
-  "poisson_ord1" = poisson_kernel_ord1,
-  "poisson_rn_default" = poisson_kernel_RN_default,
-  "poisson_true" = poisson_kernel_true,
-  "poisson_lb" = poisson_lb_kernel,
-  "multinomial" = multnom_kernel,
-  "normal_gamma" = normal_gamma_kernel,
-  "normal_gamma_cor" = normal_gamma_cor_kernel,
-  "normal" = normal_kernel,
-  "gamma" = gamma_kernel,
-  "gamma_lb" = gamma_lb_kernel,
-  "fgamma" = Fgamma_kernel,
-  "fgamma2" = Fgamma2_kernel,
-  "fgamma3" = Fgamma3_kernel
-)

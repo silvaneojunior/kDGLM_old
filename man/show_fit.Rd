@@ -9,8 +9,7 @@ show_fit(
   pred_cred = 0.95,
   smooth = TRUE,
   dynamic_plot = TRUE,
-  t_offset = 0,
-  labels = NULL
+  t_offset = 0
 )
 }
 \arguments{
@@ -21,8 +20,6 @@ show_fit(
 \item{smooth}{Bool: A flag indicating if the smoothed should be used. If false, the filtered distribuition will be used.}
 
 \item{t_offset}{Integer: A integer with the amount of steps ahead should be used for prediciton. Only used if smooth is false.}
-
-\item{labels}{Character: A vector containg the names for each time series.}
 
 \item{dynamic}{Bool: A flag indicating if the created plot should be dynamic.}
 }

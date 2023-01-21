@@ -1,228 +1,112 @@
+#' Gamma
+#'
+#' Creates an outcome with gamma distribuition with the chosen parameters (can only specify 2).
+#'
+#' @param phi character or numeric: Name of the linear preditor associated with the shape parameter of the gamma distribuition. If numeric, this parameter is treated as knowed and equal to the value passed. If a character, the parameter is treated as unknowed and equal to the exponential of the associated linear preditor. It cannot be specified with alpha.
+#' @param mu character: Name of the linear preditor associated with the mean parameter of the gamma distribuition. The parameter is treated as unknowed and equal to the exponential of the associated linear preditor.
+#' @param alpha character: Name of the linear preditor associated with the shape parameter of the gamma distribuition. The parameter is treated as unknowed and equal to the exponential of the associated linear preditor. It cannot be specified with phi.
+#' @param beta character: Name of the linear preditor associated with the rate parameter of the gamma distribuition. The parameter is treated as unknowed and equal to the exponential of the associated linear preditor. It cannot be specified with sigma.
+#' @param sigma character: Name of the linear preditor associated with the scale parameter of the gamma distribuition. The parameter is treated as unknowed and equal to the exponential of the associated linear preditor. It cannot be specified with beta.
+#' @param outcome vector: Values of the observed data.
+#' @param offset vector: The offset at each observation. Must have the same shape as outcome.
+#'
+#' @return A object of the class dlm_distr
+#' @export
+#'
+#' @examples
+#'
+#' # Gamma case
+#' T <- 200
+#' w <- (200 / 40) * 2 * pi
+#' phi <- 2.5
+#' data <- matrix(rgamma(T, phi, phi / (20 * (sin(w * 1:T / T) + 2))), T, 1)
+#'
+#' level <- polynomial_block(mu = 1, D = 1 / 0.95)
+#' season <- harmonic_block(mu = 1, period = 40, D = 1 / 0.98)
+#' scale <- polynomial_block(phi = 1, D = 1 / 1)
+#'
+#' # Known shape
+#' outcome <- Gamma(phi = phi, mu = "mu", outcome = data)
+#'
+#' fitted_data <- fit_model(level, season, outcomes = outcome)
+#' summary(fitted_data)
+#'
+#' show_fit(fitted_data, smooth = TRUE)$plot
+#'
+#' # Unknown shape
+#' outcome <- Gamma(phi = "phi", mu = "mu", outcome = data)
+#'
+#' fitted_data <- fit_model(level, season, scale, outcomes = outcome)
+#' summary(fitted_data)
+#'
+#' show_fit(fitted_data, smooth = TRUE)$plot
+Gamma <- function(phi = NA, mu = NA, alpha = NA, beta = NA, sigma = NA, outcome, offset = outcome**0) {
+  family <- Fgamma_kernel
+  if (is.numeric(phi)) {
+    if (any(!is.na(c(alpha, beta, sigma)))) {
+      stop("Error: When phi is known only mu can be estimated.")
+    }
+    var_names <- c(mu)
+    convert_mat_default <- convert_mat_canom <- diag(1)
+    family <- gamma_kernel
+    parms <- list(phi = phi)
+  } else {
+    flags <- !is.na(c(phi, mu, alpha, beta, sigma))
+    if (sum(flags) < 2) {
+      stop("Error: Parameters not fully specified. You must specified exactly 2 non reduntant parameters.")
+    }
+    if (sum(flags) > 2) {
+      stop("Error: Parameters over specified. You must specified exactly 2 non reduntant parameters.")
+    }
+    if (flags[4] & flags[5]) {
+      top("Error: Scale specified in more than one value.")
+    }
+    convert_mat_default <- matrix(c(1, 0, 0, 1, 1, 0, 1, -1, -2, 2), 2, 5)[, flags]
+    convert_mat_canom <- solve(convert_mat_default)
+    parms <- list()
+    var_names <- c(phi, mu, alpha, beta, sigma)[flags]
+  }
+
+  t <- length(outcome)
+  r <- 1
+  k <- 2
+
+  distr <- list(
+    var_names = var_names,
+    family = family,
+    r = r,
+    k = k,
+    t = t,
+    offset = matrix(offset, t, r),
+    outcome = matrix(outcome, t, r),
+    convert_mat_canom = convert_mat_canom,
+    convert_mat_default = convert_mat_default,
+    parms = parms,
+    name = "Gamma"
+  )
+
+  class(distr) <- "dlm_distr"
+  return(distr)
+}
+
 #' system_full_gamma
 #'
 #' Evaluate the compatibilizing equation for the full gamma model (see Ref. Raíra).
 #'
 #' @param x vector: current tau values.
 #' @param parms list: auxiliary values for the system.
+#'
+#' @importFrom cubature cubintegrate
 #'
 #' @return a vector with the values of the system (see Ref. Raíra).
 system_full_gamma <- function(x, parms) {
-  # A função que resolve o sistema tem um parâmetro que restringe x a valores positivos.
-  # Restringir n,k a valores positivos através desse argumento pode ser numericamente mais estável em alguns casos.
-  # Quando esta restrição estiver sendo feita, usar as linhas abaixo.
-  # n=x[1]
-  # k=x[2]
-  # Quando a restrição não estiver sendo feita, usar as linhas abaixo.
-  n <- exp(x[1])
-  k <- exp(x[2])
-  # tau=exp(x[3])
-  # n=2
-  # k=2
-
-  # Calculando tau e theta dado n e k
+  n <- exp(x) # exp(x[1])
+  k <- n # exp(x[2])
   tau <- (n * parms$Hq1 + 1) / parms$Hq2
   theta <- n - k + n * log(tau / n) - (k + 1) / (2 * parms$Hq1)
 
-  # (n * a / b + 1) * tau
-
-  # Parâmetros da distribuição aproximada de phi.
   a <- (k + 1) / 2
   b <- (n - k + n * log(tau / n) - theta)
-
-  # Se a<=5, calculamos a integral por quadratura gaussiana.
-  # Se a>5 usamos aproximações de segunda ordem para obter uma expressão analítica para os valores esperados.
-  # Em geral, a<=5, então usamos quadratura gaussiana praticamente em todos os casos.
-  # Também testamos usar apenas quadratura gaussiana, mas os problemas persistiram.
-  # print(n)
-  # print(k)
-  # print(a)
-  # print(b)
-
-  # n= 0.2322536
-  # k= 1.865727
-  # tau= 0.5087484
-  # theta= -2.320433
-
-
-
-  if (a <= 5) {
-    # Densidade marginal aproximada de alpha (uso opcional).
-    # f_densi=function(x){dgamma(a,b))}
-    # c_val=1
-    # Densidade marginal exata de phi.
-    f_densi_raw <- function(x) {
-      exp(k * (x + 1) * log(x) + lgamma(n * x + 1) + theta * x - k * lgamma(x + 1) - (n * x + 1) * log(x * tau))
-    }
-    c_val <- integrate(f_densi_raw, 0, Inf)$value
-    f_densi <- function(x) {
-      f_densi_raw(x) / c_val
-    }
-
-    # f=function(x){x*f_densi(x)}
-    # Hp1=integrate(f,0,Inf)$value
-
-    f <- function(x) {
-      x * (digamma(x * n + 1) - log(x) - log(tau)) * f_densi(x)
-    }
-    Hp3 <- integrate(f, 0, Inf)$value
-
-    f <- function(x) {
-      (x * log(x) - lgamma(x)) * f_densi(x)
-    }
-    Hp4 <- integrate(f, 0, Inf)$value
-  } else {
-    c_val <- 1
-    Hp3 <- log(tau / n) * a / b - 1 / n + b / (12 * (n**2) * (a - 1))
-    Hp4 <- a / b + 0.5 * (digamma(a) - log(b)) - b / (12 * (a - 1)) - 11 / 12
-  }
-
-  f_all <- c(
-    (Hp3 - parms$Hq3),
-    (Hp4 - parms$Hq4)
-  )
-  # print(f_all)
-  return(f_all)
-}
-
-#' system_full_gamma
-#'
-#' Evaluate the compatibilizing equation for the full gamma model (see Ref. Raíra).
-#'
-#' @param x vector: current tau values.
-#' @param parms list: auxiliary values for the system.
-#'
-#' @return a vector with the values of the system (see Ref. Raíra).
-system_full_gamma2 <- function(x, parms) {
-  # A função que resolve o sistema tem um parâmetro que restringe x a valores positivos.
-  # Restringir n,k a valores positivos através desse argumento pode ser numericamente mais estável em alguns casos.
-  # Quando esta restrição estiver sendo feita, usar as linhas abaixo.
-  # n=x[1]
-  # k=x[2]
-  # Quando a restrição não estiver sendo feita, usar as linhas abaixo.
-  n <- exp(x)#exp(x[1])
-  k <- n #exp(x[2])
-  # tau=exp(x[3])
-  # n=2
-  # k=2
-
-  # Calculando tau e theta dado n e k
-  tau <- (n * parms$Hq1 + 1) / parms$Hq2
-  theta <- n - k + n * log(tau / n) - (k + 1) / (2 * parms$Hq1)
-
-  # (n * a / b + 1) * tau
-
-  # Parâmetros da distribuição aproximada de phi.
-  a <- (k + 1) / 2
-  b <- (n - k + n * log(tau / n) - theta)
-
-  # Se a<=5, calculamos a integral por quadratura gaussiana.
-  # Se a>5 usamos aproximações de segunda ordem para obter uma expressão analítica para os valores esperados.
-  # Em geral, a<=5, então usamos quadratura gaussiana praticamente em todos os casos.
-  # Também testamos usar apenas quadratura gaussiana, mas os problemas persistiram.
-  # print(n)
-  # print(k)
-  # print(a)
-  # print(b)
-
-  # n= 0.2322536
-  # k= 1.865727
-  # tau= 0.5087484
-  # theta= -2.320433
-
-  # print(a)
-  # print(b)
-
-  if (a <= 5) {
-    # Densidade marginal aproximada de alpha (uso opcional).
-    # f_densi=function(x){dgamma(a,b))}
-    # c_val=1
-    # Densidade marginal exata de phi.
-    f_densi_raw <- function(x) {
-      exp(k * (x + 1) * log(x) + lgamma(n * x + 1) + theta * x - k * lgamma(x + 1) - (n * x + 1) * log(x * tau))
-    }
-    c_val <- integrate(f_densi_raw, 0, Inf)$value
-    f_densi <- function(x) {
-      f_densi_raw(x) / c_val
-    }
-
-    f <- function(x) {
-      x * (digamma(x * n + 1) - log(x) - log(tau)) * f_densi(x)
-    }
-    Hp3 <- integrate(f, 0, Inf)$value
-
-    f <- function(x) {
-      (x * log(x) - lgamma(x)) * f_densi(x)
-    }
-    Hp4 <- integrate(f, 0, Inf)$value
-    Hp5=Hp3+Hp4
-
-
-    # f <- function(x) {
-    #   (lgamma(x)-x*digamma(n*x+1)) * f_densi(x)
-    # }
-    # Hp5 <- integrate(f, 0, Inf)$value+parms$Hq1*log(tau)
-  } else {
-    c_val <- 1
-    Hp3 <- log(tau / n) * a / b - 1 / n + b / (12 * (n**2) * (a - 1))
-    Hp4 <- a / b + 0.5 * (digamma(a) - log(b)) - b / (12 * (a - 1)) - 11 / 12
-    Hp5=Hp3+Hp4
-    # Hp5=parms$Hq1*(log(tau/n)-1)-0.5*digamma((n+1)/2)+0.5*log(n*log(tau/n)-theta)+(log(tau/n)-theta/n)/6+11/12-1/(2*n)
-  }
-
-  f_all <- c(
-    (Hp5 - (parms$Hq3+parms$Hq4))
-  )
-  # print(f_all)
-  return(f_all)
-}
-
-#' system_full_gamma
-#'
-#' Evaluate the compatibilizing equation for the full gamma model (see Ref. Raíra).
-#'
-#' @param x vector: current tau values.
-#' @param parms list: auxiliary values for the system.
-#'
-#' @return a vector with the values of the system (see Ref. Raíra).
-system_full_gamma3 <- function(x, parms) {
-  # A função que resolve o sistema tem um parâmetro que restringe x a valores positivos.
-  # Restringir n,k a valores positivos através desse argumento pode ser numericamente mais estável em alguns casos.
-  # Quando esta restrição estiver sendo feita, usar as linhas abaixo.
-  # n=x[1]
-  # k=x[2]
-  # Quando a restrição não estiver sendo feita, usar as linhas abaixo.
-  n <- exp(x)#exp(x[1])
-  k <- n #exp(x[2])
-  # tau=exp(x[3])
-  # n=2
-  # k=2
-
-  # Calculando tau e theta dado n e k
-  tau <- (n * parms$Hq1 + 1) / parms$Hq2
-  theta <- n - k + n * log(tau / n) - (k + 1) / (2 * parms$Hq1)
-
-  # (n * a / b + 1) * tau
-
-  # Parâmetros da distribuição aproximada de phi.
-  a <- (k + 1) / 2
-  b <- (n - k + n * log(tau / n) - theta)
-
-  # Se a<=5, calculamos a integral por quadratura gaussiana.
-  # Se a>5 usamos aproximações de segunda ordem para obter uma expressão analítica para os valores esperados.
-  # Em geral, a<=5, então usamos quadratura gaussiana praticamente em todos os casos.
-  # Também testamos usar apenas quadratura gaussiana, mas os problemas persistiram.
-  # print(n)
-  # print(k)
-  # print(a)
-  # print(b)
-
-  # n= 0.2322536
-  # k= 1.865727
-  # tau= 0.5087484
-  # theta= -2.320433
-
-  # print(a)
-  # print(b)
 
   if (a <= 5) {
     # Densidade marginal aproximada de alpha (uso opcional).
@@ -238,15 +122,15 @@ system_full_gamma3 <- function(x, parms) {
     }
     # print('a')
     f <- function(x) {
-      (x * digamma(x * n + 1)  -x*log(x)- x*log(tau)) * f_densi(x)
+      (x * digamma(x * n + 1) - x * log(x) - x * log(tau)) * f_densi(x)
     }
-    Hp3 <- integrate(f, 0, Inf)$value
+    Hp3 <- cubintegrate(f, 0, Inf, nVec = 200)$integral
 
     # print('b')
     f <- function(x) {
-      (x*log(x)- lgamma(x)) * f_densi(x)
+      (x * log(x) - lgamma(x)) * f_densi(x)
     }
-    Hp4 <- integrate(f, 0, Inf)$value
+    Hp4 <- cubintegrate(f, 0, Inf, nVec = 200)$integral
 
     # print('c')
     # f <- function(x) {
@@ -254,7 +138,7 @@ system_full_gamma3 <- function(x, parms) {
     # }
     # Hp5 <- integrate(f, 0, Inf)$value
     # print('sd')
-    Hp5=Hp3+Hp4
+    Hp5 <- Hp3 + Hp4
 
 
     # f <- function(x) {
@@ -266,11 +150,11 @@ system_full_gamma3 <- function(x, parms) {
     # Hp3 <- log(tau / n) * a / b - 1 / n + b / (12 * (n**2) * (a - 1))
     # Hp4 <- a / b + 0.5 * (digamma(a) - log(b)) - b / (12 * (a - 1)) - 11 / 12
     # Hp5=Hp3+Hp4
-    Hp5=parms$Hq1*(log(tau/n)-1)-0.5*digamma((n+1)/2)+0.5*log(n*log(tau/n)-theta)+(log(tau/n)-theta/n)/6+11/12-1/(2*n)
+    Hp5 <- parms$Hq1 * (log(tau / n) - 1) - 0.5 * digamma((n + 1) / 2) + 0.5 * log(n * log(tau / n) - theta) + (log(tau / n) - theta / n) / 6 + 11 / 12 - 1 / (2 * n)
   }
 
   f_all <- c(
-    (Hp5 - (parms$Hq3+parms$Hq4))
+    (Hp5 - (parms$Hq3 + parms$Hq4))
   )
   # print(f_all)
   return(f_all)
@@ -287,80 +171,6 @@ system_full_gamma3 <- function(x, parms) {
 #' @return The parameters of the conjugated distribuition of the linear predictor.
 #' @export
 convert_FGamma_Normal <- function(ft, Qt, parms) {
-
-  # As contas foram feitas
-  s <- exp(ft[2, ] + 3)
-  f1 <- ft[1, ]
-  f2 <- ft[2, ] - log(s)
-  q1 <- Qt[1, 1]
-  q2 <- Qt[2, 2]
-  q12 <- Qt[1, 2]
-
-  # Obs.: No relatório eu escrevi Hq3 com sinal trocado. Precisamos que f2+q12>0.
-  Hq1 <- exp(f1 + q1 / 2)
-  Hq2 <- exp(f1 - f2 + (q1 + q2 - 2 * q12) / 2)
-  Hq3 <- -(f2 + q12) * Hq1
-
-  # Valor de Hq4 usando aproximações de segunda ordem para a função log gamma.
-  # Hq4=Hq1+0.5*f1-exp(-f1+q1/2)/12-11/12
-
-  # Valor de Hq4 calculado por Monte Carlo.
-  # Esse trecho é usado apenas para verificar se a aproximação acima está boa.
-  # x=rnorm(20000,f1,sqrt(q1))
-  # Hq4=mean(exp(x)*x-lgamma(exp(x)))
-
-  # Valor de Hq4 calculado por quadratura gaussiana.
-  # É preferível fazer a conta usando a densidade da log normal do que da normal.
-  Hq4 <- integrate(function(x) {
-    (x * log(x) - lgamma(x)) * dlnorm(x, f1, sqrt(q1))
-  }, 0, Inf)$value
-
-  parms <- list(
-    "Hq1" = Hq1,
-    "Hq2" = Hq2,
-    "Hq3" = Hq3,
-    "Hq4" = Hq4
-  )
-
-  # print(parms)
-  # print(f1)
-  # print(f2)
-  # print(q1)
-  # print(q2)
-  # print(q12)
-  ss1 <- multiroot(f = system_full_gamma, start = c(0,0), parms = parms) # , maxiter = 2000, atol = 10**-20)
-  # A função que resolve o sistema tem um parâmetro que restringe x a valores positivos.
-  # Restringir n,k a valores positivos através desse argumento pode ser numericamente mais estável em alguns casos.
-  # Quando esta restrição estiver sendo feita, usar as linhas abaixo.
-  # n=x[1]
-  # k=x[2]
-  # Quando a restrição não estiver sendo feita, usar as linhas abaixo.
-  x <- as.numeric(ss1$root)
-  n <- exp(x[1])
-  k <- exp(x[2])
-
-  # Calculando tau e theta dado n e k
-  tau <- ((n * parms$Hq1 + 1) / parms$Hq2)
-  # tau=exp(x[3])
-  theta <- (n - k + n * log(tau / n) - (k + 1) / (2 * parms$Hq1))
-  tau <- tau * s
-  theta <- theta + n * log(s)
-  return(list("n" = n, "k" = k, "tau" = tau, "theta" = theta))
-}
-
-#' convert_FGamma_Normal2
-#'
-#' DESCRIPTION
-#'
-#' @param ft vector: A vector representing the means from the normal distribution.
-#' @param Qt matrix: A matrix representing the covariance matrix of the normal distribution.
-#' @param parms list: A list of extra known parameters of the distribuition. Not used in this function.
-#'
-#' @return The parameters of the conjugated distribuition of the linear predictor.
-#' @export
-convert_FGamma_Normal2 <- function(ft, Qt, parms) {
-
-  # As contas foram feitas
   s <- exp(ft[2, ] + 0)
   f1 <- ft[1, ]
   f2 <- ft[2, ] - log(s)
@@ -368,21 +178,10 @@ convert_FGamma_Normal2 <- function(ft, Qt, parms) {
   q2 <- Qt[2, 2]
   q12 <- Qt[1, 2]
 
-  # Obs.: No relatório eu escrevi Hq3 com sinal trocado. Precisamos que f2+q12>0.
   Hq1 <- exp(f1 + q1 / 2)
   Hq2 <- exp(f1 - f2 + (q1 + q2 - 2 * q12) / 2)
   Hq3 <- -(f2 + q12) * Hq1
 
-  # Valor de Hq4 usando aproximações de segunda ordem para a função log gamma.
-  # Hq4=Hq1+0.5*f1-exp(-f1+q1/2)/12-11/12
-
-  # Valor de Hq4 calculado por Monte Carlo.
-  # Esse trecho é usado apenas para verificar se a aproximação acima está boa.
-  # x=rnorm(20000,f1,sqrt(q1))
-  # Hq4=mean(exp(x)*x-lgamma(exp(x)))
-
-  # Valor de Hq4 calculado por quadratura gaussiana.
-  # É preferível fazer a conta usando a densidade da log normal do que da normal.
   Hq4 <- integrate(function(x) {
     (x * log(x) - lgamma(x)) * dlnorm(x, f1, sqrt(q1))
   }, 0, Inf)$value
@@ -394,94 +193,11 @@ convert_FGamma_Normal2 <- function(ft, Qt, parms) {
     "Hq4" = Hq4
   )
 
-  # print(parms)
-  # print(f1)
-  # print(f2)
-  # print(q1)
-  # print(q2)
-  # print(q12)
-  ss1 <- multiroot(f = system_full_gamma2, start = c(0), parms = parms) # , maxiter = 2000, atol = 10**-20)
-  # A função que resolve o sistema tem um parâmetro que restringe x a valores positivos.
-  # Restringir n,k a valores positivos através desse argumento pode ser numericamente mais estável em alguns casos.
-  # Quando esta restrição estiver sendo feita, usar as linhas abaixo.
-  # n=x[1]
-  # k=x[2]
-  # Quando a restrição não estiver sendo feita, usar as linhas abaixo.
+  ss1 <- multiroot(f = system_full_gamma, start = c(0), parms = parms) # , maxiter = 2000, atol = 10**-20)
+
   x <- as.numeric(ss1$root)
-  n <- exp(x)#exp(x[1])
-  k <- n#exp(x[2])
-
-  # Calculando tau e theta dado n e k
-  tau <- ((n * parms$Hq1 + 1) / parms$Hq2)
-  # tau=exp(x[3])
-  theta <- (n - k + n * log(tau / n) - (k + 1) / (2 * parms$Hq1))
-  tau <- tau * s
-  theta <- theta + n * log(s)
-  return(list("n" = n, "k" = k, "tau" = tau, "theta" = theta))
-}
-
-#' convert_FGamma_Normal3
-#'
-#' DESCRIPTION
-#'
-#' @param ft vector: A vector representing the means from the normal distribution.
-#' @param Qt matrix: A matrix representing the covariance matrix of the normal distribution.
-#' @param parms list: A list of extra known parameters of the distribuition. Not used in this function.
-#'
-#' @return The parameters of the conjugated distribuition of the linear predictor.
-#' @export
-convert_FGamma_Normal3 <- function(ft, Qt, parms) {
-
-  # As contas foram feitas
-  s <- exp(ft[2, ] + 0)
-  f1 <- ft[1, ]
-  f2 <- ft[2, ] - log(s)
-  q1 <- Qt[1, 1]
-  q2 <- Qt[2, 2]
-  q12 <- Qt[1, 2]
-
-  # Obs.: No relatório eu escrevi Hq3 com sinal trocado. Precisamos que f2+q12>0.
-  Hq1 <- exp(f1 + q1 / 2)
-  Hq2 <- exp(f1 - f2 + (q1 + q2 - 2 * q12) / 2)
-  Hq3 <- -(f2 + q12) * Hq1
-
-  # Valor de Hq4 usando aproximações de segunda ordem para a função log gamma.
-  # Hq4=Hq1+0.5*f1-exp(-f1+q1/2)/12-11/12
-
-  # Valor de Hq4 calculado por Monte Carlo.
-  # Esse trecho é usado apenas para verificar se a aproximação acima está boa.
-  # x=rnorm(20000,f1,sqrt(q1))
-  # Hq4=mean(exp(x)*x-lgamma(exp(x)))
-
-  # Valor de Hq4 calculado por quadratura gaussiana.
-  # É preferível fazer a conta usando a densidade da log normal do que da normal.
-  Hq4 <- integrate(function(x) {
-    (x * log(x) - lgamma(x)) * dlnorm(x, f1, sqrt(q1))
-  }, 0, Inf)$value
-
-  parms <- list(
-    "Hq1" = Hq1,
-    "Hq2" = Hq2,
-    "Hq3" = Hq3,
-    "Hq4" = Hq4
-  )
-
-  # print(parms)
-  # print(f1)
-  # print(f2)
-  # print(q1)
-  # print(q2)
-  # print(q12)
-  ss1 <- multiroot(f = system_full_gamma3, start = c(0), parms = parms) # , maxiter = 2000, atol = 10**-20)
-  # A função que resolve o sistema tem um parâmetro que restringe x a valores positivos.
-  # Restringir n,k a valores positivos através desse argumento pode ser numericamente mais estável em alguns casos.
-  # Quando esta restrição estiver sendo feita, usar as linhas abaixo.
-  # n=x[1]
-  # k=x[2]
-  # Quando a restrição não estiver sendo feita, usar as linhas abaixo.
-  x <- as.numeric(ss1$root)
-  n <- exp(x)#exp(x[1])
-  k <- n#exp(x[2])
+  n <- exp(x) # exp(x[1])
+  k <- n # exp(x[2])
 
   # Calculando tau e theta dado n e k
   tau <- ((n * parms$Hq1 + 1) / parms$Hq2)
@@ -513,26 +229,15 @@ convert_Normal_FGamma <- function(conj_prior, parms) {
   tau <- tau / s
   theta <- theta - n * log(s)
 
-
-  # print(n)
-  # print(tau)
-  # print(theta)
-  # print(k)
-
   # Parâmetros da densidade aproximada de alpha
   a <- (k + 1) / 2
   b <- (n - k + n * log(tau / n) - theta)
 
-  # print(a)
-  # print(b)
-
-  # print("a")
   # Comentar essas linhas caso a densidade aproximada seja usada.
   f_densi <- function(x) {
     exp(k * (x + 1) * log(x) + lgamma(n * x + 1) + theta * x - k * lgamma(x + 1) - (n * x + 1) * log(x * tau))
   }
   c_val <- integrate(f_densi, 0, Inf)$value
-  # print("b")
 
   # Média 1 calculada com a densidade exata.
   f <- function(x) {
@@ -600,9 +305,6 @@ update_FGamma <- function(conj_prior, y, parms) {
   a <- (k0 + 1) / 2
   b <- (n0 - k0 + n0 * log(tau0 / n0) - theta0)
 
-  # print(a)
-  # print(b)
-
   n1 <- n0 + 1
   k1 <- k0 + 1
   tau1 <- tau0 + y
@@ -610,9 +312,6 @@ update_FGamma <- function(conj_prior, y, parms) {
 
   a <- (k1 + 1) / 2
   b <- (n1 - k1 + n1 * log(tau1 / n1) - theta1)
-
-  # print(a)
-  # print(b)
 
   return(list("n" = n1, "k" = k1, "tau" = tau1, "theta" = theta1))
 }
@@ -650,13 +349,14 @@ update_FGamma <- function(conj_prior, y, parms) {
 Fgamma_pred <- function(conj_param, outcome = NULL, parms = list(), pred_cred = 0.95) {
   # DUMMY
   # Essa função não está pronta, é apenas um placeholder.
-  alpha <- parms$alpha
+
+  t <- length(outcome)
 
   outcome_list <- list(
-    "pred"     = alpha,
-    "var.pred" = alpha,
-    "icl.pred" = alpha,
-    "icu.pred" = alpha
+    "pred"     = matrix(outcome, 1, t),
+    "var.pred" = matrix(outcome, 1, t),
+    "icl.pred" = matrix(outcome, 1, t),
+    "icu.pred" = matrix(outcome, 1, t)
   )
   return(outcome_list)
 }
@@ -702,40 +402,5 @@ Fgamma_kernel <- list(
   "inv_link_function" = exp,
   "param_names" = function(y) {
     c("n", "k", "tau", "theta")
-  },
-  "multi_var" = FALSE
-)
-
-#' @export
-Fgamma2_kernel <- list(
-  "conj_prior" = convert_FGamma_Normal2,
-  "conj_post" = convert_Normal_FGamma,
-  "update" = update_FGamma,
-  "smoother" = generic_smoother,
-  "pred" = Fgamma_pred,
-  "log.like" = Fgamma_log_like,
-  "offset" = log_offset_half,
-  "link_function" = log,
-  "inv_link_function" = exp,
-  "param_names" = function(y) {
-    c("n", "k", "tau", "theta")
-  },
-  "multi_var" = FALSE
-)
-
-#' @export
-Fgamma3_kernel <- list(
-  "conj_prior" = convert_FGamma_Normal3,
-  "conj_post" = convert_Normal_FGamma,
-  "update" = update_FGamma,
-  "smoother" = generic_smoother,
-  "pred" = Fgamma_pred,
-  "log.like" = Fgamma_log_like,
-  "offset" = log_offset_half,
-  "link_function" = log,
-  "inv_link_function" = exp,
-  "param_names" = function(y) {
-    c("n", "k", "tau", "theta")
-  },
-  "multi_var" = FALSE
+  }
 )

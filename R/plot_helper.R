@@ -1,46 +1,12 @@
-#' calcula_max
-#'
-#' Auxiliary function to calculate the axis limits and gradation for plots.
-#'
-#' @param pre_max Numeric: A vector/matrix from which to calculate the axis limits and gradation.
-#'
-#' @return A list contaning the gradation for the axis, the number of ticks in the axis and the maximum value.
-calcula_max <- function(pre_max) {
-  if (length(pre_max) == 0 | sum(pre_max**2) < 10**-20) {
-    pre_max <- 1
-  } else {
-    pre_max <- max(pre_max)
-  }
-  scaled_max <- log10(pre_max)
-  category <- scaled_max %% 1
-  value <- 10**(floor(log10(max(pre_max))))
-  if (category < 0.1) {
-    value <- value / 10
-  } else {
-    if (category < 0.25) {
-      value <- value / 5
-    } else {
-      if (category < 0.5) {
-        value <- value / 2
-      }
-    }
-  }
-  interval_size <- (pre_max %/% value) + 2
-  max_value <- value * interval_size
-
-  return(list(value, interval_size, max_value))
-}
-
 #' show_fit
 #'
 #' Calculate the preditive mean and some quantiles for the observed data and show a plot.
 #'
-#' @param model <undefined class> or list: A fitted GDLM model.
+#' @param model fitted_dlm: A fitted GDLM model.
 #' @param pred_cred Numeric: The credibility value for the credibility interval.
 #' @param smooth Bool: A flag indicating if the smoothed should be used. If false, the filtered distribuition will be used.
-#' @param dynamic Bool: A flag indicating if the created plot should be dynamic.
+#' @param dynamic_plot Bool: A flag indicating if the created plot should be dynamic.
 #' @param t_offset Integer: A integer with the amount of steps ahead should be used for prediciton. Only used if smooth is false.
-#' @param labels Character: A vector containg the names for each time series.
 #'
 #' @return A list containg:
 #' \itemize{
@@ -57,36 +23,47 @@ calcula_max <- function(pre_max) {
 #' @examples
 #' T <- 200
 #' w <- (200 / 40) * 2 * pi
-#' outcome <- rpois(T, 20 * (sin(w * 1:T / T) + 2))
+#' data <- rpois(T, 20 * (sin(w * 1:T / T) + 2))
 #'
-#' level <- polynomial_block(order = 1, values = 1, D = 1 / 0.95)
-#' season <- harmonic_block(period = 40, values = 1, D = 1 / 0.98)
+#' level <- polynomial_block(rate = 1, D = 1 / 0.95)
+#' season <- harmonic_block(rate = 1, period = 40, D = 1 / 0.98)
 #'
-#' fitted_data <- fit_model(level, season, outcome = outcome, family = "Poisson")
+#' outcome <- Poisson(lambda = "rate", outcome = data)
+#'
+#' fitted_data <- fit_model(level, season, outcomes = outcome)
+#' summary(fitted_data)
+#'
 #' show_fit(fitted_data, smooth = TRUE)$plot
-show_fit <- function(model, pred_cred = 0.95, smooth = TRUE, dynamic_plot = TRUE, t_offset = 0, labels = NULL) {
+show_fit <- function(model, pred_cred = 0.95, smooth = TRUE, dynamic_plot = TRUE, t_offset = 0) {
   n <- dim(model$mt)[1]
   t_last <- dim(model$mt)[2]
-  eval <- eval_past(model, smooth = smooth, t_offset = t_offset, pred_cred = pred_cred, labels = labels)
+  eval <- eval_past(model, smooth = smooth, t_offset = t_offset, pred_cred = pred_cred)
 
-  max_value <- calcula_max(model$outcome - min(model$outcome))[[3]] + min(model$outcome)
-  min_value <- -calcula_max(-(model$outcome - max(model$outcome)))[[3]] + max(model$outcome)
+  max_value <- calcula_max(eval$Observation - min(eval$Observation))[[3]] + min(eval$Observation)
+  min_value <- -calcula_max(-(eval$Observation - max(eval$Observation)))[[3]] + max(eval$Observation)
+
+
+  n_colors <- length(unique(eval$Serie))
+  colors <- rainbow(n_colors, s = 0.6)
+  names(colors) <- unique(eval$Serie)
 
   plt <- ggplot(eval, aes(x = Time, fill = Serie, color = Serie)) +
     geom_ribbon(aes(ymin = C.I.lower, ymax = C.I.upper, linetype = "Fitted values"), alpha = 0.25) +
     geom_line(aes(y = Prediction, linetype = "Fitted values")) +
-    geom_point(aes(y = Observation), alpha = 0.5) +
-    scale_fill_hue("", na.value = NA) +
-    scale_color_hue("", na.value = NA) +
+    geom_point(aes(y = Observation, linetype = "Observations"), alpha = 0.5) +
+    scale_fill_manual("", na.value = NA, values = colors) +
+    scale_color_manual("", na.value = NA, values = colors) +
     scale_y_continuous(name = "$y_t$") +
     scale_x_continuous("Time") +
     theme_bw() +
     coord_cartesian(ylim = c(min_value, max_value))
 
-  if (any(model$alt.flags == 1)) {
+  if (any(model$outcomes[[1]]$alt.flags == 1)) {
+    colors[["Detected changes"]] <- "black"
     plt <- plt +
-      geom_vline(data = data.frame(xintercept = (1:t_last)[model$alt.flags == 1], linetype = "Detected changes"), aes(xintercept = xintercept, linetype = linetype)) +
-      scale_linetype_manual("", values = c("dashed", "solid"))
+      geom_vline(data = data.frame(xintercept = (1:t_last)[model$outcomes[[1]]$alt.flags == 1], linetype = "Detected changes"), aes(xintercept = xintercept, linetype = linetype, fill = linetype, color = linetype)) +
+      scale_linetype_manual("", values = c("dashed", "solid", "solid")) +
+      scale_color_manual("", na.value = NA, values = colors)
   }
   if (dynamic_plot) {
     plt <- ggplotly(plt)
@@ -116,14 +93,17 @@ show_fit <- function(model, pred_cred = 0.95, smooth = TRUE, dynamic_plot = TRUE
 #' @import tidyr
 #'
 #' @examples
+#'
 #' T <- 200
 #' w <- (200 / 40) * 2 * pi
-#' outcome <- rpois(T, 20 * (sin(w * 1:T / T) + 2))
+#' data <- rpois(T, 20 * (sin(w * 1:T / T) + 2))
 #'
-#' level <- polynomial_block(order = 1, values = 1, D = 1 / 0.95, name = "level_effect")
-#' season <- harmonic_block(period = 40, values = 1, D = 1 / 0.98, name = "season_effect")
+#' level <- polynomial_block(rate = 1, D = 1 / 0.95, name = "level_effect")
+#' season <- harmonic_block(rate = 1, period = 40, D = 1 / 0.98, name = "season_effect")
 #'
-#' fitted_data <- fit_model(level, season, outcome = outcome, family = "Poisson")
+#' outcome <- Poisson(lambda = "rate", outcome = data)
+#'
+#' fitted_data <- fit_model(level, season, outcomes = outcome)
 #' plot_lat_var(fitted_data, "effect", smooth = TRUE)$plot
 plot_lat_var <- function(model, var, smooth = TRUE, cut_off = 10, pred_cred = 0.95, dynamic = TRUE) {
   if (!any(grepl(var, names(model$names)))) {

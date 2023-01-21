@@ -1,3 +1,54 @@
+#' Poisson
+#'
+#' Creates an outcome with Poisson distribuition with the chosen parameter.
+#'
+#' @param lambda character: Name of the linear preditor associated with the rate (mean) parameter of the Poisson distribuition. The parameter is treated as unknowed and equal to the exponential of the associated linear preditor.
+#' @param outcome vector: Values of the observed data.
+#' @param offset vector: The offset at each observation. Must have the same shape as outcome.
+#'
+#' @return A object of the class dlm_distr
+#'
+#' @export
+#'
+#' @examples
+#'
+#' # Poisson case
+#' T <- 200
+#' w <- (200 / 40) * 2 * pi
+#' data <- rpois(T, 20 * (sin(w * 1:T / T) + 2))
+#'
+#' level <- polynomial_block(rate = 1, D = 1 / 0.95)
+#' season <- harmonic_block(rate = 1, period = 40, D = 1 / 0.98)
+#'
+#' outcome <- Poisson(lambda = "rate", outcome = data)
+#'
+#' fitted_data <- fit_model(level, season, outcomes = outcome)
+#' summary(fitted_data)
+#'
+#' show_fit(fitted_data, smooth = TRUE)$plot
+Poisson <- function(lambda, outcome, offset = outcome**0) {
+  family <- poisson_kernel
+  t <- length(outcome)
+  r <- 1
+  convert_mat_default <- convert_mat_canom <- diag(r)
+
+  distr <- list(
+    var_names = c(lambda),
+    family = family,
+    r = r,
+    t = t,
+    offset = matrix(offset, t, r),
+    outcome = matrix(outcome, t, r),
+    convert_mat_canom = convert_mat_canom,
+    convert_mat_default = convert_mat_default,
+    parms = list(),
+    name = "Poisson"
+  )
+  class(distr) <- "dlm_distr"
+
+  return(distr)
+}
+
 #' convert_Gamma_Normal
 #'
 #' Calculate the parameters of the Gamma that best approximates the given log-Normal distribuition.

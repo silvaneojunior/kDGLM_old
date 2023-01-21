@@ -28,7 +28,7 @@ generic_smoother <- function(mt, Ct, at, Rt, G) {
   mts <- mt
   Cts <- Ct
 
-  var_index <- matrix(apply(Ct, 3, diag), n, T) != 0
+  # var_index <- matrix(apply(Ct, 3, diag), n, T) != 0
 
   for (t in (T - 1):1) {
     mt_now <- mt[, t]
@@ -43,14 +43,22 @@ generic_smoother <- function(mt, Ct, at, Rt, G) {
       }
     }
 
-    var_ref <- var_index[, t]
-    restricted_Rt <- Rt[var_ref, var_ref, t + 1]
-    restricted_Ct <- Ct[var_ref, var_ref, t]
+    # var_ref <- var_index[, t]
+    # restricted_Rt <- Rt[var_ref, var_ref, t + 1]
+    # restricted_Ct <- Ct[var_ref, var_ref, t]
+    # print(Ct[, , t])
+    restricted_Rt <- Rt[, , t + 1]
+    restricted_Ct <- Ct[, , t]
 
-    simple_Rt_inv <- restricted_Ct %*% t(G_now[var_ref, var_ref]) %*% ginv(restricted_Rt)
+    # simple_Rt_inv <- restricted_Ct %*% t(G_now[var_ref, var_ref]) %*% ginv(restricted_Rt)
+    simple_Rt_inv <- restricted_Ct %*% t(G_now[, ]) %*% ginv(restricted_Rt)
 
-    mts[var_ref, t] <- mt_now[var_ref] + simple_Rt_inv %*% (mts[var_ref, t + 1] - at[var_ref, t + 1])
-    Cts[var_ref, var_ref, t] <- restricted_Ct - simple_Rt_inv %*% (restricted_Rt - Cts[var_ref, var_ref, t + 1]) %*% t(simple_Rt_inv)
+    # mts[var_ref, t] <- mt_now[var_ref] + simple_Rt_inv %*% (mts[var_ref, t + 1] - at[var_ref, t + 1])
+    # Cts[var_ref, var_ref, t] <- restricted_Ct - simple_Rt_inv %*% (restricted_Rt - Cts[var_ref, var_ref, t + 1]) %*% t(simple_Rt_inv)
+
+
+    mts[, t] <- mt_now[] + simple_Rt_inv %*% (mts[, t + 1] - at[, t + 1])
+    Cts[, , t] <- restricted_Ct - simple_Rt_inv %*% (restricted_Rt - Cts[, , t + 1]) %*% t(simple_Rt_inv)
   }
   return(list("mts" = mts, "Cts" = Cts))
 }
@@ -59,16 +67,13 @@ generic_smoother <- function(mt, Ct, at, Rt, G) {
 #'
 #' Fit the model given the observed value and the model parameters.
 #'
-#' @param outcome Matrix: The observed data. It's dimension shoulb be T x m, where T is the length of the time series and m is the number of outcomes at each time.
+#' @param outcomes List: The observed data. It should contain objects of the class dlm_distr.
 #' @param m0 Vector: The prior mean for the latent vector.
 #' @param C0 Matrix: The prior covariance matrix for the latent vector.
 #' @param FF Array: A 3D-array containing the regression matrix for each time. It's dimension should be n x m x T, where n is the number of latent variables, m is the number of outcomes in the model and T is the time series length.
 #' @param G Matrix: The state evolution matrix.
 #' @param D Array: A 3D-array containing the discount factor matrix for each time. It's dimension should be n x n x T, where n is the number of latent variables and T is the time series length.
 #' @param W Array: A 3D-array containing the covariance matrix of the noise for each time. It's dimension should be the same as D.
-#' @param offset Matrix: The offset of the model. It's dimension should be the same as outcome.
-#' @param family list: a list containing the functions to be used in the filtering process.
-#' @param parms list: a list contaning extra arguments. In this model, extra parameters are not used.
 #' @param p_monit numeric (optional): The prior probability of changes in the latent space variables that are not part of it's dinamic.
 #' @param c_monit numeric (optional, if p_monit is not specified): The relative cost of false alarm in the monitoring compared to the cost of not detecting anormalities.
 #'
@@ -80,27 +85,23 @@ generic_smoother <- function(mt, Ct, at, Rt, G) {
 #'    \item Rt Array: A 3D-array containing the one-step-ahead covariance matrix for latent variables at each time. Dimensions are n x n x T.
 #'    \item ft Matrix: The one-step-ahead linear predictor for each time. Dimensions are m x T.
 #'    \item Qt Array: A 3D-array containing the one-step-ahead covariance matrix for the linear predictor for each time. Dimensions are m x m x T.
-#'    \item conj_prior_param Data.frame: A data frame contaning the conjugated prior parameters of the linear predictor  at each time.
-#'    \item conj_post_param Data.frame: A data frame contaning the conjugated posterior parameters of the linear predictor  at each time.
 #'    \item FF Array: The same as the argument (same values).
 #'    \item G Matrix: The same as the argument (same values).
 #'    \item D Array: The same as the argument (same values) when there is no monitoring. When monitoring for anormalities, the value in times where anormalities were detected is increased.
 #'    \item W Array: The same as the argument (same values).
-#'    \item outcome Matrix: The same as the argument outcome (same values).
-#'    \item offset Vector: The same as the argument (same values).
-#'    \item parms list: The same as the argument.
-#'    \item alt.flags vector: A list of 0's and 1's indicating where anomalies were detected (represented as 1).
-#'    \item log.like.null vector: The log-likelyhood of the main model at each time.
-#'    \item log.like.alt vector: The log-likelyhood of the alternative model at each time. Only used if monitoring.
+#'    \item outcome List: The same as the argument outcome (same values).
+#'    \item var_names Vector: The names of the linear predictors.
 #' }
-analytic_filter <- function(outcome, m0 = 0, C0 = 1, FF, G, D, W, offset = outcome * 0 + 1, family, parms = list(), p_monit = NA, c_monit = 1) {
-
-  # Definindo quantidades
-  T <- nrow(outcome)
-  r <- ncol(outcome)
+analytic_filter <- function(outcomes, m0 = 0, C0 = 1, FF, G, D, W, p_monit = NA, c_monit = 1) {
+  # Defining quantities
+  T <- dim(FF)[3]
+  r <- sum(sapply(outcomes, function(x) {
+    x$r
+  }))
   n <- dim(FF)[1]
   k <- dim(FF)[2]
 
+  var_names <- colnames(FF)
   D_flags <- (D == 0)
   D <- ifelse(D == 0, 1, D)
   m0 <- matrix(m0, n, 1)
@@ -112,10 +113,6 @@ analytic_filter <- function(outcome, m0 = 0, C0 = 1, FF, G, D, W, offset = outco
   at <- matrix(NA, nrow = n, ncol = T)
   Qt <- array(NA, dim = c(k, k, T))
 
-  param_names <- family$param_names(outcome)
-  conj_prior_param <- matrix(NA, T, length(param_names)) %>% as.data.frame()
-  names(conj_prior_param) <- param_names
-  conj_post_param <- conj_prior_param
 
   last_m <- m0
   last_C <- C0
@@ -123,9 +120,21 @@ analytic_filter <- function(outcome, m0 = 0, C0 = 1, FF, G, D, W, offset = outco
   D_mult <- list("null_model" = 1, "alt_model" = 100)
   W_add <- list("null_model" = 0, "alt_model" = 0.001)
   monit_win <- 1
-  log.like.null <- rep(NA, T)
-  log.like.alt <- rep(NA, T)
-  alt.flags <- rep(0, T)
+
+  for (outcome_name in names(outcomes)) {
+    if (class(outcomes[[outcome_name]]) != "dlm_distr") {
+      stop(paste0("Error: Outcome contains is not of the right class Expected a dlm_distr object, got a ", class(outcomes[[outcome_name]]), " object."))
+    }
+    param_names <- outcomes[[outcome_name]]$family$param_names(outcomes[[outcome_name]]$outcome)
+    outcomes[[outcome_name]]$conj_prior_param <- matrix(NA, T, length(param_names)) %>% as.data.frame()
+    names(outcomes[[outcome_name]]$conj_prior_param) <- param_names
+    outcomes[[outcome_name]]$conj_post_param <- outcomes[[outcome_name]]$conj_prior_param
+
+    outcomes[[outcome_name]]$log.like.null <- rep(NA, T)
+    outcomes[[outcome_name]]$log.like.alt <- rep(NA, T)
+    outcomes[[outcome_name]]$alt.flags <- rep(0, T)
+  }
+
   c <- c_monit
   p <- if (is.na(p_monit)) {
     0
@@ -135,10 +144,6 @@ analytic_filter <- function(outcome, m0 = 0, C0 = 1, FF, G, D, W, offset = outco
   threshold <- log(c_monit) + log(p) - log(1 - p)
 
   for (t in 1:T) {
-    FF_step <- matrix(FF[, , t], n, k)
-    offset_step <- offset[t, ]
-    na.flag <- any(is.null(offset_step) | any(offset_step == 0) | any(is.na(offset_step)))
-
     model_list <- if (is.na(p_monit)) {
       c("null_model")
     } else {
@@ -147,172 +152,124 @@ analytic_filter <- function(outcome, m0 = 0, C0 = 1, FF, G, D, W, offset = outco
     for (model in model_list) {
       D_p <- D[, , t]
       D_p[!D_flags[, , t]] <- D_p[!D_flags[, , t]] * D_mult[[model]]
-      # diag(D_p)=diag(D_p)*D_mult[[model]]
 
-      next_step <- one_step_evolve(last_m, last_C, FF_step, G, D_p, W[, , t] + diag(n) * W_add[[model]])
-
-      at_step <- next_step$at
-      Rt_step <- next_step$Rt
-      next_step <- family$offset(next_step$ft, next_step$Qt, if (na.flag) {
-        1
-      } else {
-        offset_step
-      })
-
-      ft_step <- next_step$ft
-      Qt_step <- next_step$Qt
-      conj_prior <- family$conj_prior(ft_step, Qt_step, parms)
-
-      log_like <- family$log.like(conj_prior, outcome[t, ], parms = parms)
+      next_step <- one_step_evolve(last_m, last_C, G, D_p, W[, , t] + diag(n) * W_add[[model]])
       models[[model]] <- list(
-        "at_step" = at_step,
-        "Rt_step" = Rt_step,
-        "next_step" = next_step,
-        "ft_step" = ft_step,
-        "Qt_step" = Qt_step,
-        "conj_prior" = conj_prior,
-        "log_like" = log_like
+        "at" = next_step$at,
+        "Rt" = next_step$Rt,
+        "at_step" = next_step$at,
+        "Rt_step" = next_step$Rt
       )
     }
-    log.like.null[t] <- models$null_model$log_like
-    log.like.alt[t] <- if (is.na(p_monit)) {
-      -Inf
-    } else {
-      models$alt_model$log_like
-    }
-    if (monit_win > 0 & !is.na(p_monit)) {
-      bayes_factor <- sum(log.like.null[t:(t - monit_win + 1)] - log.like.alt[t:(t - monit_win + 1)])
-    } else {
-      bayes_factor <- -1e-10
-    }
-    bayes_factor <- ifelse(is.nan(bayes_factor), 0, bayes_factor)
-    if (bayes_factor < threshold) {
-      next_step <- models$alt_model$next_step
-      at_step <- models$alt_model$at_step
-      Rt_step <- models$alt_model$Rt_step
-      ft_step <- models$alt_model$ft_step
-      Qt_step <- models$alt_model$Qt_step
+    for (outcome_name in names(outcomes)) {
+      outcome <- outcomes[[outcome_name]]
+      pred_index <- match(outcome$var_names, var_names)
+      k_i <- length(pred_index)
+      family <- outcome$family
+      FF_step <- matrix(FF[, pred_index, t], n, k_i)
 
-      conj_prior <- models$alt_model$conj_prior
-      D[, , t] <- D[, , t] * D_mult$alt_model
-      W[, , t] <- W[, , t] * W_add$alt_model
-      monit_win <- -5
-      model <- models$alt_model
-      alt.flags[t] <- 1
-    } else {
-      model <- models$null_model
-      if (bayes_factor < 0) {
-        monit_win <- monit_win + 1
-      } else {
-        monit_win <- 1
+      offset_step <- outcome$offset[t, ]
+      na.flag <- any(is.null(offset_step) | any(offset_step == 0) | any(is.na(offset_step)))
+
+      for (model in model_list) {
+        at_step <- models[[model]]$at_step
+        Rt_step <- models[[model]]$Rt_step
+
+        lin_pred <- calc_lin_pred(at_step, Rt_step, FF_step)
+        next_step <- family$offset(lin_pred$ft, lin_pred$Qt, if (na.flag) {
+          1
+        } else {
+          offset_step
+        })
+        ft_canom <- outcome$convert_mat_canom %*% next_step$ft
+        Qt_canom <- outcome$convert_mat_canom %*% next_step$Qt %*% t(outcome$convert_mat_canom)
+
+        conj_prior <- family$conj_prior(ft_canom, Qt_canom, parms = outcome$parms)
+
+        models[[model]] <- list(
+          "at" = models[[model]]$at,
+          "Rt" = models[[model]]$Rt,
+          "at_step" = at_step,
+          "Rt_step" = Rt_step,
+          "ft_step" = next_step$ft,
+          "Qt_step" = next_step$Qt,
+          "FF_step" = lin_pred$FF,
+          "conj_prior" = conj_prior,
+          "log_like" = family$log.like(conj_prior, outcome$outcome[t, ], parms = outcome$parms)
+        )
       }
-    }
-
-    conj_prior_param[t, ] <- conj_prior
-    if (na.flag) {
-      conj_post_param[t, ] <- conj_prior
-      norm_post <- next_step
-      mt_step <- last_m
-      Ct_step <- last_C
-      at[, t] <- model$at_step
-      Rt[, , t] <- model$Rt_step
-
-      ft[, t] <- next_step$ft
-      Qt[, , t] <- next_step$Qt
-    } else {
-      if ((family$multi_var | k == 1) | TRUE) {
-        mt_step <- model$at_step
-        Ct_step <- model$Rt_step
-        at[, t] <- mt_step
-        Rt[, , t] <- Ct_step
-
-        ft_step <- t(FF_step) %*% mt_step
-        Qt_step <- t(FF_step) %*% Ct_step %*% FF_step
-        next_step <- family$offset(ft_step, Qt_step, offset_step)
-        ft_step <- next_step$ft
-        Qt_step <- next_step$Qt
-
-        conj_prior <- family$conj_prior(ft_step, Qt_step, parms)
-
-        conj_post <- family$update(conj_prior, outcome[t, ], parms = parms)
-
-        conj_post_param[t, ] <- conj_post
-        norm_post <- family$conj_post(conj_post, parms)
-
-        at[, t] <- mt_step
-        Rt[, , t] <- Ct_step
-
-        ft[, t] <- ft_step
-        Qt[, , t] <- Qt_step
-
-        ft_star <- norm_post$ft
-        Qt_star <- norm_post$Qt
-
-        At <- Ct_step %*% FF_step %*% ginv(Qt_step)
-        mt_step <- mt_step + At %*% (ft_star - ft_step)
-        Ct_step <- Ct_step + At %*% (Qt_star - Qt_step) %*% t(At)
+      outcomes[[outcome_name]]$log.like.null[t] <- models$null_model$log_like
+      outcomes[[outcome_name]]$log.like.alt[t] <- if (is.na(p_monit)) {
+        -Inf
       } else {
-        mt_step <- model$at_step
-        Ct_step <- model$Rt_step
-        at[, t] <- mt_step
-        Rt[, , t] <- Ct_step
-
-        ft_step <- t(FF_step) %*% mt_step
-        Qt_step <- t(FF_step) %*% Ct_step %*% FF_step
-        next_step <- family$offset(ft_step, Qt_step, offset_step)
-        ft[, t] <- next_step$ft
-        Qt[, , t] <- next_step$Qt
-
-        for (index in 1:r) {
-          FF_sample <- FF_step[, index, drop = FALSE]
-          ft_step <- t(FF_sample) %*% mt_step
-          Qt_step <- t(FF_sample) %*% Ct_step %*% FF_sample
-          next_step <- family$offset(ft_step, Qt_step, offset_step[index])
-
-          ft_step <- next_step$ft
-          Qt_step <- next_step$Qt
-          conj_prior <- family$conj_prior(ft_step, Qt_step, parms)
-
-          conj_post <- family$update(conj_prior, outcome[t, index], parms = parms)
-
-          norm_post <- family$conj_post(conj_post, parms)
-          ft_star <- norm_post$ft
-          Qt_star <- norm_post$Qt
-
-          At <- Ct_step %*% FF_sample %*% ginv(Qt_step)
-          mt_step <- mt_step + At %*% (ft_star - ft_step)
-          Ct_step <- Ct_step + At %*% (Qt_star - Qt_step) %*% t(At)
+        models$alt_model$log_like
+      }
+      if (monit_win > 0 & !is.na(p_monit)) {
+        bayes_factor <- sum(outcomes[[outcome_name]]$log.like.null[t:(t - monit_win + 1)] - outcomes[[outcome_name]]$log.like.alt[t:(t - monit_win + 1)])
+      } else {
+        bayes_factor <- -1e-10
+      }
+      bayes_factor <- ifelse(is.nan(bayes_factor), 0, bayes_factor)
+      if (bayes_factor < threshold) {
+        model <- models$alt_model
+        conj_prior <- models$alt_model$conj_prior
+        D[, , t] <- D[, , t] * D_mult$alt_model
+        W[, , t] <- W[, , t] * W_add$alt_model
+        monit_win <- -5
+        outcomes[[outcome_name]]$alt.flags[t] <- 1
+      } else {
+        outcomes[[outcome_name]]$alt.flags[t] <- 0
+        model <- models$null_model
+        if (bayes_factor < 0) {
+          monit_win <- monit_win + 1
+        } else {
+          monit_win <- 1
         }
-        ft_step <- t(FF_step) %*% mt_step
-        Qt_step <- t(FF_step) %*% Ct_step %*% FF_step
-        next_step <- family$offset(ft_step, Qt_step, offset_step)
-
-        ft_step <- next_step$ft
-        Qt_step <- next_step$Qt
-        conj_post <- family$conj_prior(ft_step, Qt_step, parms)
-
-        norm_post$ft <- ft_step
-        norm_post$Qt <- Qt_step
-        conj_post_param[t, ] <- conj_post
       }
+
+      mt_step <- model$at_step
+      Ct_step <- model$Rt_step
+      ft[, t] <- ft_step <- model$ft_step
+      Qt[, , t] <- Qt_step <- model$Qt_step
+      outcomes[[outcome_name]]$conj_prior_param[t, ] <- conj_prior
+      if (na.flag) {
+        norm_post <- list(ft = ft_step, Qt = Qt_step)
+        outcomes[[outcome_name]]$conj_post_param[t, ] <- conj_prior
+      } else {
+        ft_canom <- outcome$convert_mat_canom %*% ft_step
+        Qt_canom <- outcome$convert_mat_canom %*% Qt_step %*% t(outcome$convert_mat_canom)
+        conj_prior <- family$conj_prior(ft_canom, Qt_canom, parms = outcome$parms)
+        conj_post <- family$update(conj_prior, outcome$outcome[t, ], parms = outcome$parms)
+
+        outcomes[[outcome_name]]$conj_post_param[t, ] <- conj_post
+        norm_post <- family$conj_post(conj_post, parms = outcome$parms)
+
+        ft_star <- norm_post$ft <- outcome$convert_mat_default %*% norm_post$ft
+        Qt_star <- norm_post$Qt <- outcome$convert_mat_default %*% norm_post$Qt %*% t(outcome$convert_mat_default)
+
+        At <- Ct_step %*% model$FF %*% ginv(Qt_step)
+        models[["null_model"]]$at_step <- mt_step <- mt_step + At %*% (ft_star - ft_step)
+        models[["null_model"]]$Rt_step <- Ct_step <- Ct_step + At %*% (Qt_star - Qt_step) %*% t(At)
+      }
+
+      at[, t] <- model$at
+      Rt[, , t] <- model$Rt
+      mt[, t] <- last_m <- mt_step
+      Ct[, , t] <- last_C <- Ct_step
     }
-    mt[, t] <- last_m <- mt_step
-    Ct[, , t] <- last_C <- Ct_step
   }
 
   result <- list(
     "mt" = mt, "Ct" = Ct,
     "at" = at, "Rt" = Rt,
     "ft" = ft, "Qt" = Qt,
-    "conj_prior_param" = conj_prior_param, "conj_post_param" = conj_post_param,
     "FF" = FF, "G" = G, "D" = D, "W" = W,
-    "outcome" = outcome, "offset" = offset, "parms" = parms,
-    "alt.flags" = alt.flags, "log.like.null" = log.like.null, "log.like.alt" = log.like.alt
+    "outcomes" = outcomes, "var_names" = var_names
   )
   return(result)
 }
 
-one_step_evolve <- function(m0, C0, FF, G, D, W) {
+one_step_evolve <- function(m0, C0, G, D, W) {
   n <- dim(G)[1]
   G_now <- G
   G_diff <- rep(0, n)
@@ -328,9 +285,28 @@ one_step_evolve <- function(m0, C0, FF, G, D, W) {
   Pt <- G_now %*% C0 %*% (t(G_now))
   Rt <- as.matrix(D * Pt) + W
 
-  ft <- (t(FF) %*% at)
-  Qt <- as.matrix(t(FF) %*% Rt %*% FF)
-  list("at" = at, "Rt" = Rt, "ft" = ft, "Qt" = Qt)
+  list("at" = at, "Rt" = Rt)
+}
+
+calc_lin_pred <- function(at, Rt, FF) {
+  n <- dim(FF)[1]
+  k <- dim(FF)[2]
+  FF_step <- FF
+  FF_flags <- is.na(FF)
+  at_mod <- at
+  at_mod[at_mod == 0] <- 0
+  at_matrix <- matrix(at_mod, n, k)
+  at_matrix[!FF_flags] <- 1
+  charge <- colProd(at_matrix) - colProd(!FF_flags)
+
+  index <- which(FF_flags)
+  aux_k <- length(index)
+  index_alt <- index[(1:aux_k) + rep(c(1, -1), aux_k / 2)]
+  FF_step[index] <- at_matrix[index_alt]
+
+  ft <- (t(FF_step) %*% at)
+  Qt <- as.matrix(t(FF_step) %*% Rt %*% FF_step)
+  list("ft" = ft - charge, "Qt" = Qt, "FF" = FF_step)
 }
 
 ident_offset <- function(ft, Qt, offset) {

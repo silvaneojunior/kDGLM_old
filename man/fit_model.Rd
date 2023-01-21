@@ -6,10 +6,7 @@
 \usage{
 fit_model(
   ...,
-  outcome,
-  family,
-  offset = outcome * 0 + 1,
-  parms = list(),
+  outcomes,
   pred_cred = 0.95,
   smooth_flag = TRUE,
   p_monit = NA,
@@ -17,17 +14,17 @@ fit_model(
 )
 }
 \arguments{
-\item{...}{<undefined class> or list: The structural block of the model.}
+\item{...}{dlm_block object: The structural blocks of the model.}
 
-\item{outcome}{Matrix: A matrix containing the observed data. Dimensions should be T x k, where T is the time series length and k is the number of outcomes.}
-
-\item{family}{String or <undefined class>: The list of functions (or it's name) used to fit the data. Should be choosed based on the distribution of the outcomes.}
-
-\item{offset}{Matrix: A matrix containing the offset value for the data. Dimesions should be the same as outcome.}
+\item{outcomes}{List: The observed data. It should contain objects of the class dlm_distr.}
 
 \item{pred_cred}{Numeric: A number between 0 and 1 (not included) indicanting the credibility interval for predictions. If not within the valid range of values, predicitions are not made.}
 
 \item{smooth_flag}{Bool: A flag indicating if the smoothed distribuition for the latent variables should be calculated.}
+
+\item{family}{String or <undefined class>: The list of functions (or it's name) used to fit the data. Should be choosed based on the distribution of the outcomes.}
+
+\item{offset}{Matrix: A matrix containing the offset value for the data. Dimesions should be the same as outcome.}
 }
 \value{
 The fitted model (an object of the <undefined class> or list). Contains the values of the estimated parameter and some extra info regarding the quality of the fit.
@@ -41,22 +38,22 @@ library(GDLM)
 # Normal with unkown variance case
 T <- 200
 mu <- rnorm(T, 0, 0.1)
-outcome <- rnorm(T, cumsum(mu))
+data <- rnorm(T, cumsum(mu))
 
 level <- polynomial_block(
+  mu=1,
   order = 1,
-  values = c(1, 0),
-  D = 1 / 0.98,
-  by_time = FALSE
+  D = 1 / 0.98
 )
 variance <- polynomial_block(
+  sigma2=1,
   order = 1,
-  values = c(0, 1),
-  D = 1 / 1,
-  by_time = FALSE
+  D = 1 / 1
 )
 
-fitted_data <- fit_model(level, variance, outcome = outcome, family = "normal_gamma")
+outcome=Normal(mu='mu',sigma2='sigma2',outcome=data)
+
+fitted_data <- fit_model(level, variance, outcomes = outcome)
 show_fit(fitted_data, smooth = TRUE)$plot
 
 # Poisson case

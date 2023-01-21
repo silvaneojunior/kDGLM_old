@@ -7,18 +7,18 @@
 block_merge(...)
 }
 \arguments{
-\item{...}{<undefined class object> or list: A sequence of block to be merged.}
+\item{...}{dlm_block: A sequence of block to be merged.}
 }
 \value{
-The merged block as a <undefined class object>.
+The merged block as a dlm_block.
 }
 \description{
 An auxiliary function to merge blocks.
 }
 \examples{
-level_1 <- polynomial_block(order = 1, values = matrix(c(rep(1, T), rep(0, T)), 2, T, byrow = TRUE))
-level_2 <- polynomial_block(order = 2, values = matrix(c(rep(0, T), rep(1, T)), 2, T, byrow = TRUE))
-season_2 <- harmonic_block(period = 20, values = matrix(c(rep(0, T), rep(1, T)), 2, T, byrow = TRUE))
+level_1 <- polynomial_block(alpha1=1,order = 1))
+level_2 <- polynomial_block(alpha2=1,order = 2)
+season_2 <- harmonic_block(alpha2=1,period = 20)
 
 final_block <- block_merge(level_1, level_2, season_2)
 }

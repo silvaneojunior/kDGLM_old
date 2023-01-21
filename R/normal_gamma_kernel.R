@@ -1,3 +1,109 @@
+#' Normal
+#'
+#' Creates an outcome with Normal distribuition with the chosen parameters (can only specify 2,).
+#'
+#' @param mu character: Name of the linear preditor associated with the mean parameter of the Normal distribuition. The parameter is treated as unknowed and equal to the associated linear preditor.
+#' @param tau character: Name of the linear preditor associated with the precision parameter of the Normal distribuition. The parameter is treated as unknowed and equal to the exponential of the associated linear preditor. It cannot be specified with sigma or sigma2
+#' @param sigma character: Name of the linear preditor associated with the scale parameter of the Normal distribuition. The parameter is treated as unknowed and equal to the exponential of the associated linear preditor. It cannot be specified with tau or sigma2.
+#' @param sigma2 character or numeric: Name of the linear preditor associated with the variance parameter of the Normal distribuition. If numeric, this parameter is treated as knowed and equal to the value passed. If a character, the parameter is treated as unknowed and equal to the exponential of the associated linear preditor. It cannot be specified with sigma or tau.
+#' @param outcome vector: Values of the observed data.
+#' @param offset vector: The offset at each observation. Must have the same shape as outcome.
+#'
+#' @return A object of the class dlm_distr
+#' @export
+#'
+#' @examples
+#'
+#' # Normal case
+#' T <- 200
+#' mu <- rnorm(T, 0, 0.1)
+#' data <- rnorm(T, cumsum(mu))
+#'
+#' level <- polynomial_block(
+#'   mu = 1,
+#'   D = 1 / 0.95
+#' )
+#' variance <- polynomial_block(
+#'   sigma2 = 1
+#' )
+#'
+#' # Known variance
+#' outcome <- Normal(mu = "mu", sigma2 = 1, outcome = data)
+#'
+#' fitted_data <- fit_model(level, outcomes = outcome)
+#' summary(fitted_data)
+#'
+#' show_fit(fitted_data, smooth = TRUE)$plot
+#'
+#' # Unknown variance
+#' outcome <- Normal(mu = "mu", sigma2 = "sigma2", outcome = data)
+#'
+#' fitted_data <- fit_model(level, variance, outcomes = outcome)
+#' summary(fitted_data)
+#'
+#' show_fit(fitted_data, smooth = TRUE)$plot
+Normal <- function(mu, tau = NA, sigma = NA, sigma2 = NA, outcome, offset = outcome**0) {
+  t <- length(outcome)
+  r <- 1
+  flags <- is.na(c(tau, sigma, sigma2))
+  if (all(flags)) {
+    stop("Error: Scale not specified.")
+  }
+  if (sum(!flags) > 1) {
+    stop("Error: Scale specified in more than one value.")
+  }
+  val_type <- c("tau", "sigma", "sigma2")[!flags]
+  val <- c(tau, sigma, sigma2)[!flags]
+  if (is.numeric(val)) {
+    var_names <- c(mu)
+    names(var_names) <- c("mu")
+    family <- normal_kernel
+    parms <- list(Sigma = if (val_type == "tau") {
+      1 / val
+    } else if (val_type == "sigma") {
+      val**2
+    } else {
+      val
+    })
+    convert_mat_canom <- convert_mat_default <- diag(1)
+  } else {
+    var_names <- c(mu, val)
+    names(var_names) <- c("mu", val_type)
+    family <- normal_gamma_cor_kernel
+    parms <- list()
+    convert_mat_canom <- if (val_type == "tau") {
+      diag(2)
+    } else if (val_type == "sigma") {
+      matrix(c(1, 0, 0, -2), 2, 2)
+    } else {
+      matrix(c(1, 0, 0, -1), 2, 2)
+    }
+    convert_mat_default <- if (val_type == "tau") {
+      diag(2)
+    } else if (val_type == "sigma") {
+      matrix(c(1, 0, 0, -0.5), 2, 2)
+    } else {
+      matrix(c(1, 0, 0, -1), 2, 2)
+    }
+  }
+  distr <- list(
+    var_names = var_names,
+    family = family,
+    r = 1,
+    k = length(var_names),
+    t = t,
+    offset = matrix(offset, t, r),
+    outcome = matrix(outcome, t, r),
+    convert_mat_canom = convert_mat_canom,
+    convert_mat_default = convert_mat_default,
+    parms = parms,
+    name = "Normal"
+  )
+  class(distr) <- "dlm_distr"
+
+  return(distr)
+}
+
 #' convert_NG_Normal
 #'
 #' Calculate the parameters of the Normal-Gamma that best approximates the given Normal distribuition.
@@ -16,9 +122,6 @@ convert_NG_Normal <- function(ft, Qt, parms = list()) {
   c0 <- exp(-ft[2, ] - Qt[2, 2] / 2) / (Qt[1, 1])
   helper <- -3 + 3 * sqrt(1 + 2 * Qt[2, 2] / 3)
   # helper=Qt[2,2]
-  # print(c0)
-  # print(ft)
-  # print(Qt)
   alpha <- 1 / helper
   beta <- alpha * exp(-ft[2, ] - Qt[2, 2] / 2)
   return(list("mu0" = mu0, "c0" = c0, "alpha" = alpha, "beta" = beta))

@@ -13,8 +13,7 @@ forecast(
   D = NULL,
   W = NULL,
   plot = TRUE,
-  pred_cred = 0.95,
-  labels = NULL
+  pred_cred = 0.95
 )
 }
 \arguments{
@@ -33,8 +32,6 @@ forecast(
 \item{plot}{Bool: A flag indicating if a plot should be produced.}
 
 \item{pred_cred}{Numeric: The credibility level for the I.C. intervals.}
-
-\item{labels}{Vector: A string vector with the names for the series of prediction. If none is given, will use generic names.}
 }
 \value{
 A list containing:

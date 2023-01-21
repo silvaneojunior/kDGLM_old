@@ -49,12 +49,17 @@ update_Normal_dummy <- function(conj_prior, y, parms) {
   ft <- conj_prior[1:r]
   Qt <- conj_prior[(r + 1):(r * r + r)] %>% matrix(r, r)
 
-  Sigma=parms$Sigma
+  Sigma <- parms$Sigma
+  if (length(Sigma) == 1) {
+    null.flag <- Sigma == 0
+  } else {
+    null.flag <- all(diag(Sigma) == 0)
+  }
 
-  if(all(diag(Sigma)==0)){
-    Qt=Sigma*0
-    ft=y
-  }else{
+  if (null.flag) {
+    Qt <- Sigma * 0
+    ft <- y
+  } else {
     Tau0 <- ginv(Qt)
     Tau1 <- ginv(parms$Sigma)
 
@@ -100,15 +105,19 @@ normal_pred <- function(conj_param, outcome = NULL, parms = list(), pred_cred = 
   r <- (-1 + sqrt(1 + 4 * r)) / 2
   T <- dim(conj_param)[1]
 
-  pred <- conj_param[, 1:r] %>% as.matrix()
+  pred <- t(conj_param[, 1:r] %>% as.matrix())
   var.pred <- conj_param[(r + 1):(r * r + r)] %>%
     t() %>%
     array(c(r, r, T))
   icl.pred <- matrix(NA, T, r)
   icu.pred <- matrix(NA, T, r)
   for (t in 1:T) {
-    mu <- pred[t, ]
+    mu <- pred[, t]
     sigma2 <- var.pred[, , t] + parms$Sigma
+    var.pred[, , t] <- sigma2
+    if (length(sigma2) > 1) {
+      sigma2 <- diag(sigma2)
+    }
     icl.pred[t, ] <- qnorm((1 - pred_cred) / 2) * sqrt(sigma2) + mu
     icu.pred[t, ] <- qnorm(1 - (1 - pred_cred) / 2) * sqrt(sigma2) + mu
   }

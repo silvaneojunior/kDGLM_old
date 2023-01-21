@@ -5,22 +5,19 @@
 \title{analytic_filter}
 \usage{
 analytic_filter(
-  outcome,
+  outcomes,
   m0 = 0,
   C0 = 1,
   FF,
   G,
   D,
   W,
-  offset = outcome * 0 + 1,
-  family,
-  parms = list(),
   p_monit = NA,
   c_monit = 1
 )
 }
 \arguments{
-\item{outcome}{Matrix: The observed data. It's dimension shoulb be T x m, where T is the length of the time series and m is the number of outcomes at each time.}
+\item{outcomes}{List: The observed data. It should contain objects of the class dlm_distr.}
 
 \item{m0}{Vector: The prior mean for the latent vector.}
 
@@ -33,12 +30,6 @@ analytic_filter(
 \item{D}{Array: A 3D-array containing the discount factor matrix for each time. It's dimension should be n x n x T, where n is the number of latent variables and T is the time series length.}
 
 \item{W}{Array: A 3D-array containing the covariance matrix of the noise for each time. It's dimension should be the same as D.}
-
-\item{offset}{Matrix: The offset of the model. It's dimension should be the same as outcome.}
-
-\item{family}{list: a list containing the functions to be used in the filtering process.}
-
-\item{parms}{list: a list contaning extra arguments. In this model, extra parameters are not used.}
 
 \item{p_monit}{numeric (optional): The prior probability of changes in the latent space variables that are not part of it's dinamic.}
 
@@ -53,18 +44,12 @@ A list containing the following values:
    \item Rt Array: A 3D-array containing the one-step-ahead covariance matrix for latent variables at each time. Dimensions are n x n x T.
    \item ft Matrix: The one-step-ahead linear predictor for each time. Dimensions are m x T.
    \item Qt Array: A 3D-array containing the one-step-ahead covariance matrix for the linear predictor for each time. Dimensions are m x m x T.
-   \item conj_prior_param Data.frame: A data frame contaning the conjugated prior parameters of the linear predictor  at each time.
-   \item conj_post_param Data.frame: A data frame contaning the conjugated posterior parameters of the linear predictor  at each time.
    \item FF Array: The same as the argument (same values).
    \item G Matrix: The same as the argument (same values).
    \item D Array: The same as the argument (same values) when there is no monitoring. When monitoring for anormalities, the value in times where anormalities were detected is increased.
    \item W Array: The same as the argument (same values).
-   \item outcome Matrix: The same as the argument outcome (same values).
-   \item offset Vector: The same as the argument (same values).
-   \item parms list: The same as the argument.
-   \item alt.flags vector: A list of 0's and 1's indicating where anomalies were detected (represented as 1).
-   \item log.like.null vector: The log-likelyhood of the main model at each time.
-   \item log.like.alt vector: The log-likelyhood of the alternative model at each time. Only used if monitoring.
+   \item outcome List: The same as the argument outcome (same values).
+   \item var_names Vector: The names of the linear predictors.
 }
 }
 \description{

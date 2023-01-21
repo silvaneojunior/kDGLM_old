@@ -1,3 +1,62 @@
+#' Multinom
+#'
+#' Creates an outcome with Multinomial distribuition with the chosen parameters.
+#'
+#' @param p character: a vector with the name of the linear preditor associated with the probality of each category (except the base one, which is assumed to be the last).
+#' @param outcome vector: Values of the observed data.
+#' @param offset vector: The offset at each observation. Must have the same shape as outcome.
+#'
+#' @return A object of the class dlm_distr
+#' @export
+#'
+#' @examples
+#'
+#' # Multinomial case
+#' T <- 200
+#' y1 <- rpois(T, exp(5 + (-T:T / T) * 5))
+#' y2 <- rpois(T, exp(6 + (-T:T / T) * 5 + sin((-T:T) * (2 * pi / 12))))
+#' y3 <- rpois(T, exp(5))
+#'
+#' y <- cbind(y1, y2, y3)
+#'
+#' level1 <- polynomial_block(p1 = 1)
+#' level2 <- polynomial_block(p2 = 1)
+#' season <- harmonic_block(p2 = 1, period = 12)
+#' outcome <- Multinom(p = c("p1", "p2"), outcome = y)
+#'
+#' fitted_data <- fit_model(level1, level2, season, outcomes = outcome)
+#' summary(fitted_data)
+#'
+#' show_fit(fitted_data, smooth = TRUE)$plot
+Multinom <- function(p, outcome, offset = outcome**0) {
+  family <- multnom_kernel
+  t <- dim(outcome)[1]
+  r <- dim(outcome)[2]
+  k <- dim(outcome)[2] - 1
+  if (length(p) != k) {
+    stop(paste0("Error: Incorrect number of parameter, expected ", k, " got ", length(p), "."))
+  }
+  convert_mat_default <- convert_mat_canom <- diag(k)
+  parms <- list()
+  # var_names=p
+  # names(var_names)=paste0('p',c(1:r))
+  distr <- list(
+    var_names = p,
+    family = family,
+    r = r,
+    k = k,
+    t = t,
+    offset = matrix(offset, t, r),
+    outcome = matrix(outcome, t, r),
+    convert_mat_canom = convert_mat_canom,
+    convert_mat_default = convert_mat_default,
+    parms = parms,
+    name = "Multinomial"
+  )
+  class(distr) <- "dlm_distr"
+  return(distr)
+}
+
 #' system_multinom
 #'
 #' Evaluate the compatibilizing equation for the multinomial model (see Ref. Raíra).

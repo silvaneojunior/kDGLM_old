@@ -4,7 +4,7 @@
 \alias{eval_past}
 \title{eval_past}
 \usage{
-eval_past(model, smooth = FALSE, t_offset = 0, pred_cred = 0.95, labels = NULL)
+eval_past(model, smooth = FALSE, t_offset = 0, pred_cred = 0.95)
 }
 \arguments{
 \item{model}{<undefined class> or list: The fitted model to be use for evaluation.}
