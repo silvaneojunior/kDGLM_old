@@ -13,15 +13,15 @@ show_fit(
 )
 }
 \arguments{
-\item{model}{<undefined class> or list: A fitted GDLM model.}
+\item{model}{fitted_dlm: A fitted GDLM model.}
 
 \item{pred_cred}{Numeric: The credibility value for the credibility interval.}
 
 \item{smooth}{Bool: A flag indicating if the smoothed should be used. If false, the filtered distribuition will be used.}
 
-\item{t_offset}{Integer: A integer with the amount of steps ahead should be used for prediciton. Only used if smooth is false.}
+\item{dynamic_plot}{Bool: A flag indicating if the created plot should be dynamic.}
 
-\item{dynamic}{Bool: A flag indicating if the created plot should be dynamic.}
+\item{t_offset}{Integer: A integer with the amount of steps ahead should be used for prediciton. Only used if smooth is false.}
 }
 \value{
 A list containg:
@@ -36,11 +36,15 @@ Calculate the preditive mean and some quantiles for the observed data and show a
 \examples{
 T <- 200
 w <- (200 / 40) * 2 * pi
-outcome <- rpois(T, 20 * (sin(w * 1:T / T) + 2))
+data <- rpois(T, 20 * (sin(w * 1:T / T) + 2))
 
-level <- polynomial_block(order = 1, values = 1, D = 1 / 0.95)
-season <- harmonic_block(period = 40, values = 1, D = 1 / 0.98)
+level <- polynomial_block(rate = 1, D = 1 / 0.95)
+season <- harmonic_block(rate = 1, period = 40, D = 1 / 0.98)
 
-fitted_data <- fit_model(level, season, outcome = outcome, family = "Poisson")
+outcome <- Poisson(lambda = "rate", outcome = data)
+
+fitted_data <- fit_model(level, season, outcomes = outcome)
+summary(fitted_data)
+
 show_fit(fitted_data, smooth = TRUE)$plot
 }

@@ -35,38 +35,22 @@ Fit a model given it's structure and the observed data. This function can be use
 \examples{
 library(GDLM)
 
-# Normal with unkown variance case
-T <- 200
-mu <- rnorm(T, 0, 0.1)
-data <- rnorm(T, cumsum(mu))
-
-level <- polynomial_block(
-  mu=1,
-  order = 1,
-  D = 1 / 0.98
-)
-variance <- polynomial_block(
-  sigma2=1,
-  order = 1,
-  D = 1 / 1
-)
-
-outcome=Normal(mu='mu',sigma2='sigma2',outcome=data)
-
-fitted_data <- fit_model(level, variance, outcomes = outcome)
-show_fit(fitted_data, smooth = TRUE)$plot
-
 # Poisson case
 T <- 200
 w <- (200 / 40) * 2 * pi
-outcome <- rpois(T, 20 * (sin(w * 1:T / T) + 2))
+data <- rpois(T, 20 * (sin(w * 1:T / T) + 2))
 
-level <- polynomial_block(order = 1, values = 1, D = 1 / 0.95)
-season <- harmonic_block(period = 40, values = 1, D = 1 / 0.98)
+level <- polynomial_block(rate = 1, D = 1 / 0.95)
+season <- harmonic_block(rate = 1, period = 40, D = 1 / 0.98)
 
-fitted_data <- fit_model(level, season, outcome = outcome, family = "Poisson")
+outcome <- Poisson(lambda = "rate", outcome = data)
+
+fitted_data <- fit_model(level, season, outcomes = outcome)
+summary(fitted_data)
+
 show_fit(fitted_data, smooth = TRUE)$plot
 
+##################################################################
 
 # Multinomial case
 T <- 200
@@ -76,23 +60,71 @@ y3 <- rpois(T, exp(5))
 
 y <- cbind(y1, y2, y3)
 
-level <- polynomial_block(2, k = 2)
-season <- harmonic_block(12, values = c(0, 1), by_time = FALSE)
+level <- polynomial_block(p1 = 1) + polynomial_block(p2 = 1)
+season <- harmonic_block(p2 = 1, period = 12)
+outcome <- Multinom(p = c("p1", "p2"), outcome = y)
 
-fitted_data <- fit_model(level, season, outcome = y, family = "Multinomial", pred_cred = 0.95)
+fitted_data <- fit_model(level, season, outcomes = outcome)
+summary(fitted_data)
 
 show_fit(fitted_data, smooth = TRUE)$plot
+
+##################################################################
+
+# Normal case
+T <- 200
+mu <- rnorm(T, 0, 0.1)
+data <- rnorm(T, cumsum(mu))
+
+level <- polynomial_block(
+  mu = 1,
+  D = 1 / 0.95
+)
+variance <- polynomial_block(
+  sigma2 = 1
+)
+
+# Known variance
+outcome <- Normal(mu = "mu", sigma2 = 1, outcome = data)
+
+fitted_data <- fit_model(level, outcomes = outcome)
+summary(fitted_data)
+
+show_fit(fitted_data, smooth = TRUE)$plot
+
+# Unknown variance
+outcome <- Normal(mu = "mu", sigma2 = "sigma2", outcome = data)
+
+fitted_data <- fit_model(level, variance, outcomes = outcome)
+summary(fitted_data)
+
+show_fit(fitted_data, smooth = TRUE)$plot
+
+##################################################################
 
 # Gamma case
 T <- 200
 w <- (200 / 40) * 2 * pi
 phi <- 2.5
-outcome <- matrix(rgamma(T, phi, phi / (20 * (sin(w * 1:T / T) + 2))), T, 1)
+data <- matrix(rgamma(T, phi, phi / (20 * (sin(w * 1:T / T) + 2))), T, 1)
 
-level <- polynomial_block(order = 1, values = 1, D = 1 / 0.95)
-season <- harmonic_block(period = 40, values = 1, D = 1 / 0.98)
+level <- polynomial_block(mu = 1, D = 1 / 0.95)
+season <- harmonic_block(mu = 1, period = 40, D = 1 / 0.98)
+scale <- polynomial_block(phi = 1, D = 1 / 1)
 
-fitted_data <- fit_model(level, season, outcome = outcome, family = "Gamma", parms = list("phi" = phi))
+# Known shape
+outcome <- Gamma(phi = phi, mu = "mu", outcome = data)
+
+fitted_data <- fit_model(level, season, outcomes = outcome)
+summary(fitted_data)
+
+show_fit(fitted_data, smooth = TRUE)$plot
+
+# Unknown shape
+outcome <- Gamma(phi = "phi", mu = "mu", outcome = data)
+
+fitted_data <- fit_model(level, season, scale, outcomes = outcome)
+summary(fitted_data)
 
 show_fit(fitted_data, smooth = TRUE)$plot
 }

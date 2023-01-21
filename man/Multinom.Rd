@@ -29,12 +29,12 @@ y3 <- rpois(T, exp(5))
 
 y <- cbind(y1, y2, y3)
 
-level1 <- polynomial_block(p1=1)
-level2 <- polynomial_block(p2=1)
-season <- harmonic_block(p2=1,period=12)
-outcome=Multinom(p=c('p1','p2'),outcome=y)
+level1 <- polynomial_block(p1 = 1)
+level2 <- polynomial_block(p2 = 1)
+season <- harmonic_block(p2 = 1, period = 12)
+outcome <- Multinom(p = c("p1", "p2"), outcome = y)
 
-fitted_data <- fit_model(level1,level2, season, outcomes = outcome)
+fitted_data <- fit_model(level1, level2, season, outcomes = outcome)
 summary(fitted_data)
 
 show_fit(fitted_data, smooth = TRUE)$plot

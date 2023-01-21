@@ -43,12 +43,12 @@ w <- (200 / 40) * 2 * pi
 phi <- 2.5
 data <- matrix(rgamma(T, phi, phi / (20 * (sin(w * 1:T / T) + 2))), T, 1)
 
-level <- polynomial_block(mu=1, D = 1 / 0.95)
-season <- harmonic_block(mu=1,period = 40, D = 1 / 0.98)
-scale <- polynomial_block(phi=1, D = 1 / 1)
+level <- polynomial_block(mu = 1, D = 1 / 0.95)
+season <- harmonic_block(mu = 1, period = 40, D = 1 / 0.98)
+scale <- polynomial_block(phi = 1, D = 1 / 1)
 
 # Known shape
-outcome=Gamma(phi=phi,mu='mu',outcome=data)
+outcome <- Gamma(phi = phi, mu = "mu", outcome = data)
 
 fitted_data <- fit_model(level, season, outcomes = outcome)
 summary(fitted_data)
@@ -56,9 +56,9 @@ summary(fitted_data)
 show_fit(fitted_data, smooth = TRUE)$plot
 
 # Unknown shape
-outcome=Gamma(phi='phi',mu='mu',outcome=data)
+outcome <- Gamma(phi = "phi", mu = "mu", outcome = data)
 
-fitted_data <- fit_model(level, season,scale, outcomes = outcome)
+fitted_data <- fit_model(level, season, scale, outcomes = outcome)
 summary(fitted_data)
 
 show_fit(fitted_data, smooth = TRUE)$plot

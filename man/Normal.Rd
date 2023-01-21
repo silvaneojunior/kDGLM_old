@@ -33,15 +33,15 @@ mu <- rnorm(T, 0, 0.1)
 data <- rnorm(T, cumsum(mu))
 
 level <- polynomial_block(
-  mu=1,
-  D=1/0.95
+  mu = 1,
+  D = 1 / 0.95
 )
 variance <- polynomial_block(
-  sigma2=1
+  sigma2 = 1
 )
 
 # Known variance
-outcome=Normal(mu='mu',sigma2=1,outcome=data)
+outcome <- Normal(mu = "mu", sigma2 = 1, outcome = data)
 
 fitted_data <- fit_model(level, outcomes = outcome)
 summary(fitted_data)
@@ -49,9 +49,9 @@ summary(fitted_data)
 show_fit(fitted_data, smooth = TRUE)$plot
 
 # Unknown variance
-outcome=Normal(mu='mu',sigma2='sigma2',outcome=data)
+outcome <- Normal(mu = "mu", sigma2 = "sigma2", outcome = data)
 
-fitted_data <- fit_model(level,variance, outcomes = outcome)
+fitted_data <- fit_model(level, variance, outcomes = outcome)
 summary(fitted_data)
 
 show_fit(fitted_data, smooth = TRUE)$plot

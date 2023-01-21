@@ -38,11 +38,12 @@ y_pred <- y[T:(T + 20), ]
 
 y <- y[1:T, ]
 
-level <- polynomial_block(order = 1, values = 1, k = 2)
-season_2 <- harmonic_block(period = 20, values = c(0, 1), by_time = FALSE)
+level <- polynomial_block(p1 = 1) + polynomial_block(p2 = 1)
+season_2 <- harmonic_block(p2 = 1, period = 20)
 
+outcome <- Multinom(p = c("p1", "p2"), outcome = y)
 
-fitted_data <- fit_model(level, season_2, outcome = y, family = "Multinomial")
+fitted_data <- fit_model(level, season_2, outcomes = outcome)
 
 past <- eval_past(fitted_data, smooth = TRUE)
 }

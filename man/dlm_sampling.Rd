@@ -25,35 +25,21 @@ dlm_sampling
 \examples{
 
 T <- 200
-w <- (200 / 50) * 2 * pi
-S <- exp(2 * (sin(w * 1:T / T))) * exp(-20 * (1:T / T) * ((1:T / T) - 1)) / 20
-mu <- 20 * 1:T / T
-outcome <- rnorm(T, mu, sqrt(1 / S))
+mu <- rnorm(T, 0, 0.1)
+data <- rnorm(T, cumsum(mu))
 
 level <- polynomial_block(
-  order = 2,
-  values = c(1, 0),
-  D = 1 / 1,
-  by_time = FALSE
+  mu = 1,
+  D = 1 / 0.95
 )
-variance1 <- polynomial_block(
-  order = 3,
-  values = c(0, 1),
-  D = 1 / 1,
-  C0 = diag(c(1, 0.1, 0.01)),
-  by_time = FALSE
+variance <- polynomial_block(
+  sigma2 = 1
 )
-variance2 <- harmonic_block(
-  period = 50,
-  values = c(0, 1),
-  D = 1 / 1,
-  by_time = FALSE
-)
+# Unknown variance
+outcome <- Normal(mu = "mu", sigma2 = "sigma2", outcome = data)
 
-fitted_data <- fit_model(level, variance1, variance2,
-  outcome = outcome,
-  family = "normal_gamma"
-)
+fitted_data <- fit_model(level, variance, outcomes = outcome)
+summary(fitted_data)
 
 show_fit(fitted_data, smooth = TRUE)$plot
 

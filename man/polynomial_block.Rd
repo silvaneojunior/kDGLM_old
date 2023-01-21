@@ -53,9 +53,9 @@ Creates the structure for a polynomial block with desired order.
 \examples{
 # Creating a first order structure for a model with 2 outcomes.
 # One block is created for each outcome, with each block being associated with only one of the outcomes.
-level_1 <- polynomial_block(alpha1=1,order = 1)
-level_2 <- polynomial_block(alpha2=1,order = 1)
+level_1 <- polynomial_block(alpha1 = 1, order = 1)
+level_2 <- polynomial_block(alpha2 = 1, order = 1)
 
 # Creating a block with shared effect between the oucomes
-level_3 <- polynomial_block(alpha1=1,alpha2=1,order = 2)
+level_3 <- polynomial_block(alpha1 = 1, alpha2 = 1, order = 2)
 }

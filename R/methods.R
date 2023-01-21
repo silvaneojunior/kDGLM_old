@@ -115,7 +115,7 @@ summary.fitted_dlm <- function(fitted_dlm, t = fitted_dlm$t, smooth = TRUE) {
     "---\n",
     if (pred_flag) {
       paste0(
-        format(" ", width = distr_names_len, justify = "l"), "  Pred. log-like  Abs. relative Error\n",
+        format(" ", width = distr_names_len, justify = "l"), "  Pred. log-like  Relative abs. Error\n",
         paste0(format(names(distr_names), width = distr_names_len, justify = "l"), ": ", distr_like, distr_rae, "\n", collapse = ""),
         "---"
       )

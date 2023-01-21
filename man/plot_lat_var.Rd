@@ -37,13 +37,16 @@ A list containg:
 plot_lat_var
 }
 \examples{
+
 T <- 200
 w <- (200 / 40) * 2 * pi
-outcome <- rpois(T, 20 * (sin(w * 1:T / T) + 2))
+data <- rpois(T, 20 * (sin(w * 1:T / T) + 2))
 
-level <- polynomial_block(order = 1, values = 1, D = 1 / 0.95, name = "level_effect")
-season <- harmonic_block(period = 40, values = 1, D = 1 / 0.98, name = "season_effect")
+level <- polynomial_block(rate = 1, D = 1 / 0.95, name = "level_effect")
+season <- harmonic_block(rate = 1, period = 40, D = 1 / 0.98, name = "season_effect")
 
-fitted_data <- fit_model(level, season, outcome = outcome, family = "Poisson")
+outcome <- Poisson(lambda = "rate", outcome = data)
+
+fitted_data <- fit_model(level, season, outcomes = outcome)
 plot_lat_var(fitted_data, "effect", smooth = TRUE)$plot
 }

@@ -1,13 +1,9 @@
-# usethis::use_mit_license()
+usethis::use_mit_license()
+styler::style_pkg()
+devtools::document()
 
-# styler::style_pkg()
-# devtools::document()
 devtools::install('.', upgrade='never')
 devtools::install_github('silvaneojunior/GDLM')
-
-install.packages('vctrs',clean = TRUE)
-
-remove.packages('vctrs')
 
 #################################################################################
 ############################## Teste monitoramento ##############################

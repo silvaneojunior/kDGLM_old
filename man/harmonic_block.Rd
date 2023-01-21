@@ -45,9 +45,9 @@ Creates the structure for a harmonic block with desired periodicity.
 \examples{
 # Creating seasonal structure for a model with 2 outcomes.
 # One block is created for each outcome, with each block being associated with only one of the outcomes.
-season_1 <- harmonic_block(alpha1=1,period = 3)
-season_2 <- harmonic_block(alpha2=1,period = 6)
+season_1 <- harmonic_block(alpha1 = 1, period = 3)
+season_2 <- harmonic_block(alpha2 = 1, period = 6)
 
 # Creating a block with shared effect between the oucomes
-season_3 <- harmonic_block(alpha=1,alpha2=1,period = 12)
+season_3 <- harmonic_block(alpha = 1, alpha2 = 1, period = 12)
 }

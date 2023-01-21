@@ -26,10 +26,10 @@ T <- 200
 w <- (200 / 40) * 2 * pi
 data <- rpois(T, 20 * (sin(w * 1:T / T) + 2))
 
-level <- polynomial_block(rate=1, D = 1 / 0.95)
-season <- harmonic_block(rate=1,period = 40, D = 1 / 0.98)
+level <- polynomial_block(rate = 1, D = 1 / 0.95)
+season <- harmonic_block(rate = 1, period = 40, D = 1 / 0.98)
 
-outcome=Poisson(lambda='rate',outcome=data)
+outcome <- Poisson(lambda = "rate", outcome = data)
 
 fitted_data <- fit_model(level, season, outcomes = outcome)
 summary(fitted_data)
