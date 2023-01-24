@@ -4,24 +4,18 @@
 \alias{show_fit}
 \title{show_fit}
 \usage{
-show_fit(
-  model,
-  pred_cred = 0.95,
-  smooth = TRUE,
-  dynamic_plot = TRUE,
-  t_offset = 0
-)
+show_fit(model, pred_cred = 0.95, smooth = TRUE, dynamic = TRUE, h = 0)
 }
 \arguments{
-\item{model}{fitted_dlm: A fitted GDLM model.}
+\item{model}{fitted_dlm: A fitted DGLM model.}
 
 \item{pred_cred}{Numeric: The credibility value for the credibility interval.}
 
 \item{smooth}{Bool: A flag indicating if the smoothed should be used. If false, the filtered distribuition will be used.}
 
-\item{dynamic_plot}{Bool: A flag indicating if the created plot should be dynamic.}
+\item{dynamic}{Bool: A flag indicating if the created plot should be dynamic.}
 
-\item{t_offset}{Integer: A integer with the amount of steps ahead should be used for prediciton. Only used if smooth is false.}
+\item{h}{Integer: A integer with the amount of steps ahead should be used for prediciton. Only used if smooth is false.}
 }
 \value{
 A list containg:

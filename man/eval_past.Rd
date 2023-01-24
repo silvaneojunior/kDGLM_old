@@ -4,14 +4,14 @@
 \alias{eval_past}
 \title{eval_past}
 \usage{
-eval_past(model, smooth = FALSE, t_offset = 0, pred_cred = 0.95)
+eval_past(model, smooth = FALSE, h = 0, pred_cred = 0.95)
 }
 \arguments{
 \item{model}{<undefined class> or list: The fitted model to be use for evaluation.}
 
-\item{smooth}{bool: The flag indicating if smoothed values should be used. If TRUE, t_offset will not be used.}
+\item{smooth}{bool: The flag indicating if smoothed values should be used. If TRUE, h will not be used.}
 
-\item{t_offset}{positive integer: The relative offset for forecast. Values for time t will be calculated based on the filtered values of time t-t_offset. Will be ignored if smooth is TRUE.}
+\item{h}{positive integer: The relative offset for forecast. Values for time t will be calculated based on the filtered values of time t-h Will be ignored if smooth is TRUE.}
 
 \item{pred_cred}{Numeric: The credibility level for the I.C. intervals.}
 }

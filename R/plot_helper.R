@@ -2,11 +2,11 @@
 #'
 #' Calculate the preditive mean and some quantiles for the observed data and show a plot.
 #'
-#' @param model fitted_dlm: A fitted GDLM model.
+#' @param model fitted_dlm: A fitted DGLM model.
 #' @param pred_cred Numeric: The credibility value for the credibility interval.
 #' @param smooth Bool: A flag indicating if the smoothed should be used. If false, the filtered distribuition will be used.
-#' @param dynamic_plot Bool: A flag indicating if the created plot should be dynamic.
-#' @param t_offset Integer: A integer with the amount of steps ahead should be used for prediciton. Only used if smooth is false.
+#' @param dynamic Bool: A flag indicating if the created plot should be dynamic.
+#' @param h Integer: A integer with the amount of steps ahead should be used for prediciton. Only used if smooth is false.
 #'
 #' @return A list containg:
 #' \itemize{
@@ -16,7 +16,6 @@
 #' @export
 #'
 #' @import ggplot2
-#' @importFrom plotly ggplotly
 #' @import dplyr
 #' @import tidyr
 #'
@@ -34,10 +33,10 @@
 #' summary(fitted_data)
 #'
 #' show_fit(fitted_data, smooth = TRUE)$plot
-show_fit <- function(model, pred_cred = 0.95, smooth = TRUE, dynamic_plot = TRUE, t_offset = 0) {
+show_fit <- function(model, pred_cred = 0.95, smooth = TRUE, dynamic = TRUE, h = 0) {
   n <- dim(model$mt)[1]
   t_last <- dim(model$mt)[2]
-  eval <- eval_past(model, smooth = smooth, t_offset = t_offset, pred_cred = pred_cred)
+  eval <- eval_past(model, smooth = smooth, h = h, pred_cred = pred_cred)
 
   max_value <- calcula_max(eval$Observation - min(eval$Observation))[[3]] + min(eval$Observation)
   min_value <- -calcula_max(-(eval$Observation - max(eval$Observation)))[[3]] + max(eval$Observation)
@@ -65,15 +64,19 @@ show_fit <- function(model, pred_cred = 0.95, smooth = TRUE, dynamic_plot = TRUE
       scale_linetype_manual("", values = c("dashed", "solid", "solid")) +
       scale_color_manual("", na.value = NA, values = colors)
   }
-  if (dynamic_plot) {
-    plt <- ggplotly(plt)
+  if (dynamic) {
+    if (!requireNamespace("plotly", quietly = TRUE)) {
+      warning("The plotly package is required for dynamic plots")
+    } else {
+      plt <- plotly::ggplotly(plt)
+    }
   }
   return(list("data" = eval, "plot" = plt))
 }
 
 #' plot_lat_var
 #'
-#' @param model <undefined class> or list: A fitted GDLM model.
+#' @param model <undefined class> or list: A fitted DGLM model.
 #' @param var Character: The name of the variables to plot (same value passed while creating the structure). Any variable whose name partially match this variable will be ploted.
 #' @param smooth Bool: A flag indicating if the smoothed distribuition should be used. If false, the filtered distribution shall be used.
 #' @param cut_off Integer: The number of initial steps that should be skipped in the plot. Usually, the model is still learning in the initial steps, so the estimated values are not realiable.
@@ -88,7 +91,6 @@ show_fit <- function(model, pred_cred = 0.95, smooth = TRUE, dynamic_plot = TRUE
 #' @export
 #'
 #' @import ggplot2
-#' @importFrom plotly ggplotly
 #' @import dplyr
 #' @import tidyr
 #'
@@ -202,7 +204,11 @@ plot_lat_var <- function(model, var, smooth = TRUE, cut_off = 10, pred_cred = 0.
     geom_line(aes(y = media)) +
     coord_cartesian(ylim = c(min_value, max_value))
   if (dynamic) {
-    plt <- ggplotly(plt)
+    if (!requireNamespace("plotly", quietly = TRUE)) {
+      warning("The plotly package is required for dynamic plots")
+    } else {
+      plt <- plotly::ggplotly(plt)
+    }
   }
   return(list("plot" = plt, "data" = plot_data))
 }

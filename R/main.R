@@ -13,7 +13,7 @@
 #' @export
 #'
 #' @examples
-#' library(GDLM)
+#' library(DGLM)
 #'
 #' # Poisson case
 #' T <- 200
@@ -421,8 +421,8 @@ forecast <- function(model, t = 1, outcome = NULL, offset = NULL, FF = NULL, D =
 #' Evaluates the predictive values for the observed values used to fit the model. Predictions can be made with smoothed values or with filtered values with a time offset.
 #'
 #' @param model <undefined class> or list: The fitted model to be use for evaluation.
-#' @param smooth bool: The flag indicating if smoothed values should be used. If TRUE, t_offset will not be used.
-#' @param t_offset positive integer: The relative offset for forecast. Values for time t will be calculated based on the filtered values of time t-t_offset. Will be ignored if smooth is TRUE.
+#' @param smooth bool: The flag indicating if smoothed values should be used. If TRUE, h will not be used.
+#' @param h positive integer: The relative offset for forecast. Values for time t will be calculated based on the filtered values of time t-h Will be ignored if smooth is TRUE.
 #' @param pred_cred Numeric: The credibility level for the I.C. intervals.
 #'
 #' @return A list containg:
@@ -453,13 +453,13 @@ forecast <- function(model, t = 1, outcome = NULL, offset = NULL, FF = NULL, D =
 #' fitted_data <- fit_model(level, season_2, outcomes = outcome)
 #'
 #' past <- eval_past(fitted_data, smooth = TRUE)
-eval_past <- function(model, smooth = FALSE, t_offset = 0, pred_cred = 0.95) {
-  if (smooth & t_offset > 0) {
-    t_offset <- 0
-    warning("t_offset is only used if smooth is set to TRUE.")
+eval_past <- function(model, smooth = FALSE, h = 0, pred_cred = 0.95) {
+  if (smooth & h > 0) {
+    h <- 0
+    warning("h is only used if smooth is set to TRUE.")
   }
-  if (t_offset < 0 | round(t_offset) != t_offset) {
-    stop(paste0("ERROR: t_offset should be a positive integer. Got ", t_offset, "."))
+  if (h < 0 | round(h) != h) {
+    stop(paste0("ERROR: h should be a positive integer. Got ", h, "."))
   }
   n <- dim(model$mt)[1]
   t_last <- dim(model$mt)[2]
@@ -486,8 +486,8 @@ eval_past <- function(model, smooth = FALSE, t_offset = 0, pred_cred = 0.95) {
     ref_Ct <- model$Ct
     D <- model$D
     W <- model$W
-    if (t_offset > 0) {
-      # for (i in c(1:t_offset)) {
+    if (h > 0) {
+      # for (i in c(1:h)) {
       #   G <- G %*% model$G
       # }
       G <- model$G
@@ -495,19 +495,19 @@ eval_past <- function(model, smooth = FALSE, t_offset = 0, pred_cred = 0.95) {
   }
 
   for (i in c(1:t_last)) {
-    mt <- if (i <= t_offset) {
+    mt <- if (i <= h) {
       model$m0
     } else {
-      ref_mt[, (i - t_offset):(i - t_offset)]
+      ref_mt[, (i - h):(i - h)]
     }
-    Ct <- if (i <= t_offset) {
+    Ct <- if (i <= h) {
       model$C0
     } else {
-      ref_Ct[, , i - t_offset]
+      ref_Ct[, , i - h]
     }
     # model$family$filter(model$outcome[i, ], mt, Ct, FF[, , i] %>% matrix(n, r), G, D[, , i], W[, , i], model$offset[i, ], parms = model$parms)
     next_step <- list("at" = mt, "Rt" = Ct)
-    for (t in c(1:t_offset)) {
+    for (t in c(1:h)) {
       next_step <- one_step_evolve(next_step$at, next_step$Rt, G, D[, , i]**(t == 1), W[, , i])
     }
     # next_step <- one_step_evolve(mt, Ct, FF[, , i] %>% matrix(n, r), G, D[, , i], W[, , i])

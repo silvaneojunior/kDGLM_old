@@ -104,7 +104,7 @@ summary.fitted_dlm <- function(fitted_dlm, t = fitted_dlm$t, smooth = TRUE) {
   )
 
   cat(paste0(
-    "Fitted GDLM with ", length(fitted_dlm$outcomes), " outcomes.\n\n",
+    "Fitted DGLM with ", length(fitted_dlm$outcomes), " outcomes.\n\n",
     "Distribuitions:\n",
     paste0(names(distr_names), ": ", distr_names, "\n", collapse = ""), "\n",
     "Coeficients (", coef_label, ") at time ", t, ":\n",
@@ -130,8 +130,8 @@ summary.fitted_dlm <- function(fitted_dlm, t = fitted_dlm$t, smooth = TRUE) {
 #' plot method for class fitted_dlm
 #'
 #' @export
-plot.fitted_dlm <- function(model, pred_cred = 0.95, smooth = TRUE, dynamic_plot = TRUE, t_offset = 0) {
-  show_fit(model, pred_cred, smooth, dynamic_plot, t_offset)$plot
+plot.fitted_dlm <- function(model, pred_cred = 0.95, smooth = TRUE, dynamic = TRUE, h = 0) {
+  show_fit(model, pred_cred, smooth, dynamic, h)$plot
 }
 
 #' print.fitted_dlm
@@ -159,8 +159,8 @@ effects.fitted_dlm <- function(fitted_dlm, t = fitted_dlm$t, smooth = TRUE) {
 #' fitted.values method for class fitted_dlm
 #'
 #' @export
-fitted.values.fitted_dlm <- function(fitted_dlm, smooth = TRUE, t_offset = 0, pred_cred = 0.95) {
-  eval_past(fitted_dlm, smooth, t_offset, pred_cred)
+fitted.values.fitted_dlm <- function(fitted_dlm, smooth = TRUE, h = 0, pred_cred = 0.95) {
+  eval_past(fitted_dlm, smooth, h, pred_cred)
 }
 
 #' +.fitted_dlm

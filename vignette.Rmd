@@ -1,5 +1,5 @@
 ---
-title: "GDLM: a R package for Bayesian analysis of Generialized Dynamic Linear Models"
+title: "DGLM: a R package for Bayesian analysis of Generialized Dynamic Linear Models"
 author: "Silvaneo V. dos Santos Junior"
 date: "`r Sys.Date()`"
 output: rmarkdown::html_vignette

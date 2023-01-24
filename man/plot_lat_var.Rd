@@ -14,7 +14,7 @@ plot_lat_var(
 )
 }
 \arguments{
-\item{model}{<undefined class> or list: A fitted GDLM model.}
+\item{model}{<undefined class> or list: A fitted DGLM model.}
 
 \item{var}{Character: The name of the variables to plot (same value passed while creating the structure). Any variable whose name partially match this variable will be ploted.}
 
