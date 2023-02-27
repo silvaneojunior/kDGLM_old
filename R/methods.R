@@ -28,6 +28,8 @@ summary.fitted_dlm <- function(fitted_dlm, t = fitted_dlm$t, smooth = TRUE) {
   }))
   distr_names_len <- max(nchar(names(distr_names)))
   pred_flag <- FALSE
+  distr_like <- NULL
+  distr_rae <- NULL
   if (is.numeric(fitted_dlm$pred_cred)) {
     if (0 < fitted_dlm$pred_cred & 1 > fitted_dlm$pred_cred) {
       distr_like <- c(sapply(fitted_dlm$outcomes, function(x) {
@@ -94,14 +96,16 @@ summary.fitted_dlm <- function(fitted_dlm, t = fitted_dlm$t, smooth = TRUE) {
     p_val_str
   )
 
-  distr_like <- ifelse(abs(distr_like) < 0.00001,
-    format(distr_like, digits = 4, width = 14, justify = "l", scientific = TRUE),
-    format(round(distr_like, 5), width = 14, justify = "l", scientific = FALSE)
-  )
-  distr_rae <- ifelse(abs(distr_rae) < 0.00001,
-    format(distr_rae, digits = 4, width = 21, justify = "l", scientific = TRUE),
-    format(round(distr_rae, 5), width = 21, justify = "l", scientific = FALSE)
-  )
+  if (pred_flag) {
+    distr_like <- ifelse(abs(distr_like) < 0.00001,
+      format(distr_like, digits = 4, width = 14, justify = "l", scientific = TRUE),
+      format(round(distr_like, 5), width = 14, justify = "l", scientific = FALSE)
+    )
+    distr_rae <- ifelse(abs(distr_rae) < 0.00001,
+      format(distr_rae, digits = 4, width = 21, justify = "l", scientific = TRUE),
+      format(round(distr_rae, 5), width = 21, justify = "l", scientific = FALSE)
+    )
+  }
 
   cat(paste0(
     "Fitted DGLM with ", length(fitted_dlm$outcomes), " outcomes.\n\n",

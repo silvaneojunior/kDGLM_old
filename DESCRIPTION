@@ -1,6 +1,6 @@
-Package: DGLM
+Package: kDGLM
 Type: Package
-Title: DGLM: an R package for Bayesian analysis of Generialized Dynamic Linear Models
+Title: DGLM: an R package for Bayesian analysis of Dynamic Generialized Linear Models
 Version: 1.0.0
 Authors@R: person("Silvaneo", "Santos", email = "silvaneo@dme.ufrj.br", role = c("aut", "cre","cph"))
 Description: TO BE MADE!

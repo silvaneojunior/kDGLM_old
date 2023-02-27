@@ -198,23 +198,34 @@ convert_Gamma_Normal_LB <- function(ft, Qt, parms) {
 #'
 #' poisson_pred(conj_param)
 poisson_pred <- function(conj_param, outcome = NULL, parms = list(), pred_cred = 0.95) {
-  if (is.null(dim(conj_param))) {
-    r <- length(conj_param) / 2
-  } else {
-    r <- dim(conj_param)[2] / 2
-  }
+  r <- 1
   a <- conj_param[1:r] %>% t()
   b <- conj_param[(1 + r):(2 * r)] %>% t()
-  if (any(b < 10**-40)) {
-    # b=ifelse(b >= 10**-40,b,NA)
-    warning("The beta parameter for the predictive distribution is very low (<1e-40) at some times. Predicition for those times are unviable.")
+  t <- length(a)
+  pred <- matrix(NA, r, t)
+  var.pred <- array(NA, c(1, 1, t))
+  icl.pred <- matrix(NA, r, t)
+  icu.pred <- matrix(NA, r, t)
+  log.like <- rep(NA, t)
+  flags <- b > 1e-40
+
+  N <- 5000
+  pred[, flags] <- a[flags] / b[flags]
+  var.pred[, , flags] <- a[flags] * (b[flags] + 1) / (b[flags]**2)
+
+  icl.pred[, flags] <- qnbinom((1 - pred_cred) / 2, a[flags], (b[flags] / (b[flags] + 1)))
+  icu.pred[, flags] <- qnbinom(1 - (1 - pred_cred) / 2, a[flags], (b[flags] / (b[flags] + 1)))
+
+  for (i in (1:t)[!flags]) {
+    sample_lambda <- rgamma(N, a[i], b[i])
+    sample_y <- rpois(N, sample_lambda)
+
+    pred[, i] <- mean(sample_y)
+    var.pred[, , i] <- var(sample_y)
+    icl.pred[, i] <- quantile(sample_y, (1 - pred_cred) / 2)
+    icu.pred[, i] <- quantile(sample_y, 1 - (1 - pred_cred) / 2)
   }
 
-  pred <- a / b
-  var.pred <- a * (b + 1) / (b)^2
-
-  icl.pred <- qnbinom((1 - pred_cred) / 2, a, (b / (b + 1)))
-  icu.pred <- qnbinom(1 - (1 - pred_cred) / 2, a, (b / (b + 1)))
   return(list(
     "pred" = pred,
     "var.pred" = var.pred,
@@ -245,19 +256,29 @@ poisson_pred <- function(conj_param, outcome = NULL, parms = list(), pred_cred =
 #'
 #' poisson_log_like(conj_param, rpois(3, 1))
 poisson_log_like <- function(conj_param, outcome, parms = list()) {
-  if (is.null(dim(conj_param))) {
-    r <- length(conj_param) / 2
-  } else {
-    r <- dim(conj_param)[2] / 2
-  }
+  r <- 1
   a <- conj_param[1:r] %>% t()
   b <- conj_param[(1 + r):(2 * r)] %>% t()
+  t <- length(a)
+  pred <- matrix(NA, r, t)
+  var.pred <- array(NA, c(1, 1, t))
+  icl.pred <- matrix(NA, r, t)
+  icu.pred <- matrix(NA, r, t)
+  log.like <- rep(NA, t)
+  flags <- b > 1e-40
 
-  if (any(b < 10**-40)) {
-    b <- ifelse(b >= 10**-40, b, 10**-40)
-    warning("The beta parameter for the predictive distribution is very low (<1e-40) at some times. Predicition for those times are unviable.")
+  N <- 5000
+  log.like[flags] <- dnbinom(outcome[flags], a[flags], (b[flags] / (b[flags] + 1)), log = TRUE)
+
+  for (i in (1:t)[!flags]) {
+    sample_lambda <- rgamma(N, a[i], b[i])
+    sample_y <- rpois(N, sample_lambda)
+    log.like.list <- dpois(outcome[i], sample_lambda, log = TRUE)
+    max.log.like <- max(log.like.list)
+    like.list <- exp(log.like.list - max.log.like)
+    log.like[i] <- log(mean(like.list)) + max.log.like
   }
-  return(sum(dnbinom(outcome, a, (b / (b + 1)), log = TRUE)))
+  return(log.like)
 }
 
 #' @export

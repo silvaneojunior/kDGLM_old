@@ -119,7 +119,7 @@ Normal <- function(mu, tau = NA, sigma = NA, sigma2 = NA, outcome, offset = outc
 convert_NG_Normal <- function(ft, Qt, parms = list()) {
   ft <- matrix(ft, 2, 1)
   mu0 <- ft[1, ] + Qt[1, 2]
-  c0 <- exp(-ft[2, ] - Qt[2, 2] / 2) / (Qt[1, 1])
+  c0 <- exp(-ft[2, ] - Qt[2, 2] / 2) / (Qt[1, 1] + 1e-40)
   helper <- -3 + 3 * sqrt(1 + 2 * Qt[2, 2] / 3)
   # helper=Qt[2,2]
   alpha <- 1 / helper
@@ -161,7 +161,7 @@ convert_Normal_NG <- function(conj_distr, parms = list()) {
 convert_Normal_NG_cor <- function(conj_distr, parms = list()) {
   # q12 <- conj_distr$mu0*(digamma(conj_distr$alpha)-log(conj_distr$beta))/(1-log(conj_distr$alpha)+log(conj_distr$beta))
   f1 <- conj_distr$mu0 #-q12
-  f2 <- digamma(conj_distr$alpha) - log(conj_distr$beta)
+  f2 <- digamma(conj_distr$alpha) - log(conj_distr$beta + 1e-40)
   # f2 <- log(conj_distr$alpha)-log(conj_distr$beta)
   q1 <- conj_distr$beta / (conj_distr$c0 * conj_distr$alpha)
   q2 <- trigamma(conj_distr$alpha)

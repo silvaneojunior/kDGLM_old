@@ -108,6 +108,7 @@ system_full_gamma <- function(x, parms) {
   a <- (k + 1) / 2
   b <- (n - k + n * log(tau / n) - theta)
 
+  # print((parms$Hq3 + parms$Hq4))
   if (a <= 5) {
     # Densidade marginal aproximada de alpha (uso opcional).
     # f_densi=function(x){dgamma(a,b))}
@@ -116,7 +117,8 @@ system_full_gamma <- function(x, parms) {
     f_densi_raw <- function(x) {
       exp(k * (x + 1) * log(x) + lgamma(n * x + 1) + theta * x - k * lgamma(x + 1) - (n * x + 1) * log(x * tau))
     }
-    c_val <- integrate(f_densi_raw, 0, Inf)$value
+    lim_sup <- Inf
+    c_val <- cubintegrate(f_densi_raw, 0, lim_sup, nVec = 200)$integral
     f_densi <- function(x) {
       f_densi_raw(x) / c_val
     }
@@ -124,19 +126,19 @@ system_full_gamma <- function(x, parms) {
     f <- function(x) {
       (x * digamma(x * n + 1) - x * log(x) - x * log(tau)) * f_densi(x)
     }
-    Hp3 <- cubintegrate(f, 0, Inf, nVec = 200)$integral
+    Hp3 <- cubintegrate(f, 0, lim_sup, nVec = 200)$integral
 
     # print('b')
     f <- function(x) {
       (x * log(x) - lgamma(x)) * f_densi(x)
     }
-    Hp4 <- cubintegrate(f, 0, Inf, nVec = 200)$integral
+    Hp4 <- cubintegrate(f, 0, lim_sup, nVec = 200)$integral
 
     # print('c')
     # f <- function(x) {
     #   (x * digamma(x * n + 1)  - lgamma(x)- x*log(tau)) * f_densi(x)
     # }
-    # Hp5 <- integrate(f, 0, Inf)$value
+    # Hp5 <- cubintegrate(f, 0, Inf, nVec = 200)$integral
     # print('sd')
     Hp5 <- Hp3 + Hp4
 
@@ -171,7 +173,14 @@ system_full_gamma <- function(x, parms) {
 #' @return The parameters of the conjugated distribuition of the linear predictor.
 #' @export
 convert_FGamma_Normal <- function(ft, Qt, parms) {
-  s <- exp(ft[2, ] + 0)
+  # print(ft)
+  # print(Qt)
+
+
+  # ft=matrix(c(-1.457271, 3.533958),2,1)
+  # Qt=matrix(c(0.17878138,0.03349385,0.03349385,0.15984907),2,2)
+
+  s <- exp(ft[2, ] + -1)
   f1 <- ft[1, ]
   f2 <- ft[2, ] - log(s)
   q1 <- Qt[1, 1]
@@ -182,9 +191,9 @@ convert_FGamma_Normal <- function(ft, Qt, parms) {
   Hq2 <- exp(f1 - f2 + (q1 + q2 - 2 * q12) / 2)
   Hq3 <- -(f2 + q12) * Hq1
 
-  Hq4 <- integrate(function(x) {
+  Hq4 <- cubintegrate(function(x) {
     (x * log(x) - lgamma(x)) * dlnorm(x, f1, sqrt(q1))
-  }, 0, Inf)$value
+  }, 0, Inf, nVec = 200)$integral
 
   parms <- list(
     "Hq1" = Hq1,
@@ -193,10 +202,17 @@ convert_FGamma_Normal <- function(ft, Qt, parms) {
     "Hq4" = Hq4
   )
 
-  ss1 <- multiroot(f = system_full_gamma, start = c(0), parms = parms) # , maxiter = 2000, atol = 10**-20)
-
+  ss1 <- multiroot(f = system_full_gamma, start = c(0), parms = parms, maxiter = 2000, atol = 10**-20)
   x <- as.numeric(ss1$root)
   n <- exp(x) # exp(x[1])
+  # print(q1)
+  # if(q1<1.5){
+  #   h=-1+sqrt(1+2*q1)
+  #   n=2*(1/h)-1
+  # }else{
+  #   n=1
+  # }
+
   k <- n # exp(x[2])
 
   # Calculando tau e theta dado n e k
@@ -215,6 +231,8 @@ convert_FGamma_Normal <- function(ft, Qt, parms) {
 #'
 #' @param conj_prior list: A vector containing the parameters of the Inverse-Gamma (alpha,beta).
 #' @param parms list: A list of extra known parameters of the distribuition. Not used in this function.
+#'
+#' @importFrom cubature cubintegrate
 #'
 #' @return The parameters of the Normal distribuition of the linear predictor.
 #' @export
@@ -237,13 +255,13 @@ convert_Normal_FGamma <- function(conj_prior, parms) {
   f_densi <- function(x) {
     exp(k * (x + 1) * log(x) + lgamma(n * x + 1) + theta * x - k * lgamma(x + 1) - (n * x + 1) * log(x * tau))
   }
-  c_val <- integrate(f_densi, 0, Inf)$value
+  c_val <- cubintegrate(f_densi, 0, Inf, nVec = 200)$integral
 
   # Média 1 calculada com a densidade exata.
   f <- function(x) {
     log(x) * f_densi(x)
   }
-  f1 <- integrate(f, 0, Inf)$value / c_val
+  f1 <- cubintegrate(f, 0, Inf, nVec = 200)$integral / c_val
   # Média 1 calculada com a densidade aproximada para phi.
   # f1=digamma(a)-log(b)
 
@@ -252,7 +270,7 @@ convert_Normal_FGamma <- function(conj_prior, parms) {
   f <- function(x) {
     (-digamma(n * x + 1) + log(x * tau)) * f_densi(x)
   }
-  f2 <- integrate(f, 0, Inf)$value / c_val
+  f2 <- cubintegrate(f, 0, Inf, nVec = 200)$integral / c_val
   # Média 2 calculada com a densidade aproximada
   # f2=log(tau/n)-(1/(2*n))*(b/(a-1))+(1/(12*n**2))*(b**2)/((a-1)*(a-2))
 
@@ -260,7 +278,7 @@ convert_Normal_FGamma <- function(conj_prior, parms) {
   f <- function(x) {
     (log(x)**2) * f_densi(x)
   }
-  Q1 <- integrate(f, 0, Inf)$value / c_val - f1**2
+  Q1 <- cubintegrate(f, 0, Inf, nVec = 200)$integral / c_val - f1**2
   # Variância 1 calculada com a densidade aproximada.
   # Q1=trigamma(a)
 
@@ -269,7 +287,7 @@ convert_Normal_FGamma <- function(conj_prior, parms) {
   f <- function(x) {
     ((-digamma(n * x + 1) + log(x * tau))**2) * f_densi(x)
   }
-  Q2 <- integrate(f, 0, Inf)$value / c_val - f2**2
+  Q2 <- cubintegrate(f, 0, Inf, nVec = 200)$integral / c_val - f2**2
   # Variância 2 calculada com a densidade aproximada.
 
   # Covariância calculada com a densidade exata.
@@ -277,7 +295,7 @@ convert_Normal_FGamma <- function(conj_prior, parms) {
   f <- function(x) {
     (log(x) - f1) * (-digamma(n * x + 1) + log(x * tau) - f2) * f_densi(x)
   }
-  Q12 <- integrate(f, 0, Inf)$value / c_val
+  Q12 <- cubintegrate(f, 0, Inf, nVec = 200)$integral / c_val
   # Covariância calculada com a densidade aproximada
 
   ft <- matrix(c(f1, f2 + log(s)), 2, 1)
@@ -347,16 +365,11 @@ update_FGamma <- function(conj_prior, y, parms) {
 #'
 #' gamma_pred(conj_param, parms = list("phi" = 1))
 Fgamma_pred <- function(conj_param, outcome = NULL, parms = list(), pred_cred = 0.95) {
-  # DUMMY
-  # Essa função não está pronta, é apenas um placeholder.
-
-  t <- length(outcome)
-
   outcome_list <- list(
-    "pred"     = matrix(outcome, 1, t),
-    "var.pred" = matrix(outcome, 1, t),
-    "icl.pred" = matrix(outcome, 1, t),
-    "icu.pred" = matrix(outcome, 1, t)
+    "pred"     = matrix(0, 1, length(outcome)),
+    "var.pred" = matrix(0, 1, length(outcome)),
+    "icl.pred" = matrix(0, 1, length(outcome)),
+    "icu.pred" = matrix(0, 1, length(outcome))
   )
   return(outcome_list)
 }
@@ -384,9 +397,7 @@ Fgamma_pred <- function(conj_param, outcome = NULL, parms = list(), pred_cred = 
 #'
 #' gamma_log_like(conj_param, rgamma(3, c(1:3), c(3:1)), parms = list("phi" = 1))
 Fgamma_log_like <- function(conj_param, outcome, parms = list()) {
-  # DUMMY
-  # Essa função não está pronta, é apenas um placeholder.
-  return(outcome * 0)
+  outcome * 0
 }
 
 #' @export
