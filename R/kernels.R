@@ -335,7 +335,7 @@ ident_log_offset <- function(ft, Qt, offset) {
 
 log_offset <- function(ft, Qt, offset) {
   r <- dim(ft)[1]
-  t <- dim(ft)[2]
+  t <- if.null(dim(ft)[2],1)
   if (t > 1) {
     offset <- matrix(offset, length(offset), t)
   }
