@@ -398,3 +398,29 @@ block_merge <- function(...) {
   class(block) <- "dlm_block"
   return(block)
 }
+
+#' block_mult
+#'
+#' An auxiliary function to merge blocks.
+#'
+#' @param block dlm_block: A block to be multiplied.
+#'
+#' @return The merged block as a dlm_block.
+#' @export
+#'
+#' @examples
+#' level <- polynomial_block(alpha = 1, order = 1)
+#'
+#' final_block <- block_merge(level, 5)
+block_mult <- function(block, k) {
+  if (k > 1) {
+    block_ref <- block
+    block$var_names <- paste0(block$var_names, "_1")
+    for (i in 2:k) {
+      block_clone <- block_ref
+      block_clone$var_names <- paste0(block_clone$var_names, "_", i)
+      block <- block + block_clone
+    }
+  }
+  return(block)
+}

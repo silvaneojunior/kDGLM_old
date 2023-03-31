@@ -229,8 +229,10 @@ analytic_filter <- function(outcomes, m0 = 0, C0 = 1, FF, G, D, W, p_monit = NA,
 
       mt_step <- model$at_step
       Ct_step <- model$Rt_step
-      ft[, t] <- ft_step <- model$ft_step
-      Qt[, , t] <- Qt_step <- model$Qt_step
+      # ft[, t] <- ft_step <- model$ft_step
+      # Qt[, , t] <- Qt_step <- model$Qt_step
+      ft_step <- model$ft_step
+      Qt_step <- model$Qt_step
       outcomes[[outcome_name]]$conj_prior_param[t, ] <- conj_prior
       if (na.flag) {
         norm_post <- list(ft = ft_step, Qt = Qt_step)
@@ -254,6 +256,10 @@ analytic_filter <- function(outcomes, m0 = 0, C0 = 1, FF, G, D, W, p_monit = NA,
 
       at[, t] <- model$at
       Rt[, , t] <- model$Rt
+      if (length(model_list) == 1) {
+        ft[, t] <- ft_step
+        Qt[, , t] <- Qt_step
+      }
       mt[, t] <- last_m <- mt_step
       Ct[, , t] <- last_C <- Ct_step
     }

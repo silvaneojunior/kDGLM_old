@@ -175,3 +175,16 @@ fitted.values.fitted_dlm <- function(fitted_dlm, smooth = TRUE, h = 0, pred_cred
 `+.dlm_block` <- function(e1, e2) {
   block_merge(e1, e2)
 }
+
+#' *.fitted_dlm
+#'
+#' Define product operator for class dlm_block
+#'
+#' @export
+`*.dlm_block` <- function(block, k) {
+  if (is.numeric(k)) {
+    return(block_mult(block, k))
+  } else {
+    return(block_mult(k, block))
+  }
+}
