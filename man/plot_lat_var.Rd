@@ -6,7 +6,7 @@
 \usage{
 plot_lat_var(
   model,
-  var,
+  var = "",
   smooth = TRUE,
   cut_off = 10,
   pred_cred = 0.95,

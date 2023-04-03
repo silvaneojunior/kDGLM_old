@@ -13,7 +13,7 @@
 #' @export
 #'
 #' @examples
-#' library(DGLM)
+#' library(kDGLM)
 #'
 #' # Poisson case
 #' T <- 200
@@ -131,6 +131,7 @@ fit_model <- function(..., outcomes, pred_cred = 0.95, smooth_flag = TRUE, p_mon
 
   if (structure$t == 1) {
     structure$t <- t
+    structure$G <- array(structure$G, c(structure$n, structure$n, structure$t), dimnames = dimnames(structure$G))
     structure$D <- array(structure$D, c(structure$n, structure$n, structure$t), dimnames = dimnames(structure$D))
     structure$W <- array(structure$W, c(structure$n, structure$n, structure$t), dimnames = dimnames(structure$W))
     structure$FF <- array(structure$FF, c(structure$n, structure$k, structure$t), dimnames = dimnames(structure$FF))
@@ -187,6 +188,7 @@ fit_model <- function(..., outcomes, pred_cred = 0.95, smooth_flag = TRUE, p_mon
 #' @param t Numeric: Time window for prediction.
 #' @param offset Matrix or scalar: offset for predictions. Should have dimensions k x t, where k is the number of outcomes of the model. If offset is not specified, the last value observed by the model will be used.
 #' @param FF Array: A 3D-array containing the regression matrix for each time. It's dimension should be n x k x t, where n is the number of latent variables, k is the number of outcomes in the model. If not specified, the last value given to the model will be used.
+#' @param G Array: A 3D-array containing the evolution matrix for each time. It's dimension should be n x n x t, where n is the number of latent variables. If not specified, the last value given to the model will be used.
 #' @param D Array: A 3D-array containing the discount factor matrix for each time. It's dimension should be n x n x t, where n is the number of latent variables and T is the time series length. If not specified, the last value given to the model will be used in the first step, and 1 will be use thereafter.
 #' @param W Array: A 3D-array containing the covariance matrix of the noise for each time. It's dimension should be n x n x t, where n is the number of latent variables and T is the time series length. If not specified, 0 will be used.
 #' @param plot Bool: A flag indicating if a plot should be produced.
@@ -229,26 +231,25 @@ fit_model <- function(..., outcomes, pred_cred = 0.95, smooth_flag = TRUE, p_mon
 #' show_fit(fitted_data, smooth = TRUE)$plot
 #'
 #' forecast(fitted_data, 20, outcome = y_pred)$plot
-forecast <- function(model, t = 1, outcome = NULL, offset = NULL, FF = NULL, D = NULL, W = NULL, plot = TRUE, pred_cred = 0.95) {
+forecast <- function(model, t = 1, outcome = NULL, offset = NULL, FF = NULL, G=NULL, D = NULL, W = NULL, plot = 'dynamic', pred_cred = 0.95) {
   n <- dim(model$mt)[1]
   t_last <- dim(model$mt)[2]
-  r <- dim(model$FF)[2]
-  r_out <- dim(model$outcome)[2]
+  k=dim(model$FF)[2]
+  r <- sum(sapply(model$outcomes, function(x) {
+    x$r
+  }))
+  pred <- matrix(NA, r, t)
+  var.pred <- array(NA, c(r, r, t))
+  icl.pred <- matrix(NA, r, t)
+  icu.pred <- matrix(NA, r, t)
+  log.like <- rep(NA, t)
 
-  show_y <- TRUE
-  if (is.null(outcome)) {
-    show_y <- FALSE
-    outcome <- model$outcome[t_last, ]
-  }
-  if (length(outcome) == 1) {
-    outcome <- c(outcome, rep(0, r_out - 1))
-  }
-  if (length(dim(outcome)) < 2) {
-    outcome <- matrix(outcome, t, r_out, byrow = TRUE)
-  }
-
+  #### Consistency check ####
   if (length(dim(FF)) > 3) {
     stop(paste0("Error: FF should have at most 3 dimensions. Got ", length(dim(FF)), "."))
+  }
+  if (length(dim(G)) > 3) {
+    stop(paste0("Error: G should have at most 3 dimensions. Got ", length(dim(G)), "."))
   }
   if (length(dim(D)) > 3) {
     stop(paste0("Error: D should have at most 3 dimensions. Got ", length(dim(D)), "."))
@@ -264,9 +265,11 @@ forecast <- function(model, t = 1, outcome = NULL, offset = NULL, FF = NULL, D =
     warning("Warning: Prediction window is big, results will probabily be unreliable.")
   }
 
-  #### Consistency check ####
+  if (is.null(G)) {
+    G <- array(model$G[, , t_last], c(n, n, t))
+  }
   if (is.null(FF)) {
-    FF <- array(model$FF[, , t_last], c(n, r, t))
+    FF <- array(model$FF[, , t_last], c(n, k, t))
   }
   if (is.null(D)) {
     D <- array(model$D[, , t_last], c(n, n, t))
@@ -300,15 +303,12 @@ forecast <- function(model, t = 1, outcome = NULL, offset = NULL, FF = NULL, D =
     #   W[,,2:t]=0
     # }
   }
-  if (is.null(offset)) {
-    offset <- model$offset[t_last, ]
-  }
-  if (length(dim(offset)) < 2) {
-    offset <- matrix(offset, t, r_out, byrow = TRUE)
-  }
 
-  if (any(dim(FF) != c(n, r, t))) {
-    stop(paste0("Error: FF has wrong dimesions. Expected ", paste(n, r, t, sep = "x"), ". Got ", paste(dim(FF), colapse = "x")))
+  if (any(dim(G) != c(n, n, t))) {
+    stop(paste0("Error: G has wrong dimesions. Expected ", paste(n, n, t, sep = "x"), ". Got ", paste(dim(G), colapse = "x")))
+  }
+  if (any(dim(FF) != c(n, k, t))) {
+    stop(paste0("Error: FF has wrong dimesions. Expected ", paste(n, k, t, sep = "x"), ". Got ", paste(dim(FF), colapse = "x")))
   }
   if (any(dim(D) != c(n, n, t))) {
     stop(paste0("Error: D has wrong dimesions. Expected ", paste(n, n, t, sep = "x"), ". Got ", paste(dim(D), colapse = "x")))
@@ -316,12 +316,7 @@ forecast <- function(model, t = 1, outcome = NULL, offset = NULL, FF = NULL, D =
   if (any(dim(W) != c(n, n, t))) {
     stop(paste0("Error: W has wrong dimesions. Expected ", paste(n, n, t, sep = "x"), ". Got ", paste(dim(W), colapse = "x")))
   }
-  if (any(dim(offset) != c(t, r_out))) {
-    stop(paste0("Error: W has wrong dimesions. Expected ", paste(t, r_out, sep = "x"), " or a scalar. Got ", paste(dim(offset), colapse = "x")))
-  }
   #####
-
-  G <- model$G
 
   m0 <- model$mt[, t_last]
   C0 <- model$Ct[, , t_last]
@@ -331,86 +326,137 @@ forecast <- function(model, t = 1, outcome = NULL, offset = NULL, FF = NULL, D =
   last_m <- m0
   last_C <- C0
 
-  # Definindo objetos
-  pred <- matrix(NA, dim(model$pred)[1], t)
-  var.pred <- array(NA, c(dim(model$var.pred)[1], dim(model$var.pred)[2], t))
-  icl.pred <- matrix(NA, dim(model$icl.pred)[1], t)
-  icu.pred <- matrix(NA, dim(model$icu.pred)[1], t)
+  outcome_forecast=list()
+  for(outcome_name in names(model$outcomes)){
+
+    outcome_forecast[[outcome_name]]$conj_param=matrix(NA,t,length(model$outcomes[[outcome_name]]$conj_prior_param)) %>% as.data.frame
+    names(outcome_forecast[[outcome_name]]$conj_param)=names(model$outcomes[[outcome_name]]$conj_prior_param)
+
+    if(!is.null(outcome)){
+      outcome_forecast[[outcome_name]]$outcome=outcome[[outcome_name]] %>% matrix(t,r)
+    }else{
+      outcome_forecast[[outcome_name]]$outcome=model$outcomes[[outcome_name]]$outcome[t_last,] %>% matrix(t,r)
+    }
+    if(!is.null(offset)){
+      outcome_forecast[[outcome_name]]$offset=offset[[outcome_name]] %>% matrix(t,r)
+    }else{
+      outcome_forecast[[outcome_name]]$offset=model$outcomes[[outcome_name]]$offset[t_last,] %>% matrix(t,r)
+    }
+  }
 
 
   for (t_i in c(1:t)) {
-    next_step <- one_step_evolve(last_m, last_C, FF[, , t_i] %>% matrix(n, r), G, D[, , t_i]**0, W[, , t_i] + C0 * D[, , t_i])
+    next_step <- one_step_evolve(last_m, last_C, G[,,t_i], D[, , t_i]**0, W[, , t_i] + C0 * (D[, , t_i]-1))
     last_m <- next_step$at
     last_C <- next_step$Rt
-    next_step <- model$family$offset(next_step$ft, next_step$Qt, model$offset[t_i, ])
+    lin_pred <- calc_lin_pred(last_m, last_C, FF[, , t_i] %>% matrix(n, k))
+    k_acum <- 0
+    for(outcome_name in names(model$outcomes)){
+      k_cur <- outcome$r
 
-    ft_canom <- outcome$convert_mat_canom %*% next_step$ft
-    Qt_canom <- outcome$convert_mat_canom %*% next_step$Qt %*% t(outcome$convert_mat_canom)
+      model_i=model$outcomes[[outcome_name]]
+      pred_index <- match(model_i$var_names, fitted_data$var_names)
+      lin_pred_offset <- model_i$family$offset(lin_pred$ft[pred_index,,drop=FALSE],
+                                               lin_pred$Qt[pred_index,pred_index,drop=FALSE],
+                                               outcome_forecast[[outcome_name]]$offset[t_i, ])
+      ft_canom <- model_i$convert_mat_canom %*% lin_pred_offset$ft
+      Qt_canom <- model_i$convert_mat_canom %*% lin_pred_offset$Qt %*% t(model_i$convert_mat_canom)
 
-    conj_distr <- model$family$conj_prior(ft_canom, Qt_canom)
-    prediction <- model$family$pred(conj_distr, outcome[t_i, , drop = FALSE], model$parms, pred_cred)
-
-    pred[, t_i] <- prediction$pred
-    var.pred[, , t_i] <- prediction$var.pred
-    icl.pred[, t_i] <- prediction$icl.pred
-    icu.pred[, t_i] <- prediction$icu.pred
+      conj_prior <- model_i$family$conj_prior(ft_canom, Qt_canom, parms = model_i$parms)
+      outcome_forecast[[outcome_name]]$conj_param[t_i,]=conj_prior
+    }
   }
 
-  return_list <- list("pred" = pred, "var.pred" = var.pred, "icl.pred" = icl.pred, "icu.pred" = icu.pred)
-  if (plot) {
-    r <- dim(pred)[1]
-    if (is.null(labels)) {
-      labels <- c("Serie_" %>% paste0(1:r))
+  k_acum <- 0
+  out_names <- rep(NA, r)
+  output <- matrix(NA, t, r)
+  for (outcome_name in names(model$outcomes)) {
+
+    model_i=model$outcomes[[outcome_name]]
+    k_cur <- model_i$r
+
+    prediction <- model_i$family$pred(outcome_forecast[[outcome_name]]$conj_param,
+                                      outcome_forecast[[outcome_name]]$outcome,
+                                      pred_cred = pred_cred,
+                                      parms = model_i$parms)
+
+
+    outcome_forecast[[outcome_name]]$pred=prediction$pred
+    outcome_forecast[[outcome_name]]$var.pred=prediction$var.pred
+    outcome_forecast[[outcome_name]]$icl.pred=prediction$icl.pred
+    outcome_forecast[[outcome_name]]$icu.pred=prediction$icu.pred
+
+    pred[(k_acum + 1):(k_acum + k_cur), ] <- prediction$pred
+    var.pred[(k_acum + 1):(k_acum + k_cur),(k_acum + 1):(k_acum + k_cur), ] <- prediction$var.pred
+    icl.pred[(k_acum + 1):(k_acum + k_cur), ] <- prediction$icl.pred
+    icu.pred[(k_acum + 1):(k_acum + k_cur), ] <- prediction$icu.pred
+
+
+
+    if (k_cur > 1) {
+      out_names[(k_acum + 1):(k_acum + k_cur)] <- paste0(outcome_name, "_", 1:k_cur)
+    } else {
+      out_names[(k_acum + 1):(k_acum + k_cur)] <- outcome_name
+    }
+    if(!is.null(outcome)){
+      output[, (k_acum + 1):(k_acum + k_cur)] <- outcome_forecast[[outcome_name]]$outcome
     }
 
-    pred <- cbind(t_last + c(1:t), t(pred) %>% as.data.frame())
-    names(pred) <- c("Time", labels)
-    pred <- pred %>% pivot_longer(2:(r + 1))
-    names(pred) <- c("Time", "Serie", "Prediction")
+    k_acum <- k_acum + k_cur
+  }
 
-    obs <- pred
-    obs$Prediction <- NULL
-    obs$Observation <- NA
+  data_list <- list("obs" = output, "pred" = pred %>% as.matrix() %>% t(), "icl.pred" = icl.pred %>% as.matrix() %>% t(), "icu.pred" = icu.pred %>% as.matrix() %>% t())
+  data_name <- c("Observation", "Prediction", "C.I.lower", "C.I.upper")
 
-    icl.pred <- cbind(t_last + c(1:t), t(icl.pred) %>% as.data.frame())
-    names(icl.pred) <- c("Time", labels)
-    icl.pred <- icl.pred %>% pivot_longer(2:(r + 1))
-    names(icl.pred) <- c("Time", "Serie", "C.I.lower")
+  data_raw <- lapply(1:4, function(i) {
+    data <- cbind(as.character(1:t+t_last) %>% as.data.frame(), data_list[[i]]) %>%
+      as.data.frame() %>%
+      pivot_longer(1:r + 1) %>%
+      mutate(name = as.factor(name))
+    names(data) <- c("Time", "Serie", data_name[i])
+    levels(data$Serie) <- out_names
+    data
+  })
+  data <- do.call(function(...) {
+    data_list <- list(...)
+    data <- data_list[[1]]
+    for (i in 2:4) {
+      data <- data %>% left_join(data_list[[i]], by = c("Time", "Serie"))
+    }
+    data
+  }, data_raw) %>% mutate(Time = as.numeric(Time), Serie = as.factor(Serie))
 
-    icu.pred <- cbind(t_last + c(1:t), t(icu.pred) %>% as.data.frame())
-    names(icu.pred) <- c("Time", labels)
-    icu.pred <- icu.pred %>% pivot_longer(2:(r + 1))
-    names(icu.pred) <- c("Time", "Serie", "C.I.upper")
+  data_past=eval_past(model,smooth=TRUE,pred_cred=pred_cred)
+  plot_data=rbind(cbind(data_past,type='Past'),
+                  cbind(data,type='Forecast'))
 
-    plot_data <- obs %>%
-      inner_join(pred, c("Time", "Serie")) %>%
-      inner_join(icl.pred, c("Time", "Serie")) %>%
-      inner_join(icu.pred, c("Time", "Serie")) %>%
-      mutate(Serie = as.factor(Serie))
+  return_list=list(data=plot_data,forecast=data,outcomes=outcome_forecast)
 
-    plot_data2 <- eval_past(model, smooth = TRUE, pred_cred = pred_cred)
-    levels(plot_data2$Serie) <- labels
+  if (plot!=FALSE) {
+    obs_na_rm=data_past$Observation[!is.na(data_past$Observation)]
+    max_value <- calcula_max(obs_na_rm - min(obs_na_rm))[[3]] + min(obs_na_rm)
+    min_value <- -calcula_max(-(obs_na_rm - max(obs_na_rm)))[[3]] + max(obs_na_rm)
 
-
-    max_value <- calcula_max(plot_data2$Observation - min(plot_data2$Observation))[[3]] + min(plot_data2$Observation)
-    min_value <- -calcula_max(-(plot_data2$Observation - max(plot_data2$Observation)))[[3]] + max(plot_data2$Observation)
-
-    plot_data <- rbind(plot_data2, plot_data)
-
-    plot <- ggplotly(
-      ggplot(plot_data, aes(x = Time, color = Serie, fill = Serie, linetype = ifelse(Time > t_last, "Forecast", "One-step ahead prediction"))) +
-        geom_line(aes(y = Prediction)) +
-        geom_ribbon(aes(ymin = C.I.lower, ymax = C.I.upper, linetype = "C.I."), alpha = 0.25) +
-        geom_point(aes(y = Observation)) +
+    plt.obj <- ggplot(plot_data, aes(x = Time, color = Serie, fill = Serie, linetype = type, shape=type)) +
+        geom_line(aes(y = Prediction,group='Fit')) +
+        geom_ribbon(aes(ymin = C.I.lower, ymax = C.I.upper,group='C.I.'), alpha = 0.25) +
+        geom_point(aes(y = Observation,group='Observations')) +
         scale_fill_hue("", na.value = NA) +
         scale_color_hue("", na.value = NA) +
-        scale_linetype_manual("", values = c("solid", "dashed", "solid")) +
+        scale_linetype_manual("", values = c("dashed", "solid")) +
+        scale_shape_manual("", values = c(17, 16)) +
         scale_x_continuous("Time") +
         scale_y_continuous("$y_t$") +
         theme_bw() +
         coord_cartesian(ylim = c(min_value, max_value))
-    )
-    return_list$plot <- plot
+    if(plot=='dynamic'){
+      if (!requireNamespace("plotly", quietly = TRUE)) {
+        warning("The plotly package is required for dynamic plots.")
+      } else {
+        plt.obj <- plotly::ggplotly(plt.obj)
+      }
+    }
+    return_list$plot <- plt.obj
   }
 
   return(return_list)
@@ -469,12 +515,12 @@ eval_past <- function(model, smooth = FALSE, h = 0, pred_cred = 0.95) {
   }))
 
   FF <- model$FF
-  G <- diag(n)
+  G <- array(diag(n), c(n, n, t_last))
   pred <- matrix(NA, k, t_last)
   var.pred <- array(NA, c(k, k, t_last))
   icl.pred <- matrix(NA, k, t_last)
   icu.pred <- matrix(NA, k, t_last)
-  log.like <- rep(0, t_last)
+  log.like <- rep(NA, t_last)
 
   if (smooth) {
     ref_mt <- model$mts
@@ -494,7 +540,7 @@ eval_past <- function(model, smooth = FALSE, h = 0, pred_cred = 0.95) {
     }
   }
 
-  for (i in c(1:t_last)) {
+  for (i in c((1 + h):t_last)) {
     mt <- if (i <= h) {
       model$m0
     } else {
@@ -507,8 +553,10 @@ eval_past <- function(model, smooth = FALSE, h = 0, pred_cred = 0.95) {
     }
     # model$family$filter(model$outcome[i, ], mt, Ct, FF[, , i] %>% matrix(n, r), G, D[, , i], W[, , i], model$offset[i, ], parms = model$parms)
     next_step <- list("at" = mt, "Rt" = Ct)
-    for (t in c(1:h)) {
-      next_step <- one_step_evolve(next_step$at, next_step$Rt, G, D[, , i]**(t == 1), W[, , i])
+    if (h >= 1) {
+      for (t in c(1:h)) {
+        next_step <- one_step_evolve(next_step$at, next_step$Rt, G[, , i - t + 1], D[, , i - t + 1]**(t == 1), W[, , i - t + 1])
+      }
     }
     # next_step <- one_step_evolve(mt, Ct, FF[, , i] %>% matrix(n, r), G, D[, , i], W[, , i])
     k_acum <- 0
@@ -519,17 +567,17 @@ eval_past <- function(model, smooth = FALSE, h = 0, pred_cred = 0.95) {
       k_i <- length(pred_index)
       FF_step <- matrix(FF[, pred_index, i], n, k_i)
       lin_pred <- calc_lin_pred(next_step$at, next_step$Rt, FF_step)
-
       cur_step <- outcome$family$offset(lin_pred$ft, lin_pred$Qt, outcome$offset[i, ])
 
       ft_canom <- outcome$convert_mat_canom %*% cur_step$ft
       Qt_canom <- outcome$convert_mat_canom %*% cur_step$Qt %*% t(outcome$convert_mat_canom)
 
+
       conj_distr <- outcome$family$conj_prior(ft_canom, Qt_canom)
       prediction <- outcome$family$pred(conj_distr, outcome$outcome[i, , drop = FALSE], pred_cred, parms = outcome$parms)
 
       pred[(k_acum + 1):(k_acum + k_cur), i] <- prediction$pred
-      var.pred[(k_acum + 1):(k_acum + k_cur), , i] <- prediction$var.pred
+      var.pred[(k_acum + 1):(k_acum + k_cur), (k_acum + 1):(k_acum + k_cur), i] <- prediction$var.pred
       icl.pred[(k_acum + 1):(k_acum + k_cur), i] <- prediction$icl.pred
       icu.pred[(k_acum + 1):(k_acum + k_cur), i] <- prediction$icu.pred
       log.like[i] <- log.like[i] + sum(outcome$family$log.like(conj_distr, outcome$outcome[i, , drop = FALSE], parms = outcome$parms))
@@ -686,10 +734,11 @@ dlm_sampling <- function(model, sample_size) {
     Ct <- model$Ct[, , t]
 
     mt_now <- mt[, t]
-    G_now <- G
+    G_ref=G[, , t+1]
+    G_now <- G_ref
     G_diff <- rep(0, n)
-    if (any(is.na(G))) {
-      for (index_col in (1:n)[colSums(is.na(G)) > 0]) {
+    if (any(is.na(G_ref))) {
+      for (index_col in (1:n)[colSums(is.na(G_ref)) > 0]) {
         index_row <- (1:n)[is.na(G_now[, index_col])]
         G_now[index_row, index_col] <- mt_now[index_col + 1]
         G_now[index_row, index_col + 1] <- mt_now[index_col]

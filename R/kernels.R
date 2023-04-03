@@ -6,7 +6,7 @@
 #' @param Ct Array: A 3D-array representing the filtered covariance matrix of the latent variables at each time. The third dimension should represent the time index.
 #' @param at Matrix: A matrix containing the one-step-ahead mean of the latent variables at each time based upon the filtered mean. Each row should represent one variable.
 #' @param Rt Array: A 3D-array representing the one-step-ahead covariance matrix of the latent variables at each time based upon the filtered covariance matrix. The third dimension should represent the time index.
-#' @param G  Matrix: A matrix representing the transition matrix of the model.
+#' @param G  Array: A 3D-array representing the transition matrix of the model at each time.
 #'
 #' @return List: The smoothed mean (mts) and covariance (Cts) of the latent variables at each time. Their dimension follows, respectivelly, the dimensions of mt and Ct.
 #' @export
@@ -17,12 +17,19 @@
 #'
 #' mt <- matrix(c(cumsum(rnorm(T) + 1), rep(1, T)), 2, T, byrow = TRUE)
 #' Ct <- array(diag(c(1, 1)), c(2, 2, T))
-#' G <- matrix(c(1, 0, 1, 1), 2, 2)
-#' at <- G %*% mt
-#' Rt <- array(G %*% t(G) + diag(c(0.1, 0.1)), c(2, 2, T))
+#' G <- array(c(1, 0, 1, 1), c(2, 2, T))
+#' at <- G[, , 1] %*% mt
+#' Rt <- array(G[, , 1] %*% t(G[, , 1]) + diag(c(0.1, 0.1)), c(2, 2, T))
 #'
 #' smoothed_values <- generic_smoother(mt, Ct, at, Rt, G)
 generic_smoother <- function(mt, Ct, at, Rt, G) {
+
+  mt=model$mt
+  Ct=model$Ct
+  at=model$at
+  Rt=model$Rt
+  G=model$G
+
   T <- dim(mt)[2]
   n <- dim(mt)[1]
   mts <- mt
@@ -32,17 +39,17 @@ generic_smoother <- function(mt, Ct, at, Rt, G) {
 
   for (t in (T - 1):1) {
     mt_now <- mt[, t]
-    G_now <- G
+    G_sep <- G[, , t+1]
+    G_now <- G_sep
     G_diff <- rep(0, n)
-    if (any(is.na(G))) {
-      for (index_col in (1:n)[colSums(is.na(G)) > 0]) {
+    if (any(is.na(G_sep))) {
+      for (index_col in (1:n)[colSums(is.na(G_sep)) > 0]) {
         index_row <- (1:n)[is.na(G_now[, index_col])]
         G_now[index_row, index_col] <- mt_now[index_col + 1]
         G_now[index_row, index_col + 1] <- mt_now[index_col]
-        G_diff[index_col] <- -mt_now[index_col] * mt_now[index_col + 1]
+        G_diff[index_row] <- G_diff[index_row] - mt_now[index_col] * mt_now[index_col + 1]
       }
     }
-
     # var_ref <- var_index[, t]
     # restricted_Rt <- Rt[var_ref, var_ref, t + 1]
     # restricted_Ct <- Ct[var_ref, var_ref, t]
@@ -51,15 +58,17 @@ generic_smoother <- function(mt, Ct, at, Rt, G) {
     restricted_Ct <- Ct[, , t]
 
     # simple_Rt_inv <- restricted_Ct %*% t(G_now[var_ref, var_ref]) %*% ginv(restricted_Rt)
-    simple_Rt_inv <- restricted_Ct %*% t(G_now[, ]) %*% ginv(restricted_Rt)
+    simple_Rt_inv <- restricted_Ct %*% t(G_now) %*% ginv(restricted_Rt)
 
     # mts[var_ref, t] <- mt_now[var_ref] + simple_Rt_inv %*% (mts[var_ref, t + 1] - at[var_ref, t + 1])
     # Cts[var_ref, var_ref, t] <- restricted_Ct - simple_Rt_inv %*% (restricted_Rt - Cts[var_ref, var_ref, t + 1]) %*% t(simple_Rt_inv)
 
 
-    mts[, t] <- mt_now[] + simple_Rt_inv %*% (mts[, t + 1] - at[, t + 1])
-    Cts[, , t] <- restricted_Ct - simple_Rt_inv %*% (restricted_Rt - Cts[, , t + 1]) %*% t(simple_Rt_inv)
+    mts[, t]   <- mt_now        + simple_Rt_inv %*% (mts[,   t + 1] - at[, t + 1])
+    Cts[, , t] <- restricted_Ct + simple_Rt_inv %*% (Cts[, , t + 1] - restricted_Rt) %*% t(simple_Rt_inv)
   }
+  model$Cts[3,3,]
+  Cts[3,3,]
   return(list("mts" = mts, "Cts" = Cts))
 }
 
@@ -71,7 +80,7 @@ generic_smoother <- function(mt, Ct, at, Rt, G) {
 #' @param m0 Vector: The prior mean for the latent vector.
 #' @param C0 Matrix: The prior covariance matrix for the latent vector.
 #' @param FF Array: A 3D-array containing the regression matrix for each time. It's dimension should be n x m x T, where n is the number of latent variables, m is the number of outcomes in the model and T is the time series length.
-#' @param G Matrix: The state evolution matrix.
+#' @param G Array: A 3D-array containing the state evolution matrix at each time.
 #' @param D Array: A 3D-array containing the discount factor matrix for each time. It's dimension should be n x n x T, where n is the number of latent variables and T is the time series length.
 #' @param W Array: A 3D-array containing the covariance matrix of the noise for each time. It's dimension should be the same as D.
 #' @param p_monit numeric (optional): The prior probability of changes in the latent space variables that are not part of it's dinamic.
@@ -133,6 +142,13 @@ analytic_filter <- function(outcomes, m0 = 0, C0 = 1, FF, G, D, W, p_monit = NA,
     outcomes[[outcome_name]]$log.like.null <- rep(NA, T)
     outcomes[[outcome_name]]$log.like.alt <- rep(NA, T)
     outcomes[[outcome_name]]$alt.flags <- rep(0, T)
+
+
+    pred_index <- match(outcomes[[outcome_name]]$var_names, var_names)
+    k_i <- length(pred_index)
+
+    outcomes[[outcome_name]]$ft <- matrix(NA, nrow = k_i, ncol = T)
+    outcomes[[outcome_name]]$Qt <- array(NA, dim = c(k_i, k_i, T))
   }
 
   c <- c_monit
@@ -142,6 +158,7 @@ analytic_filter <- function(outcomes, m0 = 0, C0 = 1, FF, G, D, W, p_monit = NA,
     p_monit
   }
   threshold <- log(c_monit) + log(p) - log(1 - p)
+  last_C_D=last_C
 
   for (t in 1:T) {
     model_list <- if (is.na(p_monit)) {
@@ -153,7 +170,7 @@ analytic_filter <- function(outcomes, m0 = 0, C0 = 1, FF, G, D, W, p_monit = NA,
       D_p <- D[, , t]
       D_p[!D_flags[, , t]] <- D_p[!D_flags[, , t]] * D_mult[[model]]
 
-      next_step <- one_step_evolve(last_m, last_C, G, D_p, W[, , t] + diag(n) * W_add[[model]])
+      next_step <- one_step_evolve(last_m, last_C, G[, , t], D_p**0, W[, , t] + diag(n) * W_add[[model]]+last_C_D*(D_p-1))
       models[[model]] <- list(
         "at" = next_step$at,
         "Rt" = next_step$Rt,
@@ -169,8 +186,7 @@ analytic_filter <- function(outcomes, m0 = 0, C0 = 1, FF, G, D, W, p_monit = NA,
       FF_step <- matrix(FF[, pred_index, t], n, k_i)
 
       offset_step <- outcome$offset[t, ]
-      na.flag <- any(is.null(offset_step) | any(offset_step == 0) | any(is.na(offset_step)))
-
+      na.flag <- any(is.null(offset_step) | any(offset_step == 0) | any(is.na(offset_step)) | any(is.na(outcome$outcome[t, ])))
       for (model in model_list) {
         at_step <- models[[model]]$at_step
         Rt_step <- models[[model]]$Rt_step
@@ -229,13 +245,16 @@ analytic_filter <- function(outcomes, m0 = 0, C0 = 1, FF, G, D, W, p_monit = NA,
 
       mt_step <- model$at_step
       Ct_step <- model$Rt_step
-      ft[, t] <- ft_step <- model$ft_step
-      Qt[, , t] <- Qt_step <- model$Qt_step
-      outcomes[[outcome_name]]$conj_prior_param[t, ] <- conj_prior
+      # ft[, t] <- ft_step <- model$ft_step
+      # Qt[, , t] <- Qt_step <- model$Qt_step
+      ft_step <- model$ft_step
+      Qt_step <- model$Qt_step
+      # outcomes[[outcome_name]]$conj_prior_param[t, ] <- conj_prior
       if (na.flag) {
         norm_post <- list(ft = ft_step, Qt = Qt_step)
         outcomes[[outcome_name]]$conj_post_param[t, ] <- conj_prior
       } else {
+
         ft_canom <- outcome$convert_mat_canom %*% ft_step
         Qt_canom <- outcome$convert_mat_canom %*% Qt_step %*% t(outcome$convert_mat_canom)
         conj_prior <- family$conj_prior(ft_canom, Qt_canom, parms = outcome$parms)
@@ -250,10 +269,42 @@ analytic_filter <- function(outcomes, m0 = 0, C0 = 1, FF, G, D, W, p_monit = NA,
         At <- Ct_step %*% model$FF %*% ginv(Qt_step)
         models[["null_model"]]$at_step <- mt_step <- mt_step + At %*% (ft_star - ft_step)
         models[["null_model"]]$Rt_step <- Ct_step <- Ct_step + At %*% (Qt_star - Qt_step) %*% t(At)
+
+        last_C_D=Ct_step
       }
 
       at[, t] <- model$at
       Rt[, , t] <- model$Rt
+
+      lin_pred_ref <- calc_lin_pred(model$at, model$Rt, FF[, , t])
+      ft[, t] <- lin_pred_ref$ft
+      Qt[, , t] <- lin_pred_ref$Qt
+
+      for (outcome_name in names(outcomes)) {
+        outcome <- outcomes[[outcome_name]]
+        pred_index <- match(outcome$var_names, var_names)
+        family <- outcome$family
+
+        offset_step <- outcome$offset[t, ]
+        na.flag <- any(is.null(offset_step) | any(offset_step == 0) | any(is.na(offset_step)))
+
+        lin_pred <- list(
+          ft = lin_pred_ref$ft[pred_index, , drop = FALSE],
+          Qt = lin_pred_ref$Qt[pred_index, pred_index, drop = FALSE]
+        )
+        next_step <- family$offset(lin_pred$ft, lin_pred$Qt, if (na.flag) {
+          1
+        } else {
+          offset_step
+        })
+
+        ft_canom <- outcome$convert_mat_canom %*% next_step$ft
+        Qt_canom <- outcome$convert_mat_canom %*% next_step$Qt %*% t(outcome$convert_mat_canom)
+
+        conj_prior <- family$conj_prior(ft_canom, Qt_canom, parms = outcome$parms)
+        outcomes[[outcome_name]]$conj_prior_param[t, ] <- conj_prior
+      }
+
       mt[, t] <- last_m <- mt_step
       Ct[, , t] <- last_C <- Ct_step
     }
@@ -262,6 +313,7 @@ analytic_filter <- function(outcomes, m0 = 0, C0 = 1, FF, G, D, W, p_monit = NA,
   result <- list(
     "mt" = mt, "Ct" = Ct,
     "at" = at, "Rt" = Rt,
+    # Consultar Mariane sobre oq fazer com o preditor linear.
     "ft" = ft, "Qt" = Qt,
     "FF" = FF, "G" = G, "D" = D, "W" = W,
     "outcomes" = outcomes, "var_names" = var_names
@@ -289,8 +341,12 @@ one_step_evolve <- function(m0, C0, G, D, W) {
 }
 
 calc_lin_pred <- function(at, Rt, FF) {
+  if(is.null(dim(FF))){
+    FF=matrix(FF,length(FF),1)
+  }
   n <- dim(FF)[1]
   k <- dim(FF)[2]
+
   FF_step <- FF
   FF_flags <- is.na(FF)
   at_mod <- at

@@ -207,21 +207,24 @@ poisson_pred <- function(conj_param, outcome = NULL, parms = list(), pred_cred =
   icl.pred <- matrix(NA, r, t)
   icu.pred <- matrix(NA, r, t)
   log.like <- rep(NA, t)
-  flags <- b > 1e-40
+  flags <- b > 1e-20
 
-  N <- 5000
   pred[, flags] <- a[flags] / b[flags]
   var.pred[, , flags] <- a[flags] * (b[flags] + 1) / (b[flags]**2)
 
   icl.pred[, flags] <- qnbinom((1 - pred_cred) / 2, a[flags], (b[flags] / (b[flags] + 1)))
   icu.pred[, flags] <- qnbinom(1 - (1 - pred_cred) / 2, a[flags], (b[flags] / (b[flags] + 1)))
 
+  N <- 5000
   for (i in (1:t)[!flags]) {
+
     sample_lambda <- rgamma(N, a[i], b[i])
     sample_y <- rpois(N, sample_lambda)
 
     pred[, i] <- mean(sample_y)
     var.pred[, , i] <- var(sample_y)
+    print(a[i])
+    print(b[i])
     icl.pred[, i] <- quantile(sample_y, (1 - pred_cred) / 2)
     icu.pred[, i] <- quantile(sample_y, 1 - (1 - pred_cred) / 2)
   }

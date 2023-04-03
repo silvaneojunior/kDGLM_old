@@ -4,7 +4,12 @@
 \alias{print.fitted_dlm}
 \title{print.fitted_dlm}
 \usage{
-\method{print}{fitted_dlm}(fitted_dlm, t = fitted_dlm$t, smooth = TRUE)
+\method{print}{fitted_dlm}(
+  fitted_dlm,
+  t = fitted_dlm$t,
+  smooth = TRUE,
+  metric_cutoff = round(fitted_dlm$t/10)
+)
 }
 \description{
 print method for class fitted_dlm

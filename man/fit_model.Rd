@@ -33,7 +33,7 @@ The fitted model (an object of the <undefined class> or list). Contains the valu
 Fit a model given it's structure and the observed data. This function can be used for any supported family (see vignette).
 }
 \examples{
-library(DGLM)
+library(kDGLM)
 
 # Poisson case
 T <- 200
