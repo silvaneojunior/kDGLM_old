@@ -128,7 +128,7 @@ polynomial_block <- function(..., order = 1, name = "Var_Poly", D = 1, W = 0, m0
   names[[name]] <- c(1:order)
   block <- list(
     "FF" = FF,
-    "G" = G,
+    "G" = array(G, c(order, order, t)),
     "D" = D,
     "W" = W,
     "m0" = m0,
@@ -190,7 +190,7 @@ harmonic_block <- function(..., period, name = "Var_Sazo", D = 1, W = 0, m0 = 0,
   block <- polynomial_block(..., order = order, name = name, D = D, W = W, m0 = m0, C0 = C0)
 
   G <- matrix(c(cos(w), -sin(w), sin(w), cos(w)), order, order)
-  block$G <- G
+  block$G <- array(G, c(order, order, block$t))
   block$order <- NULL
   block$period <- period
   block$type <- "Harmonic"
@@ -244,9 +244,61 @@ AR_block <- function(..., order, name = "Var_AR", D = 1, W = 0, m0 = 0, C0 = 1) 
     index <- sort(c(c(1:order), c(1:order)))
     G <- G[index + c(0, order), index + c(0, order)]
   }
-  block$G <- G
+  block$G <- array(G, c(2 * order, 2 * order, block$t))
   block$order <- order
   block$type <- "AR"
+  return(block)
+}
+
+#' FT_block
+#'
+#' DESCRIPTION
+#'
+#' @param ... Named values for the planing matrix.
+#' @param order Positive integer: DESCRIPTION.
+#' @param name String: An optional argument providing the name for this block. Can be useful to identify the models with meaningful labels, also, the name used will be used in some auxiliary functions.
+#' @param D Array, Matrix, vector or  scalar: The values for the discount factors at each time. If D is a array, it's dimensions should be nxnxt, where n is the order of the polynomial block and t is the length of the outcomes. If D is a matrix, it's dimesions should be nxn and it's values will be used for each time. If D is a vector or scalar, a discount factor matrix will be created as a diagonal matrix with the values of D in the diagonal.
+#' @param W Array, Matrix, vector or  scalar: The values for the covariance matrix for the noise factor at each time. If W is a array, it's dimensions should be nxnxt, where n is the order of the polynomial block and t is the length of the outcomes. If W is a matrix, it's dimesions should be nxn and it's values will be used for each time. If W is a vector or scalar, a discount factor matrix will be created as a diagonal matrix with the values of W in the diagonal.
+#' @param m0 Vector or scalar: The prior mean for the latent variables associated with this block. If m0 is a vector, it's dimesion should be equal to the order of the polynomial block. If m0 is a scalar, it's value will be used for all latent variables.
+#' @param C0 Matrix, vector or scalar: The prior covariance matrix for the latent variables associated with this block. If C0 is a matrix, it's dimesions should be nxn. If W is a vector or scalar, a covariance matrix will be created as a diagonal matrix with the values of C0 in the diagonal.
+#'
+#' @return An object of the class dlm_block containing the following values:
+#' \itemize{
+#'    \item FF Array: A 3D-array containing the regression matrix for each time. It's dimension should be n x m x T, where n is the number of latent variables, m is the number of outcomes in the model and T is the time series length.
+#'    \item G Matrix: The state evolution matrix.
+#'    \item D Array: A 3D-array containing the discount factor matrix for each time. It's dimension should be n x n x T, where n is the number of latent variables and T is the time series length.
+#'    \item W Array: A 3D-array containing the covariance matrix of the noise for each time. It's dimension should be the same as D.
+#'    \item m0 Vector: The prior mean for the latent vector.
+#'    \item C0 Matrix: The prior covariance matrix for the latent vector.
+#'    \item names list: A list containg the variables indexes by their name.
+#'    \item order Positive integer: Same as argument.
+#'    \item n Positive integer: The number of latent variables associated with this block (2).
+#'    \item t Positive integer: The number of time steps associated with this block. If 1, the block is compatible with blocks of any time length, but if t is greater than 1, this block can only be used with blocks of the same time length.
+#'    \item k Positive integer: The number of outcomes associated with this block. This block can only be used with blocks with the same outcome length.
+#'    \item var_names Vector: The name of the linear predictors associated with this block,
+#'    \item type Character: The type of block (FT).
+#' }
+#'
+#' @export
+#' @examples
+#' # EXAMPLE
+FT_block <- function(..., charges, name = "Var_FT", D = 1, W = 0, m0 = 0, C0 = 1) {
+  block <- polynomial_block(..., order = 3, name = name, D = D, W = W, m0 = m0, C0 = C0)
+  k <- block$k
+  t <- length(charges)
+  if (block$t != t & block$t > 1) {
+    stop("Error: Length of charges are not compatible with length of regressors. Regressors should have length 1 or equal to charges.")
+  }
+
+
+  G <- array(diag(3), c(3, 3, t))
+  G[1, 1, ] <- NA
+  G[1, 3, ] <- charges
+
+  block$G <- G
+  block$order <- order
+  block$type <- "FT"
+  block$t <- t
   return(block)
 }
 
@@ -297,7 +349,7 @@ correlation_block <- function(var_names, name = "Var_cor", D = 1, W = 0, m0 = 0,
 
   coef <- 0
   W <- 1
-  block$G <- diag(c(rep(1, k), coef))
+  block$G <- array(diag(c(rep(1, k), coef)), c(k, k, block$t))
   block$D <- simplify2array(apply(block$D, 3, function(x) {
     as.matrix(bdiag(x, 1))
   },
@@ -377,7 +429,7 @@ block_merge <- function(...) {
   }
 
   FF <- array(0, c(n, k, t), dimnames = list(NULL, var_names, NULL))
-  G <- matrix(0, n, n)
+  G <- array(0, c(n, n, t))
   D <- array(0, c(n, n, t))
   W <- array(0, c(n, n, t))
   m0 <- c()
@@ -387,7 +439,8 @@ block_merge <- function(...) {
     k_i <- length(block$var_names)
     current_range <- position:(position + block$n - 1)
     FF[current_range, var_names %in% block$var_names, ] <- block$FF[, (1:k_i)[order(block$var_names)], ]
-    G[current_range, current_range] <- block$G
+
+    G[current_range, current_range, ] <- block$G
     D[current_range, current_range, ] <- block$D
     W[current_range, current_range, ] <- block$W
     m0 <- c(m0, block$m0)
@@ -413,14 +466,17 @@ block_merge <- function(...) {
 #'
 #' final_block <- block_merge(level, 5)
 block_mult <- function(block, k) {
+  block_list <- list()
   if (k > 1) {
     block_ref <- block
     block$var_names <- paste0(block$var_names, "_1")
+    block_list[[1]] <- block
     for (i in 2:k) {
       block_clone <- block_ref
-      block_clone$var_names <- paste0(block_clone$var_names, "_", i)
-      block <- block + block_clone
+      block_clone$var_names <- paste0(block_ref$var_names, "_", i)
+      block_list[[i]] <- block_clone
     }
+    block <- do.call(block_merge, block_list)
   }
   return(block)
 }
