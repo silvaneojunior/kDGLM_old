@@ -2,7 +2,7 @@
 #'
 #' Calculate the preditive mean and some quantiles for the observed data and show a plot.
 #'
-#' @param model fitted_dlm: A fitted DGLM model.
+#' @param model fitted_dlm: A fitted DGLM.
 #' @param pred_cred Numeric: The credibility value for the credibility interval.
 #' @param smooth Bool: A flag indicating if the smoothed should be used. If false, the filtered distribuition will be used.
 #' @param dynamic Bool: A flag indicating if the created plot should be dynamic.
@@ -38,9 +38,9 @@ show_fit <- function(model, pred_cred = 0.95, smooth = TRUE, dynamic = TRUE, h =
   t_last <- dim(model$mt)[2]
   eval <- eval_past(model, smooth = smooth, h = h, pred_cred = pred_cred)
 
-  max_value <- calcula_max(eval$Observation - min(eval$Observation))[[3]] + min(eval$Observation)
-  min_value <- -calcula_max(-(eval$Observation - max(eval$Observation)))[[3]] + max(eval$Observation)
-
+  obs_na_rm=eval$Observation[!is.na(eval$Observation)]
+  max_value <- calcula_max(obs_na_rm - min(obs_na_rm))[[3]] + min(obs_na_rm)
+  min_value <- -calcula_max(-(obs_na_rm - max(obs_na_rm)))[[3]] + max(obs_na_rm)
 
   n_colors <- length(unique(eval$Serie))
   colors <- rainbow(n_colors, s = 0.6)
@@ -107,7 +107,7 @@ show_fit <- function(model, pred_cred = 0.95, smooth = TRUE, dynamic = TRUE, h =
 #'
 #' fitted_data <- fit_model(level, season, outcomes = outcome)
 #' plot_lat_var(fitted_data, "effect", smooth = TRUE)$plot
-plot_lat_var <- function(model, var, smooth = TRUE, cut_off = 10, pred_cred = 0.95, dynamic = TRUE) {
+plot_lat_var <- function(model, var = "", smooth = TRUE, cut_off = 10, pred_cred = 0.95, dynamic = TRUE) {
   if (!any(grepl(var, names(model$names)))) {
     stop(paste0("Error: Invalid selected variable. Got ", var, ", expected one of the following:\n", names(model$names)))
   }
@@ -205,7 +205,7 @@ plot_lat_var <- function(model, var, smooth = TRUE, cut_off = 10, pred_cred = 0.
     coord_cartesian(ylim = c(min_value, max_value))
   if (dynamic) {
     if (!requireNamespace("plotly", quietly = TRUE)) {
-      warning("The plotly package is required for dynamic plots")
+      warning("The plotly package is required for dynamic plots.")
     } else {
       plt <- plotly::ggplotly(plt)
     }
