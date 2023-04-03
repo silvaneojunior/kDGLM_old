@@ -22,7 +22,7 @@ summary.dlm_distr <- function(dlm_distr) {
 #' summary method for class fitted_dlm
 #'
 #' @export
-summary.fitted_dlm <- function(fitted_dlm, t = fitted_dlm$t, smooth = TRUE) {
+summary.fitted_dlm <- function(fitted_dlm, t = fitted_dlm$t, smooth = TRUE, metric_cutoff = round(fitted_dlm$t / 10)) {
   distr_names <- c(sapply(fitted_dlm$outcomes, function(x) {
     x$name
   }))
@@ -33,13 +33,14 @@ summary.fitted_dlm <- function(fitted_dlm, t = fitted_dlm$t, smooth = TRUE) {
   if (is.numeric(fitted_dlm$pred_cred)) {
     if (0 < fitted_dlm$pred_cred & 1 > fitted_dlm$pred_cred) {
       distr_like <- c(sapply(fitted_dlm$outcomes, function(x) {
-        x$log.like
+        # x$log.like
+        sum(x$family$log.like(x$conj_prior_param, x$outcome, parms = x$parms)[-(1:metric_cutoff)], na.rm = TRUE)
       }))
       distr_rae <- c(sapply(fitted_dlm$outcomes, function(x) {
         pred <- t(x$pred)
         out <- x$outcome
         out <- ifelse(out == 0, 1, out)
-        mean(abs((pred - out) / out))
+        mean(abs((pred - out) / out)[-(1:metric_cutoff), ], na.rm = TRUE)
       }))
       pred_flag <- TRUE
     }

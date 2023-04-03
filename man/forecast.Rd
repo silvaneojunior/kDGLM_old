@@ -10,9 +10,10 @@ forecast(
   outcome = NULL,
   offset = NULL,
   FF = NULL,
+  G = NULL,
   D = NULL,
   W = NULL,
-  plot = TRUE,
+  plot = "dynamic",
   pred_cred = 0.95
 )
 }
@@ -24,6 +25,8 @@ forecast(
 \item{offset}{Matrix or scalar: offset for predictions. Should have dimensions k x t, where k is the number of outcomes of the model. If offset is not specified, the last value observed by the model will be used.}
 
 \item{FF}{Array: A 3D-array containing the regression matrix for each time. It's dimension should be n x k x t, where n is the number of latent variables, k is the number of outcomes in the model. If not specified, the last value given to the model will be used.}
+
+\item{G}{Array: A 3D-array containing the evolution matrix for each time. It's dimension should be n x n x t, where n is the number of latent variables. If not specified, the last value given to the model will be used.}
 
 \item{D}{Array: A 3D-array containing the discount factor matrix for each time. It's dimension should be n x n x t, where n is the number of latent variables and T is the time series length. If not specified, the last value given to the model will be used in the first step, and 1 will be use thereafter.}
 
@@ -50,22 +53,15 @@ Makes predictions for t times ahead using the fitted model.
 }
 \examples{
 T <- 200
-w <- ((T + 20) / 40) * 2 * pi
-y1 <- matrix(rpois((T + 20), 20 * (sin(w * 1:(T + 20) / (T + 20)) + 2)), (T + 20), 1)
-y2 <- matrix(rpois((T + 20), 1:(T + 20) / (T + 20) + 1), (T + 20), 1)
-y3 <- matrix(rpois((T + 20), 6), (T + 20), 1)
-outcome <- cbind(y1, y2, y3)
-y_pred <- outcome[T:(T + 20), ]
+w <- (200 / 40) * 2 * pi
+data <- rpois(T, 20 * (sin(w * 1:T / T) + 2))
 
-outcome <- outcome[1:T, ]
+level <- polynomial_block(rate = 1, D = 1 / 0.95)
+season <- harmonic_block(rate = 1, period = 40, D = 1 / 0.98)
 
-level_1 <- polynomial_block(order = 1, values = c(1, 0), by_time = FALSE)
-level_2 <- polynomial_block(order = 2, values = c(0, 1), by_time = FALSE)
-season_2 <- harmonic_block(period = 20, values = c(0, 1), by_time = FALSE)
+outcome <- Poisson(lambda = "rate", outcome = data)
 
+fitted_data <- fit_model(level, season, outcomes = outcome)
 
-fitted_data <- fit_model(level_1, level_2, season_2, outcome = outcome, family = "Multinomial")
-show_fit(fitted_data, smooth = TRUE)$plot
-
-forecast(fitted_data, 20, outcome = y_pred)$plot
+forecast(fitted_data, 20)$plot
 }

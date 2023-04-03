@@ -25,7 +25,7 @@ analytic_filter(
 
 \item{FF}{Array: A 3D-array containing the regression matrix for each time. It's dimension should be n x m x T, where n is the number of latent variables, m is the number of outcomes in the model and T is the time series length.}
 
-\item{G}{Matrix: The state evolution matrix.}
+\item{G}{Array: A 3D-array containing the state evolution matrix at each time.}
 
 \item{D}{Array: A 3D-array containing the discount factor matrix for each time. It's dimension should be n x n x T, where n is the number of latent variables and T is the time series length.}
 

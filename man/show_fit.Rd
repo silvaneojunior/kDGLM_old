@@ -7,7 +7,7 @@
 show_fit(model, pred_cred = 0.95, smooth = TRUE, dynamic = TRUE, h = 0)
 }
 \arguments{
-\item{model}{fitted_dlm: A fitted DGLM model.}
+\item{model}{fitted_dlm: A fitted DGLM.}
 
 \item{pred_cred}{Numeric: The credibility value for the credibility interval.}
 

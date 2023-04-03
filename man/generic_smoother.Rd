@@ -15,7 +15,7 @@ generic_smoother(mt, Ct, at, Rt, G)
 
 \item{Rt}{Array: A 3D-array representing the one-step-ahead covariance matrix of the latent variables at each time based upon the filtered covariance matrix. The third dimension should represent the time index.}
 
-\item{G}{Matrix: A matrix representing the transition matrix of the model.}
+\item{G}{Array: A 3D-array representing the transition matrix of the model at each time.}
 }
 \value{
 List: The smoothed mean (mts) and covariance (Cts) of the latent variables at each time. Their dimension follows, respectivelly, the dimensions of mt and Ct.
@@ -28,9 +28,9 @@ T <- 20
 
 mt <- matrix(c(cumsum(rnorm(T) + 1), rep(1, T)), 2, T, byrow = TRUE)
 Ct <- array(diag(c(1, 1)), c(2, 2, T))
-G <- matrix(c(1, 0, 1, 1), 2, 2)
-at <- G \%*\% mt
-Rt <- array(G \%*\% t(G) + diag(c(0.1, 0.1)), c(2, 2, T))
+G <- array(c(1, 0, 1, 1), c(2, 2, T))
+at <- G[, , 1] \%*\% mt
+Rt <- array(G[, , 1] \%*\% t(G[, , 1]) + diag(c(0.1, 0.1)), c(2, 2, T))
 
 smoothed_values <- generic_smoother(mt, Ct, at, Rt, G)
 }
