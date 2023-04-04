@@ -28,9 +28,9 @@ T <- 20
 
 mt <- matrix(c(cumsum(rnorm(T) + 1), rep(1, T)), 2, T, byrow = TRUE)
 Ct <- array(diag(c(1, 1)), c(2, 2, T))
-G <- array(c(1, 0, 1, 1), c(2, 2,T))
-at <- G[,,1] \%*\% mt
-Rt <- array(G[,,1]  \%*\% t(G[,,1] ) + diag(c(0.1, 0.1)), c(2, 2, T))
+G <- array(c(1, 0, 1, 1), c(2, 2, T))
+at <- G[, , 1] \%*\% mt
+Rt <- array(G[, , 1] \%*\% t(G[, , 1]) + diag(c(0.1, 0.1)), c(2, 2, T))
 
 smoothed_values <- generic_smoother(mt, Ct, at, Rt, G)
 }

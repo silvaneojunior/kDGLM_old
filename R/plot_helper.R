@@ -38,7 +38,7 @@ show_fit <- function(model, pred_cred = 0.95, smooth = TRUE, dynamic = TRUE, h =
   t_last <- dim(model$mt)[2]
   eval <- eval_past(model, smooth = smooth, h = h, pred_cred = pred_cred)
 
-  obs_na_rm=eval$Observation[!is.na(eval$Observation)]
+  obs_na_rm <- eval$Observation[!is.na(eval$Observation)]
   max_value <- calcula_max(obs_na_rm - min(obs_na_rm))[[3]] + min(obs_na_rm)
   min_value <- -calcula_max(-(obs_na_rm - max(obs_na_rm)))[[3]] + max(obs_na_rm)
 

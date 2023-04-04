@@ -39,7 +39,7 @@ generic_smoother <- function(mt, Ct, at, Rt, G) {
 
   for (t in (T - 1):1) {
     mt_now <- mt[, t]
-    G_sep <- G[, , t+1]
+    G_sep <- G[, , t + 1]
     G_now <- G_sep
     G_diff <- rep(0, n)
     if (any(is.na(G_sep))) {
@@ -64,7 +64,7 @@ generic_smoother <- function(mt, Ct, at, Rt, G) {
     # Cts[var_ref, var_ref, t] <- restricted_Ct - simple_Rt_inv %*% (restricted_Rt - Cts[var_ref, var_ref, t + 1]) %*% t(simple_Rt_inv)
 
 
-    mts[, t]   <- mt_now        + simple_Rt_inv %*% (mts[,   t + 1] - at[, t + 1])
+    mts[, t] <- mt_now + simple_Rt_inv %*% (mts[, t + 1] - at[, t + 1])
     Cts[, , t] <- restricted_Ct + simple_Rt_inv %*% (Cts[, , t + 1] - restricted_Rt) %*% t(simple_Rt_inv)
   }
   model$Cts[3,3,]
@@ -158,7 +158,7 @@ analytic_filter <- function(outcomes, m0 = 0, C0 = 1, FF, G, D, W, p_monit = NA,
     p_monit
   }
   threshold <- log(c_monit) + log(p) - log(1 - p)
-  last_C_D=last_C
+  last_C_D <- last_C
 
   for (t in 1:T) {
     model_list <- if (is.na(p_monit)) {
@@ -170,7 +170,7 @@ analytic_filter <- function(outcomes, m0 = 0, C0 = 1, FF, G, D, W, p_monit = NA,
       D_p <- D[, , t]
       D_p[!D_flags[, , t]] <- D_p[!D_flags[, , t]] * D_mult[[model]]
 
-      next_step <- one_step_evolve(last_m, last_C, G[, , t], D_p**0, W[, , t] + diag(n) * W_add[[model]]+last_C_D*(D_p-1))
+      next_step <- one_step_evolve(last_m, last_C, G[, , t], D_p**0, W[, , t] + diag(n) * W_add[[model]] + last_C_D * (D_p - 1))
       models[[model]] <- list(
         "at" = next_step$at,
         "Rt" = next_step$Rt,
@@ -270,7 +270,7 @@ analytic_filter <- function(outcomes, m0 = 0, C0 = 1, FF, G, D, W, p_monit = NA,
         models[["null_model"]]$at_step <- mt_step <- mt_step + At %*% (ft_star - ft_step)
         models[["null_model"]]$Rt_step <- Ct_step <- Ct_step + At %*% (Qt_star - Qt_step) %*% t(At)
 
-        last_C_D=Ct_step
+        last_C_D <- Ct_step
       }
 
       at[, t] <- model$at
@@ -341,8 +341,8 @@ one_step_evolve <- function(m0, C0, G, D, W) {
 }
 
 calc_lin_pred <- function(at, Rt, FF) {
-  if(is.null(dim(FF))){
-    FF=matrix(FF,length(FF),1)
+  if (is.null(dim(FF))) {
+    FF <- matrix(FF, length(FF), 1)
   }
   n <- dim(FF)[1]
   k <- dim(FF)[2]

@@ -213,28 +213,21 @@ fit_model <- function(..., outcomes, pred_cred = 0.95, smooth_flag = TRUE, p_mon
 #'
 #' @examples
 #' T <- 200
-#' w <- ((T + 20) / 40) * 2 * pi
-#' y1 <- matrix(rpois((T + 20), 20 * (sin(w * 1:(T + 20) / (T + 20)) + 2)), (T + 20), 1)
-#' y2 <- matrix(rpois((T + 20), 1:(T + 20) / (T + 20) + 1), (T + 20), 1)
-#' y3 <- matrix(rpois((T + 20), 6), (T + 20), 1)
-#' outcome <- cbind(y1, y2, y3)
-#' y_pred <- outcome[T:(T + 20), ]
+#' w <- (200 / 40) * 2 * pi
+#' data <- rpois(T, 20 * (sin(w * 1:T / T) + 2))
 #'
-#' outcome <- outcome[1:T, ]
+#' level <- polynomial_block(rate = 1, D = 1 / 0.95)
+#' season <- harmonic_block(rate = 1, period = 40, D = 1 / 0.98)
 #'
-#' level_1 <- polynomial_block(order = 1, values = c(1, 0), by_time = FALSE)
-#' level_2 <- polynomial_block(order = 2, values = c(0, 1), by_time = FALSE)
-#' season_2 <- harmonic_block(period = 20, values = c(0, 1), by_time = FALSE)
+#' outcome <- Poisson(lambda = "rate", outcome = data)
 #'
+#' fitted_data <- fit_model(level, season, outcomes = outcome)
 #'
-#' fitted_data <- fit_model(level_1, level_2, season_2, outcome = outcome, family = "Multinomial")
-#' show_fit(fitted_data, smooth = TRUE)$plot
-#'
-#' forecast(fitted_data, 20, outcome = y_pred)$plot
-forecast <- function(model, t = 1, outcome = NULL, offset = NULL, FF = NULL, G=NULL, D = NULL, W = NULL, plot = 'dynamic', pred_cred = 0.95) {
+#' forecast(fitted_data, 20)$plot
+forecast <- function(model, t = 1, outcome = NULL, offset = NULL, FF = NULL, G = NULL, D = NULL, W = NULL, plot = "dynamic", pred_cred = 0.95) {
   n <- dim(model$mt)[1]
   t_last <- dim(model$mt)[2]
-  k=dim(model$FF)[2]
+  k <- dim(model$FF)[2]
   r <- sum(sapply(model$outcomes, function(x) {
     x$r
   }))
@@ -326,44 +319,45 @@ forecast <- function(model, t = 1, outcome = NULL, offset = NULL, FF = NULL, G=N
   last_m <- m0
   last_C <- C0
 
-  outcome_forecast=list()
-  for(outcome_name in names(model$outcomes)){
+  outcome_forecast <- list()
+  for (outcome_name in names(model$outcomes)) {
+    outcome_forecast[[outcome_name]]$conj_param <- matrix(NA, t, length(model$outcomes[[outcome_name]]$conj_prior_param)) %>% as.data.frame()
+    names(outcome_forecast[[outcome_name]]$conj_param) <- names(model$outcomes[[outcome_name]]$conj_prior_param)
 
-    outcome_forecast[[outcome_name]]$conj_param=matrix(NA,t,length(model$outcomes[[outcome_name]]$conj_prior_param)) %>% as.data.frame
-    names(outcome_forecast[[outcome_name]]$conj_param)=names(model$outcomes[[outcome_name]]$conj_prior_param)
-
-    if(!is.null(outcome)){
-      outcome_forecast[[outcome_name]]$outcome=outcome[[outcome_name]] %>% matrix(t,r)
-    }else{
-      outcome_forecast[[outcome_name]]$outcome=model$outcomes[[outcome_name]]$outcome[t_last,] %>% matrix(t,r)
+    if (!is.null(outcome)) {
+      outcome_forecast[[outcome_name]]$outcome <- outcome[[outcome_name]] %>% matrix(t, r)
+    } else {
+      outcome_forecast[[outcome_name]]$outcome <- model$outcomes[[outcome_name]]$outcome[t_last, ] %>% matrix(t, r)
     }
-    if(!is.null(offset)){
-      outcome_forecast[[outcome_name]]$offset=offset[[outcome_name]] %>% matrix(t,r)
-    }else{
-      outcome_forecast[[outcome_name]]$offset=model$outcomes[[outcome_name]]$offset[t_last,] %>% matrix(t,r)
+    if (!is.null(offset)) {
+      outcome_forecast[[outcome_name]]$offset <- offset[[outcome_name]] %>% matrix(t, r)
+    } else {
+      outcome_forecast[[outcome_name]]$offset <- model$outcomes[[outcome_name]]$offset[t_last, ] %>% matrix(t, r)
     }
   }
 
 
   for (t_i in c(1:t)) {
-    next_step <- one_step_evolve(last_m, last_C, G[,,t_i], D[, , t_i]**0, W[, , t_i] + C0 * (D[, , t_i]-1))
+    next_step <- one_step_evolve(last_m, last_C, G[, , t_i], D[, , t_i]**0, W[, , t_i] + C0 * (D[, , t_i] - 1))
     last_m <- next_step$at
     last_C <- next_step$Rt
     lin_pred <- calc_lin_pred(last_m, last_C, FF[, , t_i] %>% matrix(n, k))
     k_acum <- 0
-    for(outcome_name in names(model$outcomes)){
+    for (outcome_name in names(model$outcomes)) {
       k_cur <- outcome$r
 
-      model_i=model$outcomes[[outcome_name]]
+      model_i <- model$outcomes[[outcome_name]]
       pred_index <- match(model_i$var_names, fitted_data$var_names)
-      lin_pred_offset <- model_i$family$offset(lin_pred$ft[pred_index,,drop=FALSE],
-                                               lin_pred$Qt[pred_index,pred_index,drop=FALSE],
-                                               outcome_forecast[[outcome_name]]$offset[t_i, ])
+      lin_pred_offset <- model_i$family$offset(
+        lin_pred$ft[pred_index, , drop = FALSE],
+        lin_pred$Qt[pred_index, pred_index, drop = FALSE],
+        outcome_forecast[[outcome_name]]$offset[t_i, ]
+      )
       ft_canom <- model_i$convert_mat_canom %*% lin_pred_offset$ft
       Qt_canom <- model_i$convert_mat_canom %*% lin_pred_offset$Qt %*% t(model_i$convert_mat_canom)
 
       conj_prior <- model_i$family$conj_prior(ft_canom, Qt_canom, parms = model_i$parms)
-      outcome_forecast[[outcome_name]]$conj_param[t_i,]=conj_prior
+      outcome_forecast[[outcome_name]]$conj_param[t_i, ] <- conj_prior
     }
   }
 
@@ -371,23 +365,23 @@ forecast <- function(model, t = 1, outcome = NULL, offset = NULL, FF = NULL, G=N
   out_names <- rep(NA, r)
   output <- matrix(NA, t, r)
   for (outcome_name in names(model$outcomes)) {
-
-    model_i=model$outcomes[[outcome_name]]
+    model_i <- model$outcomes[[outcome_name]]
     k_cur <- model_i$r
 
     prediction <- model_i$family$pred(outcome_forecast[[outcome_name]]$conj_param,
-                                      outcome_forecast[[outcome_name]]$outcome,
-                                      pred_cred = pred_cred,
-                                      parms = model_i$parms)
+      outcome_forecast[[outcome_name]]$outcome,
+      pred_cred = pred_cred,
+      parms = model_i$parms
+    )
 
 
-    outcome_forecast[[outcome_name]]$pred=prediction$pred
-    outcome_forecast[[outcome_name]]$var.pred=prediction$var.pred
-    outcome_forecast[[outcome_name]]$icl.pred=prediction$icl.pred
-    outcome_forecast[[outcome_name]]$icu.pred=prediction$icu.pred
+    outcome_forecast[[outcome_name]]$pred <- prediction$pred
+    outcome_forecast[[outcome_name]]$var.pred <- prediction$var.pred
+    outcome_forecast[[outcome_name]]$icl.pred <- prediction$icl.pred
+    outcome_forecast[[outcome_name]]$icu.pred <- prediction$icu.pred
 
     pred[(k_acum + 1):(k_acum + k_cur), ] <- prediction$pred
-    var.pred[(k_acum + 1):(k_acum + k_cur),(k_acum + 1):(k_acum + k_cur), ] <- prediction$var.pred
+    var.pred[(k_acum + 1):(k_acum + k_cur), (k_acum + 1):(k_acum + k_cur), ] <- prediction$var.pred
     icl.pred[(k_acum + 1):(k_acum + k_cur), ] <- prediction$icl.pred
     icu.pred[(k_acum + 1):(k_acum + k_cur), ] <- prediction$icu.pred
 
@@ -398,7 +392,7 @@ forecast <- function(model, t = 1, outcome = NULL, offset = NULL, FF = NULL, G=N
     } else {
       out_names[(k_acum + 1):(k_acum + k_cur)] <- outcome_name
     }
-    if(!is.null(outcome)){
+    if (!is.null(outcome)) {
       output[, (k_acum + 1):(k_acum + k_cur)] <- outcome_forecast[[outcome_name]]$outcome
     }
 
@@ -409,7 +403,7 @@ forecast <- function(model, t = 1, outcome = NULL, offset = NULL, FF = NULL, G=N
   data_name <- c("Observation", "Prediction", "C.I.lower", "C.I.upper")
 
   data_raw <- lapply(1:4, function(i) {
-    data <- cbind(as.character(1:t+t_last) %>% as.data.frame(), data_list[[i]]) %>%
+    data <- cbind(as.character(1:t + t_last) %>% as.data.frame(), data_list[[i]]) %>%
       as.data.frame() %>%
       pivot_longer(1:r + 1) %>%
       mutate(name = as.factor(name))
@@ -426,30 +420,32 @@ forecast <- function(model, t = 1, outcome = NULL, offset = NULL, FF = NULL, G=N
     data
   }, data_raw) %>% mutate(Time = as.numeric(Time), Serie = as.factor(Serie))
 
-  data_past=eval_past(model,smooth=TRUE,pred_cred=pred_cred)
-  plot_data=rbind(cbind(data_past,type='Past'),
-                  cbind(data,type='Forecast'))
+  data_past <- eval_past(model, smooth = TRUE, pred_cred = pred_cred)
+  plot_data <- rbind(
+    cbind(data_past, type = "Past"),
+    cbind(data, type = "Forecast")
+  )
 
-  return_list=list(data=plot_data,forecast=data,outcomes=outcome_forecast)
+  return_list <- list(data = plot_data, forecast = data, outcomes = outcome_forecast)
 
-  if (plot!=FALSE) {
-    obs_na_rm=data_past$Observation[!is.na(data_past$Observation)]
+  if (plot != FALSE) {
+    obs_na_rm <- data_past$Observation[!is.na(data_past$Observation)]
     max_value <- calcula_max(obs_na_rm - min(obs_na_rm))[[3]] + min(obs_na_rm)
     min_value <- -calcula_max(-(obs_na_rm - max(obs_na_rm)))[[3]] + max(obs_na_rm)
 
-    plt.obj <- ggplot(plot_data, aes(x = Time, color = Serie, fill = Serie, linetype = type, shape=type)) +
-        geom_line(aes(y = Prediction,group='Fit')) +
-        geom_ribbon(aes(ymin = C.I.lower, ymax = C.I.upper,group='C.I.'), alpha = 0.25) +
-        geom_point(aes(y = Observation,group='Observations')) +
-        scale_fill_hue("", na.value = NA) +
-        scale_color_hue("", na.value = NA) +
-        scale_linetype_manual("", values = c("dashed", "solid")) +
-        scale_shape_manual("", values = c(17, 16)) +
-        scale_x_continuous("Time") +
-        scale_y_continuous("$y_t$") +
-        theme_bw() +
-        coord_cartesian(ylim = c(min_value, max_value))
-    if(plot=='dynamic'){
+    plt.obj <- ggplot(plot_data, aes(x = Time, color = Serie, fill = Serie, linetype = type, shape = type)) +
+      geom_line(aes(y = Prediction, group = "Fit")) +
+      geom_ribbon(aes(ymin = C.I.lower, ymax = C.I.upper, group = "C.I."), alpha = 0.25) +
+      geom_point(aes(y = Observation, group = "Observations")) +
+      scale_fill_hue("", na.value = NA) +
+      scale_color_hue("", na.value = NA) +
+      scale_linetype_manual("", values = c("dashed", "solid")) +
+      scale_shape_manual("", values = c(17, 16)) +
+      scale_x_continuous("Time") +
+      scale_y_continuous("$y_t$") +
+      theme_bw() +
+      coord_cartesian(ylim = c(min_value, max_value))
+    if (plot == "dynamic") {
       if (!requireNamespace("plotly", quietly = TRUE)) {
         warning("The plotly package is required for dynamic plots.")
       } else {
@@ -559,15 +555,16 @@ eval_past <- function(model, smooth = FALSE, h = 0, pred_cred = 0.95) {
       }
     }
     # next_step <- one_step_evolve(mt, Ct, FF[, , i] %>% matrix(n, r), G, D[, , i], W[, , i])
+    lin_pred <- calc_lin_pred(next_step$at %>% matrix(n, 1), next_step$Rt, FF[, , i] %>% matrix(n, r))
+
     k_acum <- 0
     for (outcome in model$outcomes) {
       k_cur <- outcome$r
 
       pred_index <- match(outcome$var_names, model$var_names)
       k_i <- length(pred_index)
-      FF_step <- matrix(FF[, pred_index, i], n, k_i)
-      lin_pred <- calc_lin_pred(next_step$at, next_step$Rt, FF_step)
-      cur_step <- outcome$family$offset(lin_pred$ft, lin_pred$Qt, outcome$offset[i, ])
+
+      cur_step <- outcome$family$offset(lin_pred$ft[pred_index, , drop = FALSE], lin_pred$Qt[pred_index, pred_index, drop = FALSE], outcome$offset[i, ])
 
       ft_canom <- outcome$convert_mat_canom %*% cur_step$ft
       Qt_canom <- outcome$convert_mat_canom %*% cur_step$Qt %*% t(outcome$convert_mat_canom)
@@ -713,7 +710,7 @@ dlm_sampling <- function(model, sample_size) {
     outcomes[[outcome_name]]$k_i <- k_i
     outcomes[[outcome_name]]$pred_index <- pred_index
 
-    ft_sample_i_out <- outcomes[[outcome_name]]$offset(ft_sample_i[outcomes[[outcome_name]]$pred_index, ], diag(k) * 0, if (na.flag) {
+    ft_sample_i_out <- outcomes[[outcome_name]]$offset(ft_sample_i[outcomes[[outcome_name]]$pred_index, , drop = FALSE], diag(k) * 0, if (na.flag) {
       1
     } else {
       offset_step
@@ -734,7 +731,7 @@ dlm_sampling <- function(model, sample_size) {
     Ct <- model$Ct[, , t]
 
     mt_now <- mt[, t]
-    G_ref=G[, , t+1]
+    G_ref <- G[, , t + 1]
     G_now <- G_ref
     G_diff <- rep(0, n)
     if (any(is.na(G_ref))) {
@@ -769,7 +766,7 @@ dlm_sampling <- function(model, sample_size) {
     }
 
     for (outcome_name in names(outcomes)) {
-      ft_sample_i_out <- outcomes[[outcome_name]]$offset(ft_sample_i[outcomes[[outcome_name]]$pred_index, ], diag(k) * 0, if (na.flag) {
+      ft_sample_i_out <- outcomes[[outcome_name]]$offset(ft_sample_i[outcomes[[outcome_name]]$pred_index, , drop = FALSE], diag(k) * 0, if (na.flag) {
         1
       } else {
         offset_step
