@@ -33,7 +33,7 @@
 #' summary(fitted_data)
 #'
 #' show_fit(fitted_data, smooth = TRUE)$plot
-show_fit <- function(model, pred_cred = 0.95, smooth = TRUE, dynamic = TRUE, h = 0) {
+show_fit <- function(model, pred_cred = 0.95, smooth = model$smooth, dynamic = TRUE, h = 0) {
   n <- dim(model$mt)[1]
   t_last <- dim(model$mt)[2]
   eval <- eval_past(model, smooth = smooth, h = h, pred_cred = pred_cred)
@@ -107,7 +107,7 @@ show_fit <- function(model, pred_cred = 0.95, smooth = TRUE, dynamic = TRUE, h =
 #'
 #' fitted_data <- fit_model(level, season, outcomes = outcome)
 #' plot_lat_var(fitted_data, "effect", smooth = TRUE)$plot
-plot_lat_var <- function(model, var = "", smooth = TRUE, cut_off = 10, pred_cred = 0.95, dynamic = TRUE) {
+plot_lat_var <- function(model, var = "", smooth = model$smooth, cut_off = 10, pred_cred = 0.95, dynamic = TRUE) {
   if (!any(grepl(var, names(model$names)))) {
     stop(paste0("Error: Invalid selected variable. Got ", var, ", expected one of the following:\n", names(model$names)))
   }

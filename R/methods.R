@@ -22,7 +22,7 @@ summary.dlm_distr <- function(dlm_distr) {
 #' summary method for class fitted_dlm
 #'
 #' @export
-summary.fitted_dlm <- function(fitted_dlm, t = fitted_dlm$t, smooth = TRUE, metric_cutoff = round(fitted_dlm$t / 10)) {
+summary.fitted_dlm <- function(fitted_dlm, t = fitted_dlm$t, smooth = fitted_dlm$smooth, metric_cutoff = round(fitted_dlm$t / 10)) {
   distr_names <- c(sapply(fitted_dlm$outcomes, function(x) {
     x$name
   }))
@@ -135,7 +135,7 @@ summary.fitted_dlm <- function(fitted_dlm, t = fitted_dlm$t, smooth = TRUE, metr
 #' plot method for class fitted_dlm
 #'
 #' @export
-plot.fitted_dlm <- function(model, pred_cred = 0.95, smooth = TRUE, dynamic = TRUE, h = 0) {
+plot.fitted_dlm <- function(model, pred_cred = 0.95, smooth = model$smooth, dynamic = TRUE, h = 0) {
   show_fit(model, pred_cred, smooth, dynamic, h)$plot
 }
 
@@ -151,7 +151,7 @@ print.fitted_dlm <- summary.fitted_dlm
 #' effects method for class fitted_dlm
 #'
 #' @export
-effects.fitted_dlm <- function(fitted_dlm, t = fitted_dlm$t, smooth = TRUE) {
+effects.fitted_dlm <- function(fitted_dlm, t = fitted_dlm$t, smooth = fitted_dlm$smooth) {
   if (fitted_dlm$smooth & smooth) {
     fitted_dlm$mts[, t]
   } else {
@@ -164,7 +164,7 @@ effects.fitted_dlm <- function(fitted_dlm, t = fitted_dlm$t, smooth = TRUE) {
 #' fitted.values method for class fitted_dlm
 #'
 #' @export
-fitted.values.fitted_dlm <- function(fitted_dlm, smooth = TRUE, h = 0, pred_cred = 0.95) {
+fitted.values.fitted_dlm <- function(fitted_dlm, smooth = fitted_dlm$smooth, h = 0, pred_cred = 0.95) {
   eval_past(fitted_dlm, smooth, h, pred_cred)
 }
 

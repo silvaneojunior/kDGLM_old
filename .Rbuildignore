@@ -3,3 +3,5 @@ Multinom/*
 reports/*
 data/*
 ^LICENSE\.md$
+^.*\.Rproj$
+^\.Rproj\.user$
