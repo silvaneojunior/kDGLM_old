@@ -24,12 +24,6 @@
 #' smoothed_values <- generic_smoother(mt, Ct, at, Rt, G)
 generic_smoother <- function(mt, Ct, at, Rt, G) {
 
-  mt=model$mt
-  Ct=model$Ct
-  at=model$at
-  Rt=model$Rt
-  G=model$G
-
   T <- dim(mt)[2]
   n <- dim(mt)[1]
   mts <- mt
@@ -67,8 +61,6 @@ generic_smoother <- function(mt, Ct, at, Rt, G) {
     mts[, t] <- mt_now + simple_Rt_inv %*% (mts[, t + 1] - at[, t + 1])
     Cts[, , t] <- restricted_Ct + simple_Rt_inv %*% (Cts[, , t + 1] - restricted_Rt) %*% t(simple_Rt_inv)
   }
-  model$Cts[3,3,]
-  Cts[3,3,]
   return(list("mts" = mts, "Cts" = Cts))
 }
 
