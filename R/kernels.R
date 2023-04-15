@@ -23,7 +23,6 @@
 #'
 #' smoothed_values <- generic_smoother(mt, Ct, at, Rt, G)
 generic_smoother <- function(mt, Ct, at, Rt, G) {
-
   T <- dim(mt)[2]
   n <- dim(mt)[1]
   mts <- mt
@@ -126,7 +125,7 @@ analytic_filter <- function(outcomes, m0 = 0, C0 = 1, FF, G, D, W, p_monit = NA,
     if (class(outcomes[[outcome_name]]) != "dlm_distr") {
       stop(paste0("Error: Outcome contains is not of the right class Expected a dlm_distr object, got a ", class(outcomes[[outcome_name]]), " object."))
     }
-    param_names <- outcomes[[outcome_name]]$family$param_names(outcomes[[outcome_name]]$outcome)
+    param_names <- outcomes[[outcome_name]]$param_names(outcomes[[outcome_name]]$outcome)
     outcomes[[outcome_name]]$conj_prior_param <- matrix(NA, T, length(param_names)) %>% as.data.frame()
     names(outcomes[[outcome_name]]$conj_prior_param) <- param_names
     outcomes[[outcome_name]]$conj_post_param <- outcomes[[outcome_name]]$conj_prior_param
@@ -162,7 +161,7 @@ analytic_filter <- function(outcomes, m0 = 0, C0 = 1, FF, G, D, W, p_monit = NA,
       D_p <- D[, , t]
       D_p[!D_flags[, , t]] <- D_p[!D_flags[, , t]] * D_mult[[model]]
 
-      next_step <- one_step_evolve(last_m, last_C, G[, , t], D_p**0, W[, , t] + diag(n) * W_add[[model]] + last_C_D * (D_p - 1))
+      next_step <- one_step_evolve(last_m, last_C, G[, , t] %>% matrix(n, n), D_p**0, W[, , t] + diag(n) * W_add[[model]] + last_C_D * (D_p - 1))
       models[[model]] <- list(
         "at" = next_step$at,
         "Rt" = next_step$Rt,
@@ -174,7 +173,6 @@ analytic_filter <- function(outcomes, m0 = 0, C0 = 1, FF, G, D, W, p_monit = NA,
       outcome <- outcomes[[outcome_name]]
       pred_index <- match(outcome$var_names, var_names)
       k_i <- length(pred_index)
-      family <- outcome$family
       FF_step <- matrix(FF[, pred_index, t], n, k_i)
 
       offset_step <- outcome$offset[t, ]
@@ -184,7 +182,7 @@ analytic_filter <- function(outcomes, m0 = 0, C0 = 1, FF, G, D, W, p_monit = NA,
         Rt_step <- models[[model]]$Rt_step
 
         lin_pred <- calc_lin_pred(at_step, Rt_step, FF_step)
-        next_step <- family$offset(lin_pred$ft, lin_pred$Qt, if (na.flag) {
+        next_step <- outcome$apply_offset(lin_pred$ft, lin_pred$Qt, if (na.flag) {
           1
         } else {
           offset_step
@@ -192,7 +190,7 @@ analytic_filter <- function(outcomes, m0 = 0, C0 = 1, FF, G, D, W, p_monit = NA,
         ft_canom <- outcome$convert_mat_canom %*% next_step$ft
         Qt_canom <- outcome$convert_mat_canom %*% next_step$Qt %*% t(outcome$convert_mat_canom)
 
-        conj_prior <- family$conj_prior(ft_canom, Qt_canom, parms = outcome$parms)
+        conj_prior <- outcome$conj_prior(ft_canom, Qt_canom, parms = outcome$parms)
 
         models[[model]] <- list(
           "at" = models[[model]]$at,
@@ -203,7 +201,7 @@ analytic_filter <- function(outcomes, m0 = 0, C0 = 1, FF, G, D, W, p_monit = NA,
           "Qt_step" = next_step$Qt,
           "FF_step" = lin_pred$FF,
           "conj_prior" = conj_prior,
-          "log_like" = family$log.like(conj_prior, outcome$outcome[t, ], parms = outcome$parms)
+          "log_like" = outcome$calc_pred(conj_prior, outcome$outcome[t, ], parms = outcome$parms, pred_cred = NA)$log.like
         )
       }
       outcomes[[outcome_name]]$log.like.null[t] <- models$null_model$log_like
@@ -246,14 +244,13 @@ analytic_filter <- function(outcomes, m0 = 0, C0 = 1, FF, G, D, W, p_monit = NA,
         norm_post <- list(ft = ft_step, Qt = Qt_step)
         outcomes[[outcome_name]]$conj_post_param[t, ] <- conj_prior
       } else {
-
         ft_canom <- outcome$convert_mat_canom %*% ft_step
         Qt_canom <- outcome$convert_mat_canom %*% Qt_step %*% t(outcome$convert_mat_canom)
-        conj_prior <- family$conj_prior(ft_canom, Qt_canom, parms = outcome$parms)
-        conj_post <- family$update(conj_prior, outcome$outcome[t, ], parms = outcome$parms)
+        conj_prior <- outcome$conj_prior(ft_canom, Qt_canom, parms = outcome$parms)
+        conj_post <- outcome$update(conj_prior, outcome$outcome[t, ], parms = outcome$parms)
 
         outcomes[[outcome_name]]$conj_post_param[t, ] <- conj_post
-        norm_post <- family$conj_post(conj_post, parms = outcome$parms)
+        norm_post <- outcome$conj_post(conj_post, parms = outcome$parms)
 
         ft_star <- norm_post$ft <- outcome$convert_mat_default %*% norm_post$ft
         Qt_star <- norm_post$Qt <- outcome$convert_mat_default %*% norm_post$Qt %*% t(outcome$convert_mat_default)
@@ -275,7 +272,6 @@ analytic_filter <- function(outcomes, m0 = 0, C0 = 1, FF, G, D, W, p_monit = NA,
       for (outcome_name in names(outcomes)) {
         outcome <- outcomes[[outcome_name]]
         pred_index <- match(outcome$var_names, var_names)
-        family <- outcome$family
 
         offset_step <- outcome$offset[t, ]
         na.flag <- any(is.null(offset_step) | any(offset_step == 0) | any(is.na(offset_step)))
@@ -284,7 +280,7 @@ analytic_filter <- function(outcomes, m0 = 0, C0 = 1, FF, G, D, W, p_monit = NA,
           ft = lin_pred_ref$ft[pred_index, , drop = FALSE],
           Qt = lin_pred_ref$Qt[pred_index, pred_index, drop = FALSE]
         )
-        next_step <- family$offset(lin_pred$ft, lin_pred$Qt, if (na.flag) {
+        next_step <- outcome$apply_offset(lin_pred$ft, lin_pred$Qt, if (na.flag) {
           1
         } else {
           offset_step
@@ -293,7 +289,7 @@ analytic_filter <- function(outcomes, m0 = 0, C0 = 1, FF, G, D, W, p_monit = NA,
         ft_canom <- outcome$convert_mat_canom %*% next_step$ft
         Qt_canom <- outcome$convert_mat_canom %*% next_step$Qt %*% t(outcome$convert_mat_canom)
 
-        conj_prior <- family$conj_prior(ft_canom, Qt_canom, parms = outcome$parms)
+        conj_prior <- outcome$conj_prior(ft_canom, Qt_canom, parms = outcome$parms)
         outcomes[[outcome_name]]$conj_prior_param[t, ] <- conj_prior
       }
 
@@ -355,52 +351,4 @@ calc_lin_pred <- function(at, Rt, FF) {
   ft <- (t(FF_step) %*% at)
   Qt <- as.matrix(t(FF_step) %*% Rt %*% FF_step)
   list("ft" = ft - charge, "Qt" = Qt, "FF" = FF_step)
-}
-
-ident_offset <- function(ft, Qt, offset) {
-  r <- dim(ft)[1]
-  t <- dim(ft)[2]
-  if (t == 1) {
-    return(
-      list("ft" = ft * offset, "Qt" = Qt * offset %*% t(offset))
-    )
-  } else {
-    offset_ft <- matrix(offset, r, t)
-    offset_Qt <- array(offset %*% t(offset), c(r, r, t))
-  }
-}
-
-ident_log_offset <- function(ft, Qt, offset) {
-  ft[1, ] <- ft[1, ] * offset
-  ft[2, ] <- ft[2, ] - log(offset)
-
-  Qt[1, ] <- Qt[1, ] * offset
-  Qt[, 1] <- Qt[, 1] * offset
-  return(
-    list("ft" = ft, "Qt" = Qt)
-  )
-}
-
-log_offset <- function(ft, Qt, offset) {
-  r <- dim(ft)[1]
-  t <- if.null(dim(ft)[2],1)
-  if (t > 1) {
-    offset <- matrix(offset, length(offset), t)
-  }
-  list("ft" = ft + log(offset), "Qt" = Qt)
-}
-
-logit_offset <- function(ft, Qt, offset) {
-  r <- dim(ft)[1]
-  t <- dim(ft)[2]
-  if (t > 1) {
-    offset <- matrix(offset, length(offset), t)
-    return(list("ft" = ft + log(offset[1:r, ] / offset[r + 1, ]), "Qt" = Qt))
-  } else {
-    return(list("ft" = ft + log(offset[1:r] / offset[r + 1]), "Qt" = Qt))
-  }
-}
-
-log_offset_half <- function(ft, Qt, offset) {
-  list("ft" = ft + matrix(c(0, log(offset)), 2, dim(ft)[2]), "Qt" = Qt)
 }

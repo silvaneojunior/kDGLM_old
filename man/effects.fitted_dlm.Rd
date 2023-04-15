@@ -4,7 +4,7 @@
 \alias{effects.fitted_dlm}
 \title{effects.fitted_dlm}
 \usage{
-\method{effects}{fitted_dlm}(fitted_dlm, t = fitted_dlm$t, smooth = TRUE)
+\method{effects}{fitted_dlm}(fitted_dlm, t = fitted_dlm$t, smooth = fitted_dlm$smooth)
 }
 \description{
 effects method for class fitted_dlm

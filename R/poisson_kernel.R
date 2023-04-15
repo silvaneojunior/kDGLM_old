@@ -27,12 +27,28 @@
 #'
 #' show_fit(fitted_data, smooth = TRUE)$plot
 Poisson <- function(lambda, outcome, offset = outcome**0) {
-  family <- poisson_kernel
+  distr <- list()
   t <- length(outcome)
   r <- 1
   convert_mat_default <- convert_mat_canom <- diag(r)
 
   distr <- list(
+    conj_prior = convert_Gamma_Normal,
+    conj_post = convert_Normal_Gamma,
+    update = update_Gamma,
+    smoother = generic_smoother,
+    calc_pred = poisson_pred,
+    apply_offset = function(ft, Qt, offset) {
+      t <- if.null(dim(ft)[2], 1)
+      offset <- matrix(offset, t, r)
+
+      list("ft" = ft + log(t(offset)), "Qt" = Qt)
+    },
+    link_function = log,
+    inv_link_function = exp,
+    param_names = function(y) {
+      c(paste0("alpha_", 1:dim(y)[2]), paste("beta_", 1:dim(y)[2]))
+    },
     var_names = c(lambda),
     family = family,
     r = r,
@@ -70,34 +86,6 @@ convert_Gamma_Normal <- function(ft, Qt, parms) {
   alpha <- (1 / h)
   beta <- alpha * exp(-ft - 0.5 * Qt)
   return(c(alpha, beta))
-}
-
-convert_Gamma_Normal_ord_1 <- function(ft, Qt, parms) {
-  # diag(Qt)=ifelse(diag(Qt)<0,0,diag(Qt))
-  h <- Qt
-  alpha <- (1 / h)
-  beta <- alpha * exp(-ft - 0.5 * Qt)
-  return(list("alpha" = alpha, "beta" = beta))
-}
-
-convert_Gamma_Normal_RN_default <- function(ft, Qt, parms) {
-  # diag(Qt)=ifelse(diag(Qt)<0,0,diag(Qt))
-  root <- multiroot(function(alpha) {
-    digamma(exp(alpha)) - log(exp(alpha)) + Qt / 2
-  }, start = 0)
-  alpha <- exp(root$root)
-  beta <- alpha * exp(-ft - 0.5 * Qt)
-  return(list("alpha" = alpha, "beta" = beta))
-}
-
-convert_Gamma_Normal_true <- function(ft, Qt, parms) {
-  # diag(Qt)=ifelse(diag(Qt)<0,0,diag(Qt))
-  root <- multiroot(function(alpha) {
-    digamma(exp(alpha)) - log(exp(alpha)) + Qt / 2
-  }, start = 0, rtol = 10**-20, maxiter = 1000)
-  alpha <- exp(root$root)
-  beta <- alpha * exp(-ft - 0.5 * Qt)
-  return(list("alpha" = alpha, "beta" = beta))
 }
 
 #' convert_Normal_Gamma
@@ -151,23 +139,6 @@ update_Gamma <- function(conj_prior, y, parms) {
   return(c(alpha, beta))
 }
 
-#' convert_Gamma_Normal_LB
-#'
-#' Calculate the parameters of the Gamma that approximates the given log-Normal distribuition following the approach proposed in ref: Migon.
-#'
-#' @param ft vector: A vector representing the means from the normal distribution.
-#' @param Qt matrix: A matrix representing the covariance matrix of the normal distribution.
-#' @param parms list: A list of extra known parameters of the distribuition. Not used in this function.
-#'
-#' @return The parameters of the posterior distribution.
-#' @export
-convert_Gamma_Normal_LB <- function(ft, Qt, parms) {
-  h <- -3 + 3 * sqrt(1 + 2 * Qt / 3)
-  alpha <- (1 / h)
-  beta <- alpha * exp(-ft + 0.5 * Qt)
-  return(c(alpha, beta))
-}
-
 #' poisson_pred
 #'
 #' Calculate the values for the predictive distribuition given the values of the parameter of the conjugated distribuition of the linear predictor.
@@ -185,6 +156,7 @@ convert_Gamma_Normal_LB <- function(ft, Qt, parms) {
 #'    \item var.pred vector/matrix: the variance of the predictive distribuition of a next observation. Same type and shape as the parameter in model.
 #'    \item icl.pred vector/matrix: the percentile of 100*((1-pred_cred)/2)% of the predictive distribuition of a next observation. Same type and shape as the parameter in model.
 #'    \item icu.pred vector/matrix: the percentile of 100*(1-(1-pred_cred)/2)% of the predictive distribuition of a next observation. Same type and shape as the parameter in model.
+#'    \item log.like vector: the The log likelihood for the outcome given the conjugated parameters.
 #' }
 #'
 #' @export
@@ -198,6 +170,9 @@ convert_Gamma_Normal_LB <- function(ft, Qt, parms) {
 #'
 #' poisson_pred(conj_param)
 poisson_pred <- function(conj_param, outcome = NULL, parms = list(), pred_cred = 0.95) {
+  pred.flag <- !is.na(pred_cred)
+  like.flag <- !is.null(outcome)
+
   r <- 1
   a <- conj_param[1:r] %>% t()
   b <- conj_param[(1 + r):(2 * r)] %>% t()
@@ -217,154 +192,34 @@ poisson_pred <- function(conj_param, outcome = NULL, parms = list(), pred_cred =
 
   N <- 5000
   for (i in (1:t)[!flags]) {
-
     sample_lambda <- rgamma(N, a[i], b[i])
     sample_y <- rpois(N, sample_lambda)
 
-    pred[, i] <- mean(sample_y)
-    var.pred[, , i] <- var(sample_y)
-    print(a[i])
-    print(b[i])
-    icl.pred[, i] <- quantile(sample_y, (1 - pred_cred) / 2)
-    icu.pred[, i] <- quantile(sample_y, 1 - (1 - pred_cred) / 2)
+    if (pred.flag) {
+      pred[, i] <- mean(sample_y)
+      var.pred[, , i] <- var(sample_y)
+      icl.pred[, i] <- quantile(sample_y, (1 - pred_cred) / 2)
+      icu.pred[, i] <- quantile(sample_y, 1 - (1 - pred_cred) / 2)
+    }
+    if (like.flag) {
+      log.like[i] <- log(mean(like.list)) + max.log.like
+    }
+  }
+  if (!pred.flag) {
+    pred <- NULL
+    var.pred <- NULL
+    icl.pred <- NULL
+    icu.pred <- NULL
+  }
+  if (!like.flag) {
+    log.like <- NULL
   }
 
   return(list(
     "pred" = pred,
     "var.pred" = var.pred,
     "icl.pred" = icl.pred,
-    "icu.pred" = icu.pred
+    "icu.pred" = icu.pred,
+    "log.like" = log.like
   ))
 }
-
-#' poisson_log_like
-#'
-#' Calculate the predictive log-likelyhood of the data given the values of the parameter of the conjugated distribuition of the linear predictor.
-#' The data is assumed to have Poisson distribuition with it's mean having distribuition Gamma with shape parameter a e rate parameter b.
-#' In this scenario, the marginal distribuition of the data is Negative Binomial with a as the dispersion parameter and b/(b+1) as the probability.
-#'
-#' @param conj_param List or data.frame: The parameters of the conjugated distribuition (Gamma) of the linear predictor.
-#' @param outcome Vector or matrix: The observed values at the current time.
-#' @param parms List (optional): A list of extra parameters for the model. Not used in this function.
-#'
-#' @return The predictive log-likelyhood of the observed data.
-#' @export
-#'
-#' @examples
-#'
-#' conj_param <- data.frame(
-#'   "a" = c(1:3),
-#'   "b" = c(3:1)
-#' )
-#'
-#' poisson_log_like(conj_param, rpois(3, 1))
-poisson_log_like <- function(conj_param, outcome, parms = list()) {
-  r <- 1
-  a <- conj_param[1:r] %>% t()
-  b <- conj_param[(1 + r):(2 * r)] %>% t()
-  t <- length(a)
-  pred <- matrix(NA, r, t)
-  var.pred <- array(NA, c(1, 1, t))
-  icl.pred <- matrix(NA, r, t)
-  icu.pred <- matrix(NA, r, t)
-  log.like <- rep(NA, t)
-  flags <- b > 1e-40
-
-  N <- 5000
-  log.like[flags] <- dnbinom(outcome[flags], a[flags], (b[flags] / (b[flags] + 1)), log = TRUE)
-
-  for (i in (1:t)[!flags]) {
-    sample_lambda <- rgamma(N, a[i], b[i])
-    sample_y <- rpois(N, sample_lambda)
-    log.like.list <- dpois(outcome[i], sample_lambda, log = TRUE)
-    max.log.like <- max(log.like.list)
-    like.list <- exp(log.like.list - max.log.like)
-    log.like[i] <- log(mean(like.list)) + max.log.like
-  }
-  return(log.like)
-}
-
-#' @export
-poisson_kernel <- list(
-  "conj_prior" = convert_Gamma_Normal,
-  "conj_post" = convert_Normal_Gamma,
-  "update" = update_Gamma,
-  "smoother" = generic_smoother,
-  "pred" = poisson_pred,
-  "log.like" = poisson_log_like,
-  "offset" = log_offset,
-  "link_function" = log,
-  "inv_link_function" = exp,
-  "param_names" = function(y) {
-    c(paste0("alpha_", 1:dim(y)[2]), paste("beta_", 1:dim(y)[2]))
-  },
-  "multi_var" = FALSE
-)
-
-#' @export
-poisson_kernel_ord1 <- list(
-  "conj_prior" = convert_Gamma_Normal_ord_1,
-  "conj_post" = convert_Normal_Gamma,
-  "update" = update_Gamma,
-  "smoother" = generic_smoother,
-  "pred" = poisson_pred,
-  "log.like" = poisson_log_like,
-  "link_function" = log,
-  "inv_link_function" = exp,
-  "offset" = log_offset,
-  "param_names" = function(y) {
-    c("alpha", "beta")
-  },
-  "multi_var" = FALSE
-)
-
-#' @export
-poisson_kernel_RN_default <- list(
-  "conj_prior" = convert_Gamma_Normal_RN_default,
-  "conj_post" = convert_Normal_Gamma,
-  "update" = update_Gamma,
-  "smoother" = generic_smoother,
-  "pred" = poisson_pred,
-  "log.like" = poisson_log_like,
-  "offset" = log_offset,
-  "link_function" = log,
-  "inv_link_function" = exp,
-  "param_names" = function(y) {
-    c("alpha", "beta")
-  },
-  "multi_var" = FALSE
-)
-
-#' @export
-poisson_kernel_true <- list(
-  "conj_prior" = convert_Gamma_Normal_true,
-  "conj_post" = convert_Normal_Gamma,
-  "update" = update_Gamma,
-  "smoother" = generic_smoother,
-  "pred" = poisson_pred,
-  "log.like" = poisson_log_like,
-  "offset" = log_offset,
-  "link_function" = log,
-  "inv_link_function" = exp,
-  "param_names" = function(y) {
-    c("alpha", "beta")
-  },
-  "multi_var" = FALSE
-)
-
-#' @export
-poisson_lb_kernel <- list(
-  "conj_prior" = convert_Gamma_Normal_LB,
-  "conj_post" = convert_Normal_Gamma,
-  "update" = update_Gamma,
-  "smoother" = generic_smoother,
-  "pred" = poisson_pred,
-  "log.like" = poisson_log_like,
-  "offset" = log_offset,
-  "link_function" = log,
-  "inv_link_function" = exp,
-  "param_names" = function(y) {
-    c("alpha", "beta")
-  },
-  "multi_var" = FALSE
-)

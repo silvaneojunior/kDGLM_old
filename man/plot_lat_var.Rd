@@ -7,10 +7,10 @@
 plot_lat_var(
   model,
   var = "",
-  smooth = TRUE,
+  smooth = model$smooth,
   cut_off = 10,
   pred_cred = 0.95,
-  dynamic = TRUE
+  plotly = requireNamespace("plotly", quietly = TRUE)
 )
 }
 \arguments{
@@ -24,7 +24,7 @@ plot_lat_var(
 
 \item{pred_cred}{Numeric: The credibility value for the credibility interval.}
 
-\item{dynamic}{Bool: A flag indicating if the created plot should be dynamic.}
+\item{plotly}{Bool: A flag indicating if plotly should be used to create plots.}
 }
 \value{
 A list containg:

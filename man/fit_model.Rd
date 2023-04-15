@@ -22,8 +22,6 @@ fit_model(
 
 \item{smooth_flag}{Bool: A flag indicating if the smoothed distribuition for the latent variables should be calculated.}
 
-\item{family}{String or <undefined class>: The list of functions (or it's name) used to fit the data. Should be choosed based on the distribution of the outcomes.}
-
 \item{offset}{Matrix: A matrix containing the offset value for the data. Dimesions should be the same as outcome.}
 }
 \value{

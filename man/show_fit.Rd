@@ -4,7 +4,13 @@
 \alias{show_fit}
 \title{show_fit}
 \usage{
-show_fit(model, pred_cred = 0.95, smooth = TRUE, dynamic = TRUE, h = 0)
+show_fit(
+  model,
+  pred_cred = 0.95,
+  smooth = model$smooth,
+  plotly = requireNamespace("plotly", quietly = TRUE),
+  h = 0
+)
 }
 \arguments{
 \item{model}{fitted_dlm: A fitted DGLM.}
@@ -13,7 +19,7 @@ show_fit(model, pred_cred = 0.95, smooth = TRUE, dynamic = TRUE, h = 0)
 
 \item{smooth}{Bool: A flag indicating if the smoothed should be used. If false, the filtered distribuition will be used.}
 
-\item{dynamic}{Bool: A flag indicating if the created plot should be dynamic.}
+\item{plotly}{Bool: A flag indicating if plotly should be used for creating plots.}
 
 \item{h}{Integer: A integer with the amount of steps ahead should be used for prediciton. Only used if smooth is false.}
 }

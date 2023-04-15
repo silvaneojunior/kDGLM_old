@@ -22,6 +22,7 @@ A list containing the following values:
    \item var.pred vector/matrix: the variance of the predictive distribuition of a next observation. Same type and shape as the parameter in model.
    \item icl.pred vector/matrix: the percentile of 100*((1-pred_cred)/2)% of the predictive distribuition of a next observation. Same type and shape as the parameter in model.
    \item icu.pred vector/matrix: the percentile of 100*(1-(1-pred_cred)/2)% of the predictive distribuition of a next observation. Same type and shape as the parameter in model.
+   \item log.like vector: the The log likelihood for the outcome given the conjugated parameters.
 }
 }
 \description{
@@ -31,6 +32,10 @@ In this scenario, the marginal distribuition of the data is also Normal.
 }
 \examples{
 
-#
-#
+ft <- c(0.5, -1 / 2, 0, -2.0)
+Qt <- diag(4)
+
+conj_param <- c(ft, Qt)
+
+normal_pred(conj_param, parms = list("Sigma" = diag(4)))
 }

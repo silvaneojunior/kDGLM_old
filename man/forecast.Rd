@@ -13,7 +13,7 @@ forecast(
   G = NULL,
   D = NULL,
   W = NULL,
-  plot = "dynamic",
+  plot = ifelse(requireNamespace("plotly", quietly = TRUE), "plotly", TRUE),
   pred_cred = 0.95
 )
 }

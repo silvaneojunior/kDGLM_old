@@ -4,7 +4,7 @@
 \alias{plot.fitted_dlm}
 \title{plot.fitted_dlm}
 \usage{
-\method{plot}{fitted_dlm}(model, pred_cred = 0.95, smooth = TRUE, dynamic = TRUE, h = 0)
+\method{plot}{fitted_dlm}(model, pred_cred = 0.95, smooth = model$smooth, plotly = TRUE, h = 0)
 }
 \description{
 plot method for class fitted_dlm

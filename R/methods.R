@@ -23,28 +23,23 @@ summary.dlm_distr <- function(dlm_distr) {
 #'
 #' @export
 summary.fitted_dlm <- function(fitted_dlm, t = fitted_dlm$t, smooth = fitted_dlm$smooth, metric_cutoff = round(fitted_dlm$t / 10)) {
-  distr_names <- c(sapply(fitted_dlm$outcomes, function(x) {
-    x$name
-  }))
-  distr_names_len <- max(nchar(names(distr_names)))
-  pred_flag <- FALSE
-  distr_like <- NULL
-  distr_rae <- NULL
-  if (is.numeric(fitted_dlm$pred_cred)) {
-    if (0 < fitted_dlm$pred_cred & 1 > fitted_dlm$pred_cred) {
-      distr_like <- c(sapply(fitted_dlm$outcomes, function(x) {
-        # x$log.like
-        sum(x$family$log.like(x$conj_prior_param, x$outcome, parms = x$parms)[-(1:metric_cutoff)], na.rm = TRUE)
-      }))
-      distr_rae <- c(sapply(fitted_dlm$outcomes, function(x) {
-        pred <- t(x$pred)
-        out <- x$outcome
-        out <- ifelse(out == 0, 1, out)
-        mean(abs((pred - out) / out)[-(1:metric_cutoff), ], na.rm = TRUE)
-      }))
-      pred_flag <- TRUE
-    }
+  r <- length(fitted_dlm$outcomes)
+  distr_names <- list()
+  distr_like <- rep(NA, r)
+  distr_rae <- rep(NA, r)
+  for (outcome_index in 1:r) {
+    outcome <- fitted_dlm$outcomes[[outcome_index]]
+    distr_names[names(fitted_dlm$outcomes)[outcome_index]] <- outcome$name
+
+    prediction <- outcome$calc_pred(outcome$conj_prior_param, outcome$outcome, parms = outcome$parms, pred_cred = 0.95)
+    distr_like[outcome_index] <- sum(prediction$log.like[-(1:metric_cutoff)], na.rm = TRUE)
+
+    pred <- t(prediction$pred)
+    out <- outcome$outcome
+    out <- ifelse(out == 0, 1, out)
+    distr_rae[outcome_index] <- mean(abs((pred - out) / out)[-(1:metric_cutoff), ], na.rm = TRUE)
   }
+  distr_names_len <- max(sapply(distr_names, length))
 
   coef_label <- if (fitted_dlm$smooth & smooth) {
     "smoothed"
@@ -97,16 +92,14 @@ summary.fitted_dlm <- function(fitted_dlm, t = fitted_dlm$t, smooth = fitted_dlm
     p_val_str
   )
 
-  if (pred_flag) {
-    distr_like <- ifelse(abs(distr_like) < 0.00001,
-      format(distr_like, digits = 4, width = 14, justify = "l", scientific = TRUE),
-      format(round(distr_like, 5), width = 14, justify = "l", scientific = FALSE)
-    )
-    distr_rae <- ifelse(abs(distr_rae) < 0.00001,
-      format(distr_rae, digits = 4, width = 21, justify = "l", scientific = TRUE),
-      format(round(distr_rae, 5), width = 21, justify = "l", scientific = FALSE)
-    )
-  }
+  distr_like <- ifelse(abs(distr_like) < 0.00001,
+    format(distr_like, digits = 4, width = 14, justify = "l", scientific = TRUE),
+    format(round(distr_like, 5), width = 14, justify = "l", scientific = FALSE)
+  )
+  distr_rae <- ifelse(abs(distr_rae) < 0.00001,
+    format(distr_rae, digits = 4, width = 21, justify = "l", scientific = TRUE),
+    format(round(distr_rae, 5), width = 21, justify = "l", scientific = FALSE)
+  )
 
   cat(paste0(
     "Fitted DGLM with ", length(fitted_dlm$outcomes), " outcomes.\n\n",
@@ -118,15 +111,9 @@ summary.fitted_dlm <- function(fitted_dlm, t = fitted_dlm$t, smooth = fitted_dlm
     "---\n",
     "Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1\n\n",
     "---\n",
-    if (pred_flag) {
-      paste0(
-        format(" ", width = distr_names_len, justify = "l"), "  Pred. log-like  Relative abs. Error\n",
-        paste0(format(names(distr_names), width = distr_names_len, justify = "l"), ": ", distr_like, distr_rae, "\n", collapse = ""),
-        "---"
-      )
-    } else {
-      ""
-    }
+    format(" ", width = distr_names_len, justify = "l"), "  Pred. log-like  Relative abs. Error\n",
+    paste0(format(names(distr_names), width = distr_names_len, justify = "l"), ": ", distr_like, distr_rae, "\n", collapse = ""),
+    "---"
   ))
 }
 
@@ -135,8 +122,8 @@ summary.fitted_dlm <- function(fitted_dlm, t = fitted_dlm$t, smooth = fitted_dlm
 #' plot method for class fitted_dlm
 #'
 #' @export
-plot.fitted_dlm <- function(model, pred_cred = 0.95, smooth = model$smooth, dynamic = TRUE, h = 0) {
-  show_fit(model, pred_cred, smooth, dynamic, h)$plot
+plot.fitted_dlm <- function(model, pred_cred = 0.95, smooth = model$smooth, plotly = TRUE, h = 0) {
+  show_fit(model, pred_cred, smooth, plotly, h)$plot
 }
 
 #' print.fitted_dlm

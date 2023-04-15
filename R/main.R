@@ -4,7 +4,6 @@
 #'
 #' @param ... dlm_block object: The structural blocks of the model.
 #' @param outcomes List: The observed data. It should contain objects of the class dlm_distr.
-#' @param family String or <undefined class>: The list of functions (or it's name) used to fit the data. Should be choosed based on the distribution of the outcomes.
 #' @param offset Matrix: A matrix containing the offset value for the data. Dimesions should be the same as outcome.
 #' @param pred_cred Numeric: A number between 0 and 1 (not included) indicanting the credibility interval for predictions. If not within the valid range of values, predicitions are not made.
 #' @param smooth_flag Bool: A flag indicating if the smoothed distribuition for the latent variables should be calculated.
@@ -157,17 +156,14 @@ fit_model <- function(..., outcomes, pred_cred = 0.95, smooth_flag = TRUE, p_mon
   }
   for (outcome_name in names(model$outcomes)) {
     outcome <- model$outcomes[[outcome_name]]
-    if (is.numeric(pred_cred)) {
-      if (0 < pred_cred & 1 > pred_cred) {
-        prediction <- outcome$family$pred(outcome$conj_prior_param, outcome$outcome, pred_cred = pred_cred, parms = outcome$parms)
 
-        model$outcomes[[outcome_name]]$pred <- prediction$pred
-        model$outcomes[[outcome_name]]$var.pred <- prediction$var.pred
-        model$outcomes[[outcome_name]]$icl.pred <- prediction$icl.pred
-        model$outcomes[[outcome_name]]$icu.pred <- prediction$icu.pred
-      }
-    }
-    model$outcomes[[outcome_name]]$log.like <- sum(outcome$family$log.like(outcome$conj_prior_param, outcome$outcome, parms = outcome$parms))
+    prediction <- outcome$calc_pred(outcome$conj_prior_param, outcome$outcome, pred_cred = pred_cred, parms = outcome$parms)
+
+    model$outcomes[[outcome_name]]$pred <- prediction$pred
+    model$outcomes[[outcome_name]]$var.pred <- prediction$var.pred
+    model$outcomes[[outcome_name]]$icl.pred <- prediction$icl.pred
+    model$outcomes[[outcome_name]]$icu.pred <- prediction$icu.pred
+    model$outcomes[[outcome_name]]$log.like <- prediction$log.like
   }
   model$m0 <- structure$m0
   model$C0 <- structure$C0
@@ -224,7 +220,7 @@ fit_model <- function(..., outcomes, pred_cred = 0.95, smooth_flag = TRUE, p_mon
 #' fitted_data <- fit_model(level, season, outcomes = outcome)
 #'
 #' forecast(fitted_data, 20)$plot
-forecast <- function(model, t = 1, outcome = NULL, offset = NULL, FF = NULL, G = NULL, D = NULL, W = NULL, plot = "dynamic", pred_cred = 0.95) {
+forecast <- function(model, t = 1, outcome = NULL, offset = NULL, FF = NULL, G = NULL, D = NULL, W = NULL, plot = ifelse(requireNamespace("plotly", quietly = TRUE), "plotly", TRUE), pred_cred = 0.95) {
   n <- dim(model$mt)[1]
   t_last <- dim(model$mt)[2]
   k <- dim(model$FF)[2]
@@ -254,9 +250,9 @@ forecast <- function(model, t = 1, outcome = NULL, offset = NULL, FF = NULL, G =
     stop(paste0("Error: D should have at most 2 dimensions. Got ", length(dim(offset)), "."))
   }
 
-  if (t > 10) {
-    warning("Warning: Prediction window is big, results will probabily be unreliable.")
-  }
+  # if (t > 10) {
+  #   warning("Warning: Prediction window is big, results will probabily be unreliable.")
+  # }
 
   if (is.null(G)) {
     G <- array(model$G[, , t_last], c(n, n, t))
@@ -338,7 +334,7 @@ forecast <- function(model, t = 1, outcome = NULL, offset = NULL, FF = NULL, G =
 
 
   for (t_i in c(1:t)) {
-    next_step <- one_step_evolve(last_m, last_C, G[, , t_i], D[, , t_i]**0, W[, , t_i] + C0 * (D[, , t_i] - 1))
+    next_step <- one_step_evolve(last_m, last_C, G[, , t_i] %>% matrix(n, n), D[, , t_i]**0, W[, , t_i] + C0 * (D[, , t_i] - 1))
     last_m <- next_step$at
     last_C <- next_step$Rt
     lin_pred <- calc_lin_pred(last_m, last_C, FF[, , t_i] %>% matrix(n, k))
@@ -348,7 +344,7 @@ forecast <- function(model, t = 1, outcome = NULL, offset = NULL, FF = NULL, G =
 
       model_i <- model$outcomes[[outcome_name]]
       pred_index <- match(model_i$var_names, fitted_data$var_names)
-      lin_pred_offset <- model_i$family$offset(
+      lin_pred_offset <- model_i$apply_offset(
         lin_pred$ft[pred_index, , drop = FALSE],
         lin_pred$Qt[pred_index, pred_index, drop = FALSE],
         outcome_forecast[[outcome_name]]$offset[t_i, ]
@@ -356,7 +352,7 @@ forecast <- function(model, t = 1, outcome = NULL, offset = NULL, FF = NULL, G =
       ft_canom <- model_i$convert_mat_canom %*% lin_pred_offset$ft
       Qt_canom <- model_i$convert_mat_canom %*% lin_pred_offset$Qt %*% t(model_i$convert_mat_canom)
 
-      conj_prior <- model_i$family$conj_prior(ft_canom, Qt_canom, parms = model_i$parms)
+      conj_prior <- model_i$conj_prior(ft_canom, Qt_canom, parms = model_i$parms)
       outcome_forecast[[outcome_name]]$conj_param[t_i, ] <- conj_prior
     }
   }
@@ -368,7 +364,7 @@ forecast <- function(model, t = 1, outcome = NULL, offset = NULL, FF = NULL, G =
     model_i <- model$outcomes[[outcome_name]]
     k_cur <- model_i$r
 
-    prediction <- model_i$family$pred(outcome_forecast[[outcome_name]]$conj_param,
+    prediction <- model_i$calc_pred(outcome_forecast[[outcome_name]]$conj_param,
       outcome_forecast[[outcome_name]]$outcome,
       pred_cred = pred_cred,
       parms = model_i$parms
@@ -433,10 +429,10 @@ forecast <- function(model, t = 1, outcome = NULL, offset = NULL, FF = NULL, G =
     max_value <- calcula_max(obs_na_rm - min(obs_na_rm))[[3]] + min(obs_na_rm)
     min_value <- -calcula_max(-(obs_na_rm - max(obs_na_rm)))[[3]] + max(obs_na_rm)
 
-    plt.obj <- ggplot(plot_data, aes(x = Time, color = Serie, fill = Serie, linetype = type, shape = type)) +
-      geom_line(aes(y = Prediction, group = "Fit")) +
-      geom_ribbon(aes(ymin = C.I.lower, ymax = C.I.upper, group = "C.I."), alpha = 0.25) +
-      geom_point(aes(y = Observation, group = "Observations")) +
+    plt.obj <- ggplot(plot_data, aes(x = Time)) +
+      geom_line(aes(y = Prediction, linetype = type, color = Serie)) +
+      geom_ribbon(aes(ymin = C.I.lower, ymax = C.I.upper, fill = Serie, group = paste0(Serie, type)), alpha = 0.25, color = NA) +
+      geom_point(aes(y = Observation, shape = paste0("Obs_", type), color = Serie)) +
       scale_fill_hue("", na.value = NA) +
       scale_color_hue("", na.value = NA) +
       scale_linetype_manual("", values = c("dashed", "solid")) +
@@ -445,11 +441,31 @@ forecast <- function(model, t = 1, outcome = NULL, offset = NULL, FF = NULL, G =
       scale_y_continuous("$y_t$") +
       theme_bw() +
       coord_cartesian(ylim = c(min_value, max_value))
-    if (plot == "dynamic") {
+    if (plot == "plotly") {
       if (!requireNamespace("plotly", quietly = TRUE)) {
-        warning("The plotly package is required for dynamic plots.")
+        warning("The plotly package is required for plotly plots.")
       } else {
+        series_names <- unique(plot_data$Serie)
+        n_series <- length(series_names)
         plt.obj <- plotly::ggplotly(plt.obj)
+        for (i in (1:n_series) - 1) {
+          plt.obj$x$data[[2 * i + 1]]$legendgroup <-
+            plt.obj$x$data[[2 * i + 1]]$name <-
+            plt.obj$x$data[[2 * i + 2]]$legendgroup <-
+            plt.obj$x$data[[2 * i + 2]]$name <-
+            plt.obj$x$data[[i + 2 * n_series + 1]]$legendgroup <-
+            plt.obj$x$data[[i + 2 * n_series + 1]]$name <-
+            paste0(series_names[i + 1], ": fitted values")
+
+          plt.obj$x$data[[2 * i + 1 + 3 * n_series]]$legendgroup <-
+            plt.obj$x$data[[2 * i + 1 + 3 * n_series]]$name <-
+            plt.obj$x$data[[2 * i + 2 + 3 * n_series]]$legendgroup <-
+            plt.obj$x$data[[2 * i + 2 + 3 * n_series]]$name <- paste0(series_names[i + 1], ": observations")
+
+          plt.obj$x$data[[2 * i + 1]]$showlegend <-
+            plt.obj$x$data[[i + 1 + 2 * n_series]]$showlegend <-
+            plt.obj$x$data[[2 * i + 1 + 3 * n_series]]$showlegend <- FALSE
+        }
       }
     }
     return_list$plot <- plt.obj
@@ -547,7 +563,7 @@ eval_past <- function(model, smooth = FALSE, h = 0, pred_cred = 0.95) {
     } else {
       ref_Ct[, , i - h]
     }
-    # model$family$filter(model$outcome[i, ], mt, Ct, FF[, , i] %>% matrix(n, r), G, D[, , i], W[, , i], model$offset[i, ], parms = model$parms)
+    # model$filter(model$outcome[i, ], mt, Ct, FF[, , i] %>% matrix(n, r), G, D[, , i], W[, , i], model$offset[i, ], parms = model$parms)
     next_step <- list("at" = mt, "Rt" = Ct)
     if (h >= 1) {
       for (t in c(1:h)) {
@@ -564,20 +580,20 @@ eval_past <- function(model, smooth = FALSE, h = 0, pred_cred = 0.95) {
       pred_index <- match(outcome$var_names, model$var_names)
       k_i <- length(pred_index)
 
-      cur_step <- outcome$family$offset(lin_pred$ft[pred_index, , drop = FALSE], lin_pred$Qt[pred_index, pred_index, drop = FALSE], outcome$offset[i, ])
+      cur_step <- outcome$apply_offset(lin_pred$ft[pred_index, , drop = FALSE], lin_pred$Qt[pred_index, pred_index, drop = FALSE], outcome$offset[i, ])
 
       ft_canom <- outcome$convert_mat_canom %*% cur_step$ft
       Qt_canom <- outcome$convert_mat_canom %*% cur_step$Qt %*% t(outcome$convert_mat_canom)
 
 
-      conj_distr <- outcome$family$conj_prior(ft_canom, Qt_canom)
-      prediction <- outcome$family$pred(conj_distr, outcome$outcome[i, , drop = FALSE], pred_cred, parms = outcome$parms)
+      conj_distr <- outcome$conj_prior(ft_canom, Qt_canom)
+      prediction <- outcome$calc_pred(conj_distr, outcome$outcome[i, , drop = FALSE], pred_cred, parms = outcome$parms)
 
       pred[(k_acum + 1):(k_acum + k_cur), i] <- prediction$pred
       var.pred[(k_acum + 1):(k_acum + k_cur), (k_acum + 1):(k_acum + k_cur), i] <- prediction$var.pred
       icl.pred[(k_acum + 1):(k_acum + k_cur), i] <- prediction$icl.pred
       icu.pred[(k_acum + 1):(k_acum + k_cur), i] <- prediction$icu.pred
-      log.like[i] <- log.like[i] + sum(outcome$family$log.like(conj_distr, outcome$outcome[i, , drop = FALSE], parms = outcome$parms))
+      log.like[i] <- log.like[i] + sum(prediction$log.like)
       k_acum <- k_acum + k_cur
     }
   }
@@ -666,9 +682,10 @@ dlm_sampling <- function(model, sample_size) {
   outcomes <- list()
   for (outcome_name in names(model$outcomes)) {
     outcomes[[outcome_name]] <- list(
-      inv_link = model$outcomes[[outcome_name]]$family$inv_link_function,
-      offset = model$outcomes[[outcome_name]]$family$offset,
-      l = length(model$outcomes[[outcome_name]]$var_names)
+      inv_link = model$outcomes[[outcome_name]]$inv_link_function,
+      apply_offset = model$outcomes[[outcome_name]]$apply_offset,
+      offset = model$outcomes[[outcome_name]]$offset,
+      l = dim(model$outcomes[[outcome_name]]$conj_prior_param)[2]
     )
   }
   alt_chol_local <- if (n == 1) {
@@ -679,9 +696,6 @@ dlm_sampling <- function(model, sample_size) {
 
   mt_sample <- rnorm(n * T_len * sample_size) %>% array(c(n, T_len, sample_size))
   ft_sample <- array(NA, c(k, T_len, sample_size))
-
-  offset_step <- model$offset[T_len, ]
-  na.flag <- any(is.null(offset_step) | any(offset_step == 0) | any(is.na(offset_step)))
 
   Ct_chol <- tryCatch(
     {
@@ -710,11 +724,16 @@ dlm_sampling <- function(model, sample_size) {
     outcomes[[outcome_name]]$k_i <- k_i
     outcomes[[outcome_name]]$pred_index <- pred_index
 
-    ft_sample_i_out <- outcomes[[outcome_name]]$offset(ft_sample_i[outcomes[[outcome_name]]$pred_index, , drop = FALSE], diag(k) * 0, if (na.flag) {
-      1
-    } else {
+    offset_step <- outcomes[[outcome_name]]$offset[T_len, ]
+    if (any(is.na(offset_step))) {
+      offset_step <- 1
+    }
+
+    ft_sample_i_out <- outcomes[[outcome_name]]$apply_offset(
+      ft_sample_i[outcomes[[outcome_name]]$pred_index, , drop = FALSE],
+      diag(k) * 0,
       offset_step
-    })$ft
+    )$ft
     param_sample_i <- outcomes[[outcome_name]]$inv_link(ft_sample_i_out)
 
     outcomes[[outcome_name]]$param_sample <- array(NA, c(outcomes[[outcome_name]]$l, T_len, sample_size))
@@ -724,7 +743,6 @@ dlm_sampling <- function(model, sample_size) {
   ft_sample[, T_len, ] <- ft_sample_i
 
   for (t in (T_len - 1):1) {
-    offset_step <- model$offset[t, ]
     na.flag <- any(is.null(offset_step) | any(offset_step == 0) | any(is.na(offset_step)))
 
     Rt <- model$Rt[, , t + 1]
@@ -766,11 +784,15 @@ dlm_sampling <- function(model, sample_size) {
     }
 
     for (outcome_name in names(outcomes)) {
-      ft_sample_i_out <- outcomes[[outcome_name]]$offset(ft_sample_i[outcomes[[outcome_name]]$pred_index, , drop = FALSE], diag(k) * 0, if (na.flag) {
-        1
-      } else {
+      offset_step <- outcomes[[outcome_name]]$offset[t, ]
+      if (any(is.na(offset_step))) {
+        offset_step <- 1
+      }
+      ft_sample_i_out <- outcomes[[outcome_name]]$apply_offset(
+        ft_sample_i[outcomes[[outcome_name]]$pred_index, , drop = FALSE],
+        diag(k) * 0,
         offset_step
-      })$ft
+      )$ft
       param_sample_i <- outcomes[[outcome_name]]$inv_link(ft_sample_i_out)
       outcomes[[outcome_name]]$param_sample[, t, ] <- param_sample_i
     }

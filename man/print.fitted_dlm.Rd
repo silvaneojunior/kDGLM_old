@@ -7,7 +7,7 @@
 \method{print}{fitted_dlm}(
   fitted_dlm,
   t = fitted_dlm$t,
-  smooth = TRUE,
+  smooth = fitted_dlm$smooth,
   metric_cutoff = round(fitted_dlm$t/10)
 )
 }

@@ -5,7 +5,7 @@
 #' @param model fitted_dlm: A fitted DGLM.
 #' @param pred_cred Numeric: The credibility value for the credibility interval.
 #' @param smooth Bool: A flag indicating if the smoothed should be used. If false, the filtered distribuition will be used.
-#' @param dynamic Bool: A flag indicating if the created plot should be dynamic.
+#' @param plotly Bool: A flag indicating if plotly should be used for creating plots.
 #' @param h Integer: A integer with the amount of steps ahead should be used for prediciton. Only used if smooth is false.
 #'
 #' @return A list containg:
@@ -33,8 +33,7 @@
 #' summary(fitted_data)
 #'
 #' show_fit(fitted_data, smooth = TRUE)$plot
-show_fit <- function(model, pred_cred = 0.95, smooth = model$smooth, dynamic = TRUE, h = 0) {
-  n <- dim(model$mt)[1]
+show_fit <- function(model, pred_cred = 0.95, smooth = model$smooth, plotly = requireNamespace("plotly", quietly = TRUE), h = 0) {
   t_last <- dim(model$mt)[2]
   eval <- eval_past(model, smooth = smooth, h = h, pred_cred = pred_cred)
 
@@ -44,12 +43,26 @@ show_fit <- function(model, pred_cred = 0.95, smooth = model$smooth, dynamic = T
 
   n_colors <- length(unique(eval$Serie))
   colors <- rainbow(n_colors, s = 0.6)
-  names(colors) <- unique(eval$Serie)
+  series_names <- unique(eval$Serie)
+  names(colors) <- series_names
+  colors[["Detected changes"]] <- "black"
+  linetypes <- c(
+    "Detected changes" = "dashed",
+    "Observation" = NA,
+    "Fitted values" = "solid"
+  )
+  shapes <- c(
+    "Detected changes" = NA,
+    "Observation" = 16,
+    "Fitted values" = NA
+  )
 
-  plt <- ggplot(eval, aes(x = Time, fill = Serie, color = Serie)) +
-    geom_ribbon(aes(ymin = C.I.lower, ymax = C.I.upper, linetype = "Fitted values"), alpha = 0.25) +
-    geom_line(aes(y = Prediction, linetype = "Fitted values")) +
-    geom_point(aes(y = Observation, linetype = "Observations"), alpha = 0.5) +
+  plt <- ggplot() +
+    geom_ribbon(data = eval, aes(x = Time, fill = Serie, ymin = C.I.lower, ymax = C.I.upper), alpha = 0.25) +
+    geom_line(data = eval, aes(x = Time, color = Serie, y = Prediction, linetype = "Fitted values")) +
+    geom_point(data = eval, aes(x = Time, color = Serie, y = Observation, shape = "Observation"), alpha = 0.5) +
+    scale_linetype_manual("", values = linetypes) +
+    scale_shape_manual("", values = shapes) +
     scale_fill_manual("", na.value = NA, values = colors) +
     scale_color_manual("", na.value = NA, values = colors) +
     scale_y_continuous(name = "$y_t$") +
@@ -58,17 +71,29 @@ show_fit <- function(model, pred_cred = 0.95, smooth = model$smooth, dynamic = T
     coord_cartesian(ylim = c(min_value, max_value))
 
   if (any(model$outcomes[[1]]$alt.flags == 1)) {
-    colors[["Detected changes"]] <- "black"
     plt <- plt +
-      geom_vline(data = data.frame(xintercept = (1:t_last)[model$outcomes[[1]]$alt.flags == 1], linetype = "Detected changes"), aes(xintercept = xintercept, linetype = linetype, fill = linetype, color = linetype)) +
-      scale_linetype_manual("", values = c("dashed", "solid", "solid")) +
-      scale_color_manual("", na.value = NA, values = colors)
+      geom_vline(
+        data = data.frame(xintercept = (1:t_last)[model$outcomes[[1]]$alt.flags == 1], linetype = "Detected changes"),
+        aes(xintercept = xintercept, linetype = linetype, fill = linetype, color = linetype)
+      )
   }
-  if (dynamic) {
+  if (plotly) {
     if (!requireNamespace("plotly", quietly = TRUE)) {
-      warning("The plotly package is required for dynamic plots")
+      warning("The plotly package is required for plotly plots.")
     } else {
       plt <- plotly::ggplotly(plt)
+
+      for (i in (1:n_colors) - 1) {
+        plt$x$data[[i + 1]]$legendgroup <-
+          plt$x$data[[i + 1 + n_colors]]$legendgroup <-
+          plt$x$data[[i + 1]]$name <-
+          plt$x$data[[i + 1 + n_colors]]$name <- paste0(series_names[i + 1], ": fitted values")
+
+        plt$x$data[[i + 1]]$showlegend <- FALSE
+
+        plt$x$data[[i + 1 + 2 * n_colors]]$legendgroup <-
+          plt$x$data[[i + 1 + 2 * n_colors]]$name <- paste0(series_names[i + 1], ": observations")
+      }
     }
   }
   return(list("data" = eval, "plot" = plt))
@@ -81,7 +106,7 @@ show_fit <- function(model, pred_cred = 0.95, smooth = model$smooth, dynamic = T
 #' @param smooth Bool: A flag indicating if the smoothed distribuition should be used. If false, the filtered distribution shall be used.
 #' @param cut_off Integer: The number of initial steps that should be skipped in the plot. Usually, the model is still learning in the initial steps, so the estimated values are not realiable.
 #' @param pred_cred Numeric: The credibility value for the credibility interval.
-#' @param dynamic Bool: A flag indicating if the created plot should be dynamic.
+#' @param plotly Bool: A flag indicating if plotly should be used to create plots.
 #'
 #' @return A list containg:
 #' \itemize{
@@ -107,7 +132,7 @@ show_fit <- function(model, pred_cred = 0.95, smooth = model$smooth, dynamic = T
 #'
 #' fitted_data <- fit_model(level, season, outcomes = outcome)
 #' plot_lat_var(fitted_data, "effect", smooth = TRUE)$plot
-plot_lat_var <- function(model, var = "", smooth = model$smooth, cut_off = 10, pred_cred = 0.95, dynamic = TRUE) {
+plot_lat_var <- function(model, var = "", smooth = model$smooth, cut_off = 10, pred_cred = 0.95, plotly = requireNamespace("plotly", quietly = TRUE)) {
   if (!any(grepl(var, names(model$names)))) {
     stop(paste0("Error: Invalid selected variable. Got ", var, ", expected one of the following:\n", names(model$names)))
   }
@@ -203,9 +228,9 @@ plot_lat_var <- function(model, var = "", smooth = model$smooth, cut_off = 10, p
     geom_ribbon(aes(ymin = lim_i, ymax = lim_s, fill = paste(name, IC_label), color = paste(name, IC_label)), alpha = 0.25) +
     geom_line(aes(y = media)) +
     coord_cartesian(ylim = c(min_value, max_value))
-  if (dynamic) {
+  if (plotly) {
     if (!requireNamespace("plotly", quietly = TRUE)) {
-      warning("The plotly package is required for dynamic plots.")
+      warning("The plotly package is required for plotly plots.")
     } else {
       plt <- plotly::ggplotly(plt)
     }

@@ -29,7 +29,6 @@
 #'
 #' show_fit(fitted_data, smooth = TRUE)$plot
 Multinom <- function(p, outcome, offset = outcome**0) {
-  family <- multnom_kernel
   t <- dim(outcome)[1]
   r <- dim(outcome)[2]
   k <- dim(outcome)[2] - 1
@@ -51,7 +50,31 @@ Multinom <- function(p, outcome, offset = outcome**0) {
     convert_mat_canom = convert_mat_canom,
     convert_mat_default = convert_mat_default,
     parms = parms,
-    name = "Multinomial"
+    name = "Multinomial",
+    conj_prior = convert_Dir_Normal,
+    conj_post = convert_Normal_Dir,
+    update = update_Dir,
+    smoother = generic_smoother,
+    calc_pred = multnom_pred,
+    apply_offset = function(ft, Qt, offset) {
+      t <- dim(ft)[2]
+      offset <- matrix(offset, r, t)
+      offset_class <- offset[-r, ]
+      offset_ref <- matrix(offset[r, ], r - 1, t, byrow = TRUE)
+      return(list("ft" = ft + log(offset_class / offset_ref), "Qt" = Qt))
+    },
+    link_function = function(x) {
+      T <- length(x)
+      return(log(x[-T, ] / x[T, ]))
+    },
+    inv_link_function = function(x) {
+      y <- exp(x)
+      x_last <- 1 / (1 + colSums(y))
+      return(rbind(y * x_last, x_last))
+    },
+    param_names = function(y) {
+      paste0("alpha_", 1:dim(y)[2])
+    }
   )
   class(distr) <- "dlm_distr"
   return(distr)
@@ -163,6 +186,7 @@ update_Dir <- function(conj_prior, y, parms = list()) {
 #'    \item var.pred vector/matrix: the variance of the predictive distribuition of a next observation. Same type and shape as the parameter in model.
 #'    \item icl.pred vector/matrix: the percentile of 100*((1-pred_cred)/2)% of the predictive distribuition of a next observation. Same type and shape as the parameter in model.
 #'    \item icu.pred vector/matrix: the percentile of 100*(1-(1-pred_cred)/2)% of the predictive distribuition of a next observation. Same type and shape as the parameter in model.
+#'    \item log.like vector: the The log likelihood for the outcome given the conjugated parameters.
 #' }
 #'
 #' @export
@@ -173,13 +197,20 @@ update_Dir <- function(conj_prior, y, parms = list()) {
 #'
 #' multnom_pred(conj_param, matrix(5, 5, 3))
 multnom_pred <- function(conj_param, outcome, parms = list(), pred_cred = 0.95) {
+  pred.flag <- !is.na(pred_cred)
+  like.flag <- !is.null(outcome)
+
   conj_param <- if (is.null(dim(conj_param))) {
-    conj_param %>% t()
+    conj_param %>%
+      data.frame.to_matrix() %>%
+      t()
   } else {
     conj_param
   }
   outcome <- if (is.null(dim(outcome))) {
-    outcome %>% t()
+    outcome %>%
+      data.frame.to_matrix() %>%
+      t()
   } else {
     outcome
   }
@@ -190,84 +221,6 @@ multnom_pred <- function(conj_param, outcome, parms = list(), pred_cred = 0.95) 
   var.pred <- array(NA, c(r + 1, r + 1, T))
   icl.pred <- matrix(NA, r + 1, T)
   icu.pred <- matrix(NA, r + 1, T)
-  for (t in 1:T) {
-    outcome_t <- outcome[t, ]
-    N <- sum(outcome_t)
-    N <- max(N, 1)
-
-    alpha <- conj_param[t, ] %>% as.numeric()
-    alpha0 <- sum(alpha)
-
-    p <- alpha / alpha0
-    p_var <- p * (1 - p) / (alpha0 + 1)
-
-    pred[, t] <- N * p
-    var.pred[, , t] <- diag(N * p * (1 - p) * (N + alpha0) / (alpha0 + 1))
-    for (i in 2:(r + 1)) {
-      for (j in 1:(i - 1)) {
-        var.pred[i, j, t] <- var.pred[j, i, t] <- -N * p[i] * p[j] * (N + alpha0) / (alpha0 + 1)
-      }
-    }
-
-    const <- lgamma(alpha0) + lgamma(N + 1) - lgamma(N + alpha0)
-
-    x_mat <- matrix(0:N, N + 1, r + 1)
-    alpha_mat <- matrix(alpha, N + 1, r + 1, byrow = TRUE)
-    x_alpha_mat <- x_mat + alpha_mat
-
-    prob_mat <- lgamma(x_alpha_mat) - lgamma(x_mat + 1) - lgamma(alpha_mat) + lgamma(N + alpha0 - x_alpha_mat) - lgamma(N - x_mat + 1) - lgamma(alpha0 - alpha_mat)
-    prob_mat <- exp(const + prob_mat)
-    for (i in 1:(r + 1)) {
-      probs_acum <- cumsum(prob_mat[, i])
-
-      icl.pred[i, t] <- sum(probs_acum <= ((1 - pred_cred) / 2)) - 1
-      icu.pred[i, t] <- sum(probs_acum <= (1 - (1 - pred_cred) / 2))
-
-      icl.pred[i, t] <- max(0, icl.pred[i])
-      icu.pred[i, t] <- min(N, icu.pred[i])
-    }
-  }
-
-  list(
-    "pred"     = pred,
-    "var.pred" = var.pred,
-    "icl.pred" = icl.pred,
-    "icu.pred" = icu.pred
-  )
-}
-
-#' multnom_log_like
-#'
-#' Calculate the predictive log-likelyhood of the data given the values of the parameter of the conjugated distribuition of the linear predictor.
-#' The data is assumed to have Multinomial distribuition with known number of trial N and the probability vector having distribuition Dirichlet with parameters alpha_i.
-#' In this scenario, the marginal distribuition of the data is Dirichlet-Multinomial with parameters N and alpha_i.
-#'
-#' @param conj_param List or data.frame: The parameters of the conjugated distribuition (Dirichlet) of the linear predictor.
-#' @param outcome Vector or matrix: The observed values at the current time.
-#' @param parms List (optional): A list of extra parameters for the model. Not used in this function.
-#'
-#' @return The predictive log-likelyhood of the observed data.
-#' @export
-#'
-#' @examples
-#'
-#' conj_param <- matrix(c(1:15), 5, 3, byrow = TRUE)
-#'
-#' multnom_log_like(conj_param, matrix(5, 5, 3))
-multnom_log_like <- function(conj_param, outcome, parms = list()) {
-  conj_param <- if (is.null(dim(conj_param))) {
-    conj_param %>% t()
-  } else {
-    conj_param
-  }
-  outcome <- if (is.null(dim(outcome))) {
-    outcome %>% t()
-  } else {
-    outcome
-  }
-  T <- nrow(conj_param)
-  r <- ncol(conj_param) - 1
-
   log.like <- rep(NA, T)
   for (t in 1:T) {
     outcome_t <- outcome[t, ]
@@ -279,32 +232,44 @@ multnom_log_like <- function(conj_param, outcome, parms = list()) {
 
     const <- lgamma(alpha0) + lgamma(N + 1) - lgamma(N + alpha0)
 
-    log.like[t] <- const + sum(lgamma(outcome_t + alpha) - lgamma(outcome_t + 1) - lgamma(alpha))
-    # lgamma(N + alpha0 - outcome_t) - lgamma(N - outcome_t + 1) - lgamma(alpha0 - alpha)
-  }
-  log.like
-}
+    if (pred.flag) {
+      p <- alpha / alpha0
+      p_var <- p * (1 - p) / (alpha0 + 1)
 
-#' @export
-multnom_kernel <- list(
-  "conj_prior" = convert_Dir_Normal,
-  "conj_post" = convert_Normal_Dir,
-  "update" = update_Dir,
-  "smoother" = generic_smoother,
-  "pred" = multnom_pred,
-  "log.like" = multnom_log_like,
-  "offset" = logit_offset,
-  "link_function" = function(x) {
-    T <- length(x)
-    return(log(x[-T, ] / x[T, ]))
-  },
-  "inv_link_function" = function(x) {
-    y <- exp(x)
-    x_last <- 1 / (1 + colSums(y))
-    return(rbind(y * x_last, x_last))
-  },
-  "param_names" = function(y) {
-    paste0("alpha.", 1:dim(y)[2])
-  },
-  "multi_var" = TRUE
-)
+      pred[, t] <- N * p
+      var.pred[, , t] <- diag(N * p * (1 - p) * (N + alpha0) / (alpha0 + 1))
+      for (i in 2:(r + 1)) {
+        for (j in 1:(i - 1)) {
+          var.pred[i, j, t] <- var.pred[j, i, t] <- -N * p[i] * p[j] * (N + alpha0) / (alpha0 + 1)
+        }
+      }
+
+      x_mat <- matrix(0:N, N + 1, r + 1)
+      alpha_mat <- matrix(alpha, N + 1, r + 1, byrow = TRUE)
+      x_alpha_mat <- x_mat + alpha_mat
+
+      prob_mat <- lgamma(x_alpha_mat) - lgamma(x_mat + 1) - lgamma(alpha_mat) + lgamma(N + alpha0 - x_alpha_mat) - lgamma(N - x_mat + 1) - lgamma(alpha0 - alpha_mat)
+      prob_mat <- exp(const + prob_mat)
+      for (i in 1:(r + 1)) {
+        probs_acum <- cumsum(prob_mat[, i])
+
+        icl.pred[i, t] <- sum(probs_acum <= ((1 - pred_cred) / 2)) - 1
+        icu.pred[i, t] <- sum(probs_acum <= (1 - (1 - pred_cred) / 2))
+
+        icl.pred[i, t] <- max(0, icl.pred[i])
+        icu.pred[i, t] <- min(N, icu.pred[i])
+      }
+    }
+    if (like.flag) {
+      log.like[t] <- const + sum(lgamma(outcome_t + alpha) - lgamma(outcome_t + 1) - lgamma(alpha))
+    }
+  }
+
+  list(
+    "pred"     = pred,
+    "var.pred" = var.pred,
+    "icl.pred" = icl.pred,
+    "icu.pred" = icu.pred,
+    "log.like" = log.like
+  )
+}
