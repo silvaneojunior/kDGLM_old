@@ -31,15 +31,15 @@ summary.fitted_dlm <- function(fitted_dlm, t = fitted_dlm$t, smooth = fitted_dlm
     outcome <- fitted_dlm$outcomes[[outcome_index]]
     distr_names[names(fitted_dlm$outcomes)[outcome_index]] <- outcome$name
 
-    prediction <- outcome$calc_pred(outcome$conj_prior_param, outcome$outcome, parms = outcome$parms, pred_cred = 0.95)
-    distr_like[outcome_index] <- sum(prediction$log.like[-(1:metric_cutoff)], na.rm = TRUE)
+    prediction <- outcome$calc_pred(outcome$conj_prior_param[-(1:metric_cutoff), ], outcome$outcome[-(1:metric_cutoff), ], parms = outcome$parms, pred_cred = 0.95)
+    distr_like[outcome_index] <- sum(prediction$log.like, na.rm = TRUE)
 
     pred <- t(prediction$pred)
-    out <- outcome$outcome
+    out <- outcome$outcome[-(1:metric_cutoff), ]
     out <- ifelse(out == 0, 1, out)
-    distr_rae[outcome_index] <- mean(abs((pred - out) / out)[-(1:metric_cutoff), ], na.rm = TRUE)
+    distr_rae[outcome_index] <- mean(abs((pred - out) / out), na.rm = TRUE)
   }
-  distr_names_len <- max(sapply(distr_names, length))
+  distr_names_len <- max(sapply(names(distr_names), nchar))
 
   coef_label <- if (fitted_dlm$smooth & smooth) {
     "smoothed"

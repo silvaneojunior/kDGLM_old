@@ -51,3 +51,76 @@ calcula_max <- function(pre_max) {
 
   return(list(value, interval_size, max_value))
 }
+
+#' colQuantile
+#'
+#' A function that calculates the column-wise quantiles of a matrix.
+#'
+#' @param X Matrix.
+#' @param q Numeric: A number between 0 and 1.
+#'
+#' @importFrom Rfast colnth
+#'
+#' @return Vector: The chosen quatile for each column of X.
+colQuantile <- function(X, q) {
+  n <- dim(X)[1]
+  k <- dim(X)[2]
+  min_index <- floor(n * q)
+  max_index <- ceiling(n * q)
+  (colnth(X, rep(min_index, k)) + colnth(X, rep(max_index, k))) / 2
+}
+
+#' rowQuantile
+#'
+#' A function that calculates the row-wise quantiles of a matrix.
+#'
+#' @param X Matrix.
+#' @param q Numeric: A number between 0 and 1.
+#'
+#' @importFrom Rfast rownth
+#'
+#' @return Vector: The chosen quatile for each row of X.
+rowQuantile <- function(X, q) {
+  n <- dim(X)[1]
+  k <- dim(X)[2]
+  min_index <- floor(k * q)
+  max_index <- ceiling(k * q)
+  (rownth(X, rep(min_index, n)) + rownth(X, rep(max_index, n))) / 2
+}
+
+
+#' f_root
+#'
+#' Calculates the root of a function given an initial value and a function to calculate it's derivatives.
+#'
+#' @param f function: A function that receives a vector and return a vector of the same size.
+#' @param df function: A function that receives a vector and return the derivatives of fx in relation to it's argmuments (must return a matrix, if fx returns a vector).
+#' @param start vector: The initial value to start the algorithm.
+#' @param tol numeric: The tolerance for the solution error.
+#' @param n_max numeric: The maximum number of iterations allowed.
+#'
+#' @return A list contaning:
+#' \itemize{
+#'    \item root vector: The solution for the system.
+#'    \item f.root vector: The function fx evaluated at the root.
+#'    \item iter numeric: The number of steps taken.
+#' }
+f_root <- function(f, df, start, tol = 1e-8, n_max = 1000) {
+  x_root <- start
+  fx <- f(x_root)
+  dfx <- df(x_root)
+  error <- max(abs(fx))
+  count <- 0
+  while (error >= tol & count < n_max) {
+    count <- count + 1
+    change <- solve(dfx, -fx)
+    x_root <- x_root + change
+    fx <- f(x_root)
+    dfx <- df(x_root)
+    error <- max(abs(fx))
+  }
+  if (count >= n_max) {
+    warning("Steady state not reached.\n")
+  }
+  return(list("root" = x_root, "f.root" = fx, "inter." = count))
+}
