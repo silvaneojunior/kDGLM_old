@@ -1,3 +1,5 @@
+#### Default Method ####
+
 #' Poisson
 #'
 #' Creates an outcome with Poisson distribuition with the chosen parameter.
@@ -29,13 +31,13 @@
 Poisson <- function(lambda, outcome, offset = outcome**0) {
   distr <- list()
   t <- length(outcome)
-  r <- 1
+  r <- k <- 1
   convert_mat_default <- convert_mat_canom <- diag(r)
 
   distr <- list(
-    conj_prior = convert_Gamma_Normal,
-    conj_post = convert_Normal_Gamma,
-    update = update_Gamma,
+    conj_prior = convert_Poisson_Normal,
+    conj_post = convert_Normal_Poisson,
+    update = update_Poisson,
     smoother = generic_smoother,
     calc_pred = poisson_pred,
     apply_offset = function(ft, Qt, offset) {
@@ -52,6 +54,7 @@ Poisson <- function(lambda, outcome, offset = outcome**0) {
     var_names = c(lambda),
     family = family,
     r = r,
+    k = k,
     t = t,
     offset = matrix(offset, t, r),
     outcome = matrix(outcome, t, r),
@@ -61,11 +64,12 @@ Poisson <- function(lambda, outcome, offset = outcome**0) {
     name = "Poisson"
   )
   class(distr) <- "dlm_distr"
+  distr$alt_method <- FALSE
 
   return(distr)
 }
 
-#' convert_Gamma_Normal
+#' convert_Poisson_Normal
 #'
 #' Calculate the parameters of the Gamma that best approximates the given log-Normal distribuition.
 #' The approximation is the best in the sense that it minimizes the KL divergence from the log-Normal to the Gamma
@@ -76,7 +80,7 @@ Poisson <- function(lambda, outcome, offset = outcome**0) {
 #'
 #' @return The parameters of the conjugated distribuition of the linear predictor.
 #' @export
-convert_Gamma_Normal <- function(ft, Qt, parms) {
+convert_Poisson_Normal <- function(ft, Qt, parms) {
   # diag(Qt)=ifelse(diag(Qt)<0,0,diag(Qt))
   if (length(ft) > 1) {
     Qt <- diag(Qt)
@@ -85,10 +89,10 @@ convert_Gamma_Normal <- function(ft, Qt, parms) {
   h <- -3 + 3 * sqrt(1 + 2 * Qt / 3)
   alpha <- (1 / h)
   beta <- alpha * exp(-ft - 0.5 * Qt)
-  return(c(alpha, beta))
+  return(list("alpha" = alpha, "beta" = beta))
 }
 
-#' convert_Normal_Gamma
+#' convert_Normal_Poisson
 #'
 #' Calculate the parameters of the log-Normal that best approximates the given Gamma distribuition.
 #' The approximation is the best in the sense that it minimizes the KL divergence from the Gamma to the log-Normal
@@ -98,14 +102,9 @@ convert_Gamma_Normal <- function(ft, Qt, parms) {
 #'
 #' @return The parameters of the Normal distribuition of the linear predictor.
 #' @export
-convert_Normal_Gamma <- function(conj_prior, parms) {
-  if (is.null(dim(conj_prior))) {
-    r <- length(conj_prior) / 2
-  } else {
-    r <- dim(conj_prior)[2] / 2
-  }
-  alpha <- conj_prior[1:r]
-  beta <- conj_prior[(r + 1):(2 * r)]
+convert_Normal_Poisson <- function(conj_prior, parms) {
+  alpha <- conj_prior$alpha
+  beta <- conj_prior$beta
   ft <- digamma(alpha) - log(beta)
   Qt <- trigamma(alpha)
   if (length(alpha) > 1) {
@@ -116,27 +115,24 @@ convert_Normal_Gamma <- function(conj_prior, parms) {
   return(list("ft" = ft, "Qt" = Qt))
 }
 
-#' update_Gamma
+#' update_Poisson
 #'
 #' Calculate posterior parameter for the Gamma, assuming that the observed values came from a Poisson model from which the rate parameter (lambda) have prior distribuition Gamma.
 #'
 #' @param conj_prior list: A vector containing the parameters of the Gamma (alpha,beta).
+#' @param ft vector: A vector representing the means from the normal distribution. Not used in the default method.
+#' @param Qt matrix: A matrix representing the covariance matrix of the normal distribution. Not used in the default method.
 #' @param y vector: A vector containing the observations.
 #' @param parms list: A list of extra known parameters of the distribuition. Not used in this kernel.
 #'
 #' @return The parameters of the posterior distribution.
 #' @export
-update_Gamma <- function(conj_prior, y, parms) {
-  if (is.null(dim(conj_prior))) {
-    r <- length(conj_prior) / 2
-  } else {
-    r <- dim(conj_prior)[2] / 2
-  }
-  alpha <- conj_prior[1:r]
-  beta <- conj_prior[(r + 1):(2 * r)]
+update_Poisson <- function(conj_prior, ft, Qt, y, parms) {
+  alpha <- conj_prior$alpha
+  beta <- conj_prior$beta
   alpha <- alpha + y
   beta <- beta + 1
-  return(c(alpha, beta))
+  return(list("alpha" = alpha, "beta" = beta))
 }
 
 #' poisson_pred
@@ -172,10 +168,13 @@ update_Gamma <- function(conj_prior, y, parms) {
 poisson_pred <- function(conj_param, outcome = NULL, parms = list(), pred_cred = 0.95) {
   pred.flag <- !is.na(pred_cred)
   like.flag <- !is.null(outcome)
+  if (!like.flag & !pred.flag) {
+    return(list())
+  }
 
   r <- 1
-  a <- conj_param[1:r] %>% t()
-  b <- conj_param[(1 + r):(2 * r)] %>% t()
+  a <- conj_param$alpha
+  b <- conj_param$beta
   t <- length(a)
   pred <- matrix(NA, r, t)
   var.pred <- array(NA, c(1, 1, t))
@@ -183,12 +182,20 @@ poisson_pred <- function(conj_param, outcome = NULL, parms = list(), pred_cred =
   icu.pred <- matrix(NA, r, t)
   log.like <- rep(NA, t)
   flags <- b > 1e-20
+  if (like.flag) {
+    outcome <- matrix(outcome, t, r)
+  }
 
-  pred[, flags] <- a[flags] / b[flags]
-  var.pred[, , flags] <- a[flags] * (b[flags] + 1) / (b[flags]**2)
+  if (pred.flag) {
+    pred[, flags] <- a[flags] / b[flags]
+    var.pred[, , flags] <- a[flags] * (b[flags] + 1) / (b[flags]**2)
 
-  icl.pred[, flags] <- qnbinom((1 - pred_cred) / 2, a[flags], (b[flags] / (b[flags] + 1)))
-  icu.pred[, flags] <- qnbinom(1 - (1 - pred_cred) / 2, a[flags], (b[flags] / (b[flags] + 1)))
+    icl.pred[, flags] <- qnbinom((1 - pred_cred) / 2, a[flags], (b[flags] / (b[flags] + 1)))
+    icu.pred[, flags] <- qnbinom(1 - (1 - pred_cred) / 2, a[flags], (b[flags] / (b[flags] + 1)))
+  }
+  if (like.flag) {
+    log.like[flags] <- dnbinom(outcome[flags, 1], a[flags], (b[flags] / (b[flags] + 1)), log = TRUE)
+  }
 
   N <- 5000
   for (i in (1:t)[!flags]) {
@@ -202,7 +209,10 @@ poisson_pred <- function(conj_param, outcome = NULL, parms = list(), pred_cred =
       icu.pred[, i] <- quantile(sample_y, 1 - (1 - pred_cred) / 2)
     }
     if (like.flag) {
-      log.like[i] <- log(mean(like.list)) + max.log.like
+      log.like.list <- dpois(outcome[i, 1], sample_lambda, log = TRUE)
+      max.like.list <- max(like.list)
+
+      log.like[i] <- log(mean(exp(log.like.list - max.like.list))) + max.like.list
     }
   }
   if (!pred.flag) {
@@ -222,4 +232,88 @@ poisson_pred <- function(conj_param, outcome = NULL, parms = list(), pred_cred =
     "icu.pred" = icu.pred,
     "log.like" = log.like
   ))
+}
+
+#### Alternative Method ####
+
+#' Poisson_alt
+#'
+#' Creates an outcome with Poisson distribuition with the chosen parameter.
+#'
+#' @param lambda character: Name of the linear preditor associated with the rate (mean) parameter of the Poisson distribuition. The parameter is treated as unknowed and equal to the exponential of the associated linear preditor.
+#' @param outcome vector: Values of the observed data.
+#' @param offset vector: The offset at each observation. Must have the same shape as outcome.
+#'
+#' @return A object of the class dlm_distr
+#'
+#' @export
+#'
+#' @examples
+#'
+#' # Poisson case
+#' T <- 200
+#' w <- (200 / 40) * 2 * pi
+#' data <- rpois(T, 20 * (sin(w * 1:T / T) + 2))
+#'
+#' level <- polynomial_block(rate = 1, D = 1 / 0.95)
+#' season <- harmonic_block(rate = 1, period = 40, D = 1 / 0.98)
+#'
+#' outcome <- Poisson_alt(lambda = "rate", outcome = data)
+#'
+#' fitted_data <- fit_model(level, season, outcomes = outcome)
+#' summary(fitted_data)
+#'
+#' show_fit(fitted_data, smooth = TRUE)$plot
+Poisson_alt <- function(lambda, outcome, offset = outcome**0) {
+  distr <- Poisson(lambda, outcome, offset)
+
+  distr$update <- update_Poisson_alt
+  distr$alt_method <- TRUE
+  return(distr)
+}
+
+#' update_Poisson_alt
+#'
+#' Calculate posterior parameter for the Gamma, assuming that the observed values came from a Poisson model from which the rate parameter (lambda) have prior distribuition Gamma.
+#'
+#' @param conj_prior list: A vector containing the parameters of the Gamma (alpha,beta). Not used in the alternative method.
+#' @param y vector: A vector containing the observations.
+#' @param ft vector: A vector representing the means from the normal distribution.
+#' @param Qt matrix: A matrix representing the covariance matrix of the normal distribution.
+#' @param parms list: A list of extra known parameters of the distribuition. Not used in this kernel.
+#'
+#' @importFrom MASS ginv
+#' @importFrom cubature cubintegrate
+#'
+#' @return The parameters of the posterior distribution.
+#' @export
+update_Poisson_alt <- function(conj_prior, ft, Qt, y, parms) {
+  f0 <- ft
+  Q0 <- Qt
+  S0 <- ginv(Qt)
+
+  # val_const=lgamma(y+1)
+  c_val <- -Inf
+
+  f <- function(x) {
+    log.prob <- y * log(x) - x + dlnorm(x, ft, sqrt(Qt), log = TRUE)
+    max.prob <- max(log.prob)
+    if (max.prob > c_val) {
+      c_val <- max.prob
+    }
+
+    prob <- exp(log.prob - c_val)
+
+    rbind(
+      prob,
+      log(x) * prob,
+      (log(x)**2) * prob
+    )
+  }
+
+  val <- cubintegrate(f, c(0), c(Inf), fDim = 3, nVec = 1000)$integral
+  ft <- matrix(val[2] / val[1], 1, 1)
+  Qt <- matrix(val[3], 1, 1) / val[1] - ft**2
+
+  return(list("ft" = ft, "Qt" = Qt))
 }

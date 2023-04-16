@@ -107,6 +107,15 @@
 #'
 #' show_fit(fitted_data, smooth = TRUE)$plot
 fit_model <- function(..., outcomes, pred_cred = 0.95, smooth_flag = TRUE, p_monit = NA, c_monit = 1) {
+  pred_cred <- if (is.numeric(pred_cred)) {
+    if (pred_cred > 0 & pred_cred < 1) {
+      pred_cred
+    } else {
+      NA
+    }
+  } else {
+    NA
+  }
   if (class(outcomes) == "dlm_distr") {
     outcomes <- list(outcomes)
   }
@@ -157,7 +166,11 @@ fit_model <- function(..., outcomes, pred_cred = 0.95, smooth_flag = TRUE, p_mon
   for (outcome_name in names(model$outcomes)) {
     outcome <- model$outcomes[[outcome_name]]
 
-    prediction <- outcome$calc_pred(outcome$conj_prior_param, outcome$outcome, pred_cred = pred_cred, parms = outcome$parms)
+    prediction <- outcome$calc_pred(outcome$conj_prior_param, if (is.na(pred_cred)) {
+      NULL
+    } else {
+      outcome$outcome
+    }, pred_cred = pred_cred, parms = outcome$parms)
 
     model$outcomes[[outcome_name]]$pred <- prediction$pred
     model$outcomes[[outcome_name]]$var.pred <- prediction$var.pred
@@ -310,6 +323,11 @@ forecast <- function(model, t = 1, outcome = NULL, offset = NULL, FF = NULL, G =
   m0 <- model$mt[, t_last]
   C0 <- model$Ct[, , t_last]
 
+  m1 <- matrix(NA, n, t)
+  C1 <- array(NA, c(n, n, t))
+  f1 <- matrix(NA, k, t)
+  Q1 <- array(NA, c(k, k, t))
+
   D <- ifelse(D == 0, 1, D)
 
   last_m <- m0
@@ -317,18 +335,22 @@ forecast <- function(model, t = 1, outcome = NULL, offset = NULL, FF = NULL, G =
 
   outcome_forecast <- list()
   for (outcome_name in names(model$outcomes)) {
+    r_i <- model$outcomes[[outcome_name]]$r
     outcome_forecast[[outcome_name]]$conj_param <- matrix(NA, t, length(model$outcomes[[outcome_name]]$conj_prior_param)) %>% as.data.frame()
     names(outcome_forecast[[outcome_name]]$conj_param) <- names(model$outcomes[[outcome_name]]$conj_prior_param)
 
+    outcome_forecast[[outcome_name]]$ft <- matrix(NA, model$outcomes[[outcome_name]]$k, t)
+    outcome_forecast[[outcome_name]]$Qt <- array(NA, c(model$outcomes[[outcome_name]]$k, model$outcomes[[outcome_name]]$k, t))
+
     if (!is.null(outcome)) {
-      outcome_forecast[[outcome_name]]$outcome <- outcome[[outcome_name]] %>% matrix(t, r)
+      outcome_forecast[[outcome_name]]$outcome <- outcome[[outcome_name]] %>% matrix(t, r_i)
     } else {
-      outcome_forecast[[outcome_name]]$outcome <- model$outcomes[[outcome_name]]$outcome[t_last, ] %>% matrix(t, r)
+      outcome_forecast[[outcome_name]]$outcome <- model$outcomes[[outcome_name]]$outcome[t_last, ] %>% matrix(t, r_i)
     }
     if (!is.null(offset)) {
-      outcome_forecast[[outcome_name]]$offset <- offset[[outcome_name]] %>% matrix(t, r)
+      outcome_forecast[[outcome_name]]$offset <- offset[[outcome_name]] %>% matrix(t, r_i)
     } else {
-      outcome_forecast[[outcome_name]]$offset <- model$outcomes[[outcome_name]]$offset[t_last, ] %>% matrix(t, r)
+      outcome_forecast[[outcome_name]]$offset <- model$outcomes[[outcome_name]]$offset[t_last, ] %>% matrix(t, r_i)
     }
   }
 
@@ -337,11 +359,14 @@ forecast <- function(model, t = 1, outcome = NULL, offset = NULL, FF = NULL, G =
     next_step <- one_step_evolve(last_m, last_C, G[, , t_i] %>% matrix(n, n), D[, , t_i]**0, W[, , t_i] + C0 * (D[, , t_i] - 1))
     last_m <- next_step$at
     last_C <- next_step$Rt
-    lin_pred <- calc_lin_pred(last_m, last_C, FF[, , t_i] %>% matrix(n, k))
-    k_acum <- 0
-    for (outcome_name in names(model$outcomes)) {
-      k_cur <- outcome$r
 
+    m1[, t_i] <- last_m
+    C1[, , t_i] <- last_C
+
+    lin_pred <- calc_lin_pred(last_m, last_C, FF[, , t_i] %>% matrix(n, k))
+    f1[, t_i] <- lin_pred$ft
+    Q1[, , t_i] <- lin_pred$Qt
+    for (outcome_name in names(model$outcomes)) {
       model_i <- model$outcomes[[outcome_name]]
       pred_index <- match(model_i$var_names, fitted_data$var_names)
       lin_pred_offset <- model_i$apply_offset(
@@ -354,15 +379,22 @@ forecast <- function(model, t = 1, outcome = NULL, offset = NULL, FF = NULL, G =
 
       conj_prior <- model_i$conj_prior(ft_canom, Qt_canom, parms = model_i$parms)
       outcome_forecast[[outcome_name]]$conj_param[t_i, ] <- conj_prior
+
+      outcome_forecast[[outcome_name]]$ft[, t_i] <- lin_pred_offset$ft
+      outcome_forecast[[outcome_name]]$Qt[, , t_i] <- lin_pred_offset$Qt
     }
   }
+  if (is.null(outcome)) {
+    outcome_forecast[[outcome_name]]$outcome <- NULL
+    outcome_forecast[[outcome_name]]$offset <- NULL
+  }
 
-  k_acum <- 0
+  r_acum <- 0
   out_names <- rep(NA, r)
   output <- matrix(NA, t, r)
   for (outcome_name in names(model$outcomes)) {
     model_i <- model$outcomes[[outcome_name]]
-    k_cur <- model_i$r
+    r_cur <- model_i$r
 
     prediction <- model_i$calc_pred(outcome_forecast[[outcome_name]]$conj_param,
       outcome_forecast[[outcome_name]]$outcome,
@@ -376,23 +408,23 @@ forecast <- function(model, t = 1, outcome = NULL, offset = NULL, FF = NULL, G =
     outcome_forecast[[outcome_name]]$icl.pred <- prediction$icl.pred
     outcome_forecast[[outcome_name]]$icu.pred <- prediction$icu.pred
 
-    pred[(k_acum + 1):(k_acum + k_cur), ] <- prediction$pred
-    var.pred[(k_acum + 1):(k_acum + k_cur), (k_acum + 1):(k_acum + k_cur), ] <- prediction$var.pred
-    icl.pred[(k_acum + 1):(k_acum + k_cur), ] <- prediction$icl.pred
-    icu.pred[(k_acum + 1):(k_acum + k_cur), ] <- prediction$icu.pred
+    pred[(r_acum + 1):(r_acum + r_cur), ] <- prediction$pred
+    var.pred[(r_acum + 1):(r_acum + r_cur), (r_acum + 1):(r_acum + r_cur), ] <- prediction$var.pred
+    icl.pred[(r_acum + 1):(r_acum + r_cur), ] <- prediction$icl.pred
+    icu.pred[(r_acum + 1):(r_acum + r_cur), ] <- prediction$icu.pred
 
 
 
-    if (k_cur > 1) {
-      out_names[(k_acum + 1):(k_acum + k_cur)] <- paste0(outcome_name, "_", 1:k_cur)
+    if (r_cur > 1) {
+      out_names[(r_acum + 1):(r_acum + r_cur)] <- paste0(outcome_name, "_", 1:r_cur)
     } else {
-      out_names[(k_acum + 1):(k_acum + k_cur)] <- outcome_name
+      out_names[(r_acum + 1):(r_acum + r_cur)] <- outcome_name
     }
     if (!is.null(outcome)) {
-      output[, (k_acum + 1):(k_acum + k_cur)] <- outcome_forecast[[outcome_name]]$outcome
+      output[, (r_acum + 1):(r_acum + r_cur)] <- outcome_forecast[[outcome_name]]$outcome
     }
 
-    k_acum <- k_acum + k_cur
+    r_acum <- r_acum + r_cur
   }
 
   data_list <- list("obs" = output, "pred" = pred %>% as.matrix() %>% t(), "icl.pred" = icl.pred %>% as.matrix() %>% t(), "icu.pred" = icu.pred %>% as.matrix() %>% t())
@@ -422,7 +454,7 @@ forecast <- function(model, t = 1, outcome = NULL, offset = NULL, FF = NULL, G =
     cbind(data, type = "Forecast")
   )
 
-  return_list <- list(data = plot_data, forecast = data, outcomes = outcome_forecast)
+  return_list <- list(data = plot_data, forecast = data, outcomes = outcome_forecast, mt = m1, Ct = C1, ft = f1, Qt = Q1)
 
   if (plot != FALSE) {
     obs_na_rm <- data_past$Observation[!is.na(data_past$Observation)]
@@ -573,9 +605,9 @@ eval_past <- function(model, smooth = FALSE, h = 0, pred_cred = 0.95) {
     # next_step <- one_step_evolve(mt, Ct, FF[, , i] %>% matrix(n, r), G, D[, , i], W[, , i])
     lin_pred <- calc_lin_pred(next_step$at %>% matrix(n, 1), next_step$Rt, FF[, , i] %>% matrix(n, r))
 
-    k_acum <- 0
+    r_acum <- 0
     for (outcome in model$outcomes) {
-      k_cur <- outcome$r
+      r_cur <- outcome$r
 
       pred_index <- match(outcome$var_names, model$var_names)
       k_i <- length(pred_index)
@@ -589,28 +621,28 @@ eval_past <- function(model, smooth = FALSE, h = 0, pred_cred = 0.95) {
       conj_distr <- outcome$conj_prior(ft_canom, Qt_canom)
       prediction <- outcome$calc_pred(conj_distr, outcome$outcome[i, , drop = FALSE], pred_cred, parms = outcome$parms)
 
-      pred[(k_acum + 1):(k_acum + k_cur), i] <- prediction$pred
-      var.pred[(k_acum + 1):(k_acum + k_cur), (k_acum + 1):(k_acum + k_cur), i] <- prediction$var.pred
-      icl.pred[(k_acum + 1):(k_acum + k_cur), i] <- prediction$icl.pred
-      icu.pred[(k_acum + 1):(k_acum + k_cur), i] <- prediction$icu.pred
+      pred[(r_acum + 1):(r_acum + r_cur), i] <- prediction$pred
+      var.pred[(r_acum + 1):(r_acum + r_cur), (r_acum + 1):(r_acum + r_cur), i] <- prediction$var.pred
+      icl.pred[(r_acum + 1):(r_acum + r_cur), i] <- prediction$icl.pred
+      icu.pred[(r_acum + 1):(r_acum + r_cur), i] <- prediction$icu.pred
       log.like[i] <- log.like[i] + sum(prediction$log.like)
-      k_acum <- k_acum + k_cur
+      r_acum <- r_acum + r_cur
     }
   }
 
-  k_acum <- 0
+  r_acum <- 0
   out_names <- rep(NA, k)
   output <- matrix(NA, t_last, k)
   for (outcome_name in names(model$outcomes)) {
-    k_cur <- model$outcomes[[outcome_name]]$r
-    if (k_cur > 1) {
-      out_names[(k_acum + 1):(k_acum + k_cur)] <- paste0(outcome_name, "_", 1:k_cur)
+    r_cur <- model$outcomes[[outcome_name]]$r
+    if (r_cur > 1) {
+      out_names[(r_acum + 1):(r_acum + r_cur)] <- paste0(outcome_name, "_", 1:r_cur)
     } else {
-      out_names[(k_acum + 1):(k_acum + k_cur)] <- outcome_name
+      out_names[(r_acum + 1):(r_acum + r_cur)] <- outcome_name
     }
-    output[, (k_acum + 1):(k_acum + k_cur)] <- model$outcomes[[outcome_name]]$outcome
+    output[, (r_acum + 1):(r_acum + r_cur)] <- model$outcomes[[outcome_name]]$outcome
 
-    k_acum <- k_acum + k_cur
+    r_acum <- r_acum + r_cur
   }
 
   data_list <- list("obs" = output, "pred" = pred %>% as.matrix() %>% t(), "icl.pred" = icl.pred %>% as.matrix() %>% t(), "icu.pred" = icu.pred %>% as.matrix() %>% t())

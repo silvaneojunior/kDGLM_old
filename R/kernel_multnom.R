@@ -1,3 +1,5 @@
+#### Default Method ####
+
 #' Multinom
 #'
 #' Creates an outcome with Multinomial distribuition with the chosen parameters.
@@ -51,9 +53,9 @@ Multinom <- function(p, outcome, offset = outcome**0) {
     convert_mat_default = convert_mat_default,
     parms = parms,
     name = "Multinomial",
-    conj_prior = convert_Dir_Normal,
-    conj_post = convert_Normal_Dir,
-    update = update_Dir,
+    conj_prior = convert_Multinom_Normal,
+    conj_post = convert_Normal_Multinom,
+    update = update_Multinom,
     smoother = generic_smoother,
     calc_pred = multnom_pred,
     apply_offset = function(ft, Qt, offset) {
@@ -77,6 +79,7 @@ Multinom <- function(p, outcome, offset = outcome**0) {
     }
   )
   class(distr) <- "dlm_distr"
+  distr$alt_method <- FALSE
   return(distr)
 }
 
@@ -101,7 +104,7 @@ system_multinom <- function(x, parms) {
   return(f_all)
 }
 
-#' convert_Dir_Normal
+#' convert_Multinom_Normal
 #'
 #' Calculate the parameters of the Dirichlet that best approximates the given log-Normal distribuition.
 #' The approximation is the best in the sense that it minimizes the KL divergence from the log-Normal to the Dirichlet.
@@ -113,7 +116,7 @@ system_multinom <- function(x, parms) {
 #' @importFrom rootSolve multiroot
 #' @return The parameters of the conjugated distribuition of the linear predictor.
 #' @export
-convert_Dir_Normal <- function(ft, Qt, parms = list()) {
+convert_Multinom_Normal <- function(ft, Qt, parms = list()) {
   calc_helper <- 1 + sum(exp(ft))
   r <- length(ft)
 
@@ -134,7 +137,7 @@ convert_Dir_Normal <- function(ft, Qt, parms = list()) {
   return(alpha)
 }
 
-#' convert_Normal_Dir
+#' convert_Normal_Multinom
 #'
 #' Calculate the parameters of the log-Normal that best approximates the given Dirichlet distribuition.
 #' The approximation is the best in the sense that it minimizes the KL divergence from the Dirichlet to the log-Normal
@@ -144,7 +147,7 @@ convert_Dir_Normal <- function(ft, Qt, parms = list()) {
 #'
 #' @return The parameters of the Normal distribuition of the linear predictor.
 #' @export
-convert_Normal_Dir <- function(conj_prior, parms = list()) {
+convert_Normal_Multinom <- function(conj_prior, parms = list()) {
   alpha <- conj_prior
   r <- length(alpha) - 1
   ft <- digamma(alpha[-r - 1]) - digamma(alpha[r + 1])
@@ -153,17 +156,19 @@ convert_Normal_Dir <- function(conj_prior, parms = list()) {
   return(list("ft" = ft, "Qt" = Qt))
 }
 
-#' update_Dir
+#' update_Multinom
 #'
 #' Calculate posterior parameter for the Dirichlet, assuming that the observed values came from a Multinomial model from which the number of trials is known and the prior distribuition for the probabilities of each category have joint distribuition Dirichlet.
 #'
 #' @param conj_prior list: A vector containing the concentration parameters of the Dirichlet.
+#' @param ft vector: A vector representing the means from the normal distribution. Not used in the default method.
+#' @param Qt matrix: A matrix representing the covariance matrix of the normal distribution. Not used in the default method.
 #' @param y vector: A vector containing the observations.
 #' @param parms list: A list of extra known parameters of the distribuition. Not used in this kernel.
 #'
 #' @return The parameters of the posterior distribution.
 #' @export
-update_Dir <- function(conj_prior, y, parms = list()) {
+update_Multinom <- function(conj_prior, ft, Qt, y, parms = list()) {
   r <- length(y)
   alpha <- conj_prior + y
   return(alpha)
@@ -199,35 +204,45 @@ update_Dir <- function(conj_prior, y, parms = list()) {
 multnom_pred <- function(conj_param, outcome, parms = list(), pred_cred = 0.95) {
   pred.flag <- !is.na(pred_cred)
   like.flag <- !is.null(outcome)
+  if (!like.flag & !pred.flag) {
+    return(list())
+  }
 
-  conj_param <- if (is.null(dim(conj_param))) {
-    conj_param %>%
+  if (is.null(dim(conj_param))) {
+    conj_param <- conj_param %>%
       data.frame.to_matrix() %>%
       t()
-  } else {
-    conj_param
   }
-  outcome <- if (is.null(dim(outcome))) {
-    outcome %>%
-      data.frame.to_matrix() %>%
-      t()
-  } else {
-    outcome
-  }
-  T <- nrow(conj_param)
-  r <- ncol(conj_param) - 1
 
-  pred <- matrix(NA, r + 1, T)
-  var.pred <- array(NA, c(r + 1, r + 1, T))
-  icl.pred <- matrix(NA, r + 1, T)
-  icu.pred <- matrix(NA, r + 1, T)
-  log.like <- rep(NA, T)
-  for (t in 1:T) {
-    outcome_t <- outcome[t, ]
+  t <- nrow(conj_param)
+  k <- ncol(conj_param) - 1
+  r <- ncol(conj_param)
+
+  if (pred.flag) {
+    pred <- matrix(NA, r, t)
+    var.pred <- array(NA, c(r, r, t))
+    icl.pred <- matrix(NA, r, t)
+    icu.pred <- matrix(NA, r, t)
+  } else {
+    pred <- NULL
+    var.pred <- NULL
+    icl.pred <- NULL
+    icu.pred <- NULL
+  }
+  if (like.flag) {
+    outcome <- matrix(outcome, t, r)
+    log.like <- rep(NA, t)
+  } else {
+    outcome <- matrix(1 / r, t, r)
+    log.like <- NULL
+  }
+
+  for (t_i in 1:t) {
+    outcome_t <- outcome[t_i, ]
     N <- sum(outcome_t)
     N <- max(N, 1)
 
-    alpha <- conj_param[t, ] %>% as.numeric()
+    alpha <- conj_param[t_i, ] %>% as.numeric()
     alpha0 <- sum(alpha)
 
     const <- lgamma(alpha0) + lgamma(N + 1) - lgamma(N + alpha0)
@@ -236,32 +251,32 @@ multnom_pred <- function(conj_param, outcome, parms = list(), pred_cred = 0.95) 
       p <- alpha / alpha0
       p_var <- p * (1 - p) / (alpha0 + 1)
 
-      pred[, t] <- N * p
-      var.pred[, , t] <- diag(N * p * (1 - p) * (N + alpha0) / (alpha0 + 1))
-      for (i in 2:(r + 1)) {
+      pred[, t_i] <- N * p
+      var.pred[, , t_i] <- diag(N * p * (1 - p) * (N + alpha0) / (alpha0 + 1))
+      for (i in 2:r) {
         for (j in 1:(i - 1)) {
-          var.pred[i, j, t] <- var.pred[j, i, t] <- -N * p[i] * p[j] * (N + alpha0) / (alpha0 + 1)
+          var.pred[i, j, t_i] <- var.pred[j, i, t_i] <- -N * p[i] * p[j] * (N + alpha0) / (alpha0 + 1)
         }
       }
 
-      x_mat <- matrix(0:N, N + 1, r + 1)
-      alpha_mat <- matrix(alpha, N + 1, r + 1, byrow = TRUE)
+      x_mat <- matrix(0:N, N + 1, r)
+      alpha_mat <- matrix(alpha, N + 1, r, byrow = TRUE)
       x_alpha_mat <- x_mat + alpha_mat
 
       prob_mat <- lgamma(x_alpha_mat) - lgamma(x_mat + 1) - lgamma(alpha_mat) + lgamma(N + alpha0 - x_alpha_mat) - lgamma(N - x_mat + 1) - lgamma(alpha0 - alpha_mat)
       prob_mat <- exp(const + prob_mat)
-      for (i in 1:(r + 1)) {
+      for (i in 1:r) {
         probs_acum <- cumsum(prob_mat[, i])
 
-        icl.pred[i, t] <- sum(probs_acum <= ((1 - pred_cred) / 2)) - 1
-        icu.pred[i, t] <- sum(probs_acum <= (1 - (1 - pred_cred) / 2))
+        icl.pred[i, t_i] <- sum(probs_acum <= ((1 - pred_cred) / 2)) - 1
+        icu.pred[i, t_i] <- sum(probs_acum <= (1 - (1 - pred_cred) / 2))
 
-        icl.pred[i, t] <- max(0, icl.pred[i])
-        icu.pred[i, t] <- min(N, icu.pred[i])
+        icl.pred[i, t_i] <- max(0, icl.pred[i])
+        icu.pred[i, t_i] <- min(N, icu.pred[i])
       }
     }
     if (like.flag) {
-      log.like[t] <- const + sum(lgamma(outcome_t + alpha) - lgamma(outcome_t + 1) - lgamma(alpha))
+      log.like[t_i] <- const + sum(lgamma(outcome_t + alpha) - lgamma(outcome_t + 1) - lgamma(alpha))
     }
   }
 
@@ -272,4 +287,107 @@ multnom_pred <- function(conj_param, outcome, parms = list(), pred_cred = 0.95) 
     "icu.pred" = icu.pred,
     "log.like" = log.like
   )
+}
+
+#### Alternative Method ####
+
+#' Multinom_alt
+#'
+#' Creates an outcome with Multinomial distribuition with the chosen parameters.
+#'
+#' @param p character: a vector with the name of the linear preditor associated with the probality of each category (except the base one, which is assumed to be the last).
+#' @param outcome vector: Values of the observed data.
+#' @param offset vector: The offset at each observation. Must have the same shape as outcome.
+#'
+#' @return A object of the class dlm_distr
+#' @export
+#'
+#' @examples
+#'
+#' # Multinomial case
+#' T <- 200
+#' y1 <- rpois(T, exp(5 + (-T:T / T) * 5))
+#' y2 <- rpois(T, exp(6 + (-T:T / T) * 5 + sin((-T:T) * (2 * pi / 12))))
+#' y3 <- rpois(T, exp(5))
+#'
+#' y <- cbind(y1, y2, y3)
+#'
+#' level1 <- polynomial_block(p1 = 1)
+#' level2 <- polynomial_block(p2 = 1)
+#' season <- harmonic_block(p2 = 1, period = 12)
+#' outcome <- Multinom_alt(p = c("p1", "p2"), outcome = y)
+#'
+#' fitted_data <- fit_model(level1, level2, season, outcomes = outcome)
+#' summary(fitted_data)
+#'
+#' show_fit(fitted_data, smooth = TRUE)$plot
+Multinom_alt <- function(p, outcome, offset = outcome**0) {
+  distr <- Multinom(p, outcome, offset)
+
+  distr$alt_method <- TRUE
+  distr$update <- update_Multinom_alt
+  return(distr)
+}
+
+#' update_Multinom_alt
+#'
+#' Calculate posterior parameter for the Dirichlet, assuming that the observed values came from a Multinomial model from which the number of trials is known and the prior distribuition for the probabilities of each category have joint distribuition Dirichlet.
+#'
+#' @param conj_prior list: A vector containing the concentration parameters of the Dirichlet. Not used in the alternative method.
+#' @param ft vector: A vector representing the means from the normal distribution.
+#' @param Qt matrix: A matrix representing the covariance matrix of the normal distribution.
+#' @param y vector: A vector containing the observations.
+#' @param parms list: A list of extra known parameters of the distribuition. Not used in this kernel.
+#'
+#' @return The parameters of the posterior distribution.
+#' @export
+update_Multinom_alt <- function(conj_prior, ft, Qt, y, parms = list()) {
+  f0 <- ft
+  S0 <- ginv(Qt)
+  n <- sum(y)
+  r <- length(y)
+
+  log.like <- function(x) {
+    p0 <- c(exp(x), 1)
+    p <- p0 / sum(p0)
+
+    sum(y * log(p)) - 0.5 * t(x - f0) %*% S0 %*% (x - f0)
+  }
+
+  d1.log.like <- function(x) {
+    p0 <- c(x, 0)
+    # p0 <- p0-max(p0)
+    p0 <- exp(p0)
+    p <- p0 / sum(p0)
+
+    y[-r] - n * p[-r] +
+      -S0 %*% (x - f0)
+  }
+
+  # d2.log.like <- function(x) {
+  #   p0 <- c(x, 0)
+  #   # p0 <- p0-max(p0)
+  #   p0=exp(p0)
+  #   p <- p0 / sum(p0)
+  #
+  #   mat <- -n * p[-r] %*% t(p[-r]) +
+  #     -S0
+  #   mat
+  # }
+
+  d2.log.like <- function(x) {
+    mat <- matrix(NA, r - 1, r - 1)
+    dev.ref <- d1.log.like(x)
+    for (i in 1:(r - 1)) {
+      x.dev <- x
+      x.dev[i] <- x[i] + 1e-8
+      mat[, i] <- (d1.log.like(x.dev) - dev.ref) / (1e-8)
+    }
+    mat
+  }
+
+  mode <- f_root(d1.log.like, d2.log.like, start = f0)$root
+  H <- d2.log.like(mode)
+  S <- spdinv(-H)
+  return(list("ft" = matrix(mode, length(mode), 1), "Qt" = S))
 }

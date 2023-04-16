@@ -1,3 +1,5 @@
+#### Default Method ####
+
 #' Normal
 #'
 #' Creates an outcome with Normal distribuition with the chosen parameters (can only specify 2,).
@@ -57,6 +59,7 @@ Normal <- function(mu, tau = NA, sigma = NA, sigma2 = NA, outcome, offset = outc
   if (is.numeric(val)) {
     var_names <- c(mu)
     names(var_names) <- c("mu")
+    k <- 1
     distr <- list(
       "conj_prior" = convert_dummy_prior,
       "conj_post" = convert_dummy_post,
@@ -111,6 +114,7 @@ Normal <- function(mu, tau = NA, sigma = NA, sigma2 = NA, outcome, offset = outc
   } else {
     var_names <- c(mu, val)
     names(var_names) <- c("mu", val_type)
+    k <- 2
     distr <- list(
       "conj_prior" = convert_NG_Normal,
       "conj_post" = convert_Normal_NG,
@@ -156,7 +160,7 @@ Normal <- function(mu, tau = NA, sigma = NA, sigma2 = NA, outcome, offset = outc
   distr$var_names <- var_names
   distr$family <- family
   distr$r <- 1
-  distr$k <- length(var_names)
+  distr$k <- k
   distr$t <- t
   distr$offset <- matrix(offset, t, r)
   distr$outcome <- matrix(outcome, t, r)
@@ -167,10 +171,12 @@ Normal <- function(mu, tau = NA, sigma = NA, sigma2 = NA, outcome, offset = outc
 
   class(distr) <- "dlm_distr"
 
+  distr$alt_method <- FALSE
+
   return(distr)
 }
 
-#### Normal with unknown variance ####
+##### Normal with unknown variance #####
 
 #' convert_NG_Normal
 #'
@@ -203,12 +209,6 @@ convert_Normal_NG <- function(conj_distr, parms = list()) {
   q1 <- conj_distr$beta / (conj_distr$c0 * conj_distr$alpha)
   q2 <- trigamma(conj_distr$alpha)
   q12 <- 0
-  ####################################################
-  # Se estas equações forem usadas no lugar das que estão acima o ajuste fica bom, mesmo em casos relativamente extremos (priori vaga).
-  #
-  # q1 <- conj_distr$beta / (conj_distr$c0 * (conj_distr$alpha))
-  # q2 <- 2*log(conj_distr$alpha)-2*digamma(conj_distr$alpha)
-  ####################################################
 
   ft <- c(f1, f2)
   Qt <- matrix(c(q1, q12, q12, q2), byrow = F, ncol = 2)
@@ -220,12 +220,14 @@ convert_Normal_NG <- function(conj_distr, parms = list()) {
 #' Calculate posterior parameter for the Normal-Gamma, assuming that the observed values came from a Normal model from which the prior distribuition for the mean and the precision have joint distribuition Normal-Gamma
 #'
 #' @param conj_prior list: A vector containing the parameters of the Normal-Gamma (mu0,c0,alpha,beta).
+#' @param ft vector: A vector representing the means from the normal distribution. Not used in the default method.
+#' @param Qt matrix: A matrix representing the covariance matrix of the normal distribution. Not used in the default method.
 #' @param y vector: A vector containing the observations.
 #' @param parms list: A list of extra known parameters of the distribuition. Not used in this kernel.
 #'
 #' @return The parameters of the posterior distribution.
 #' @export
-update_NG <- function(conj_prior, y, parms = list()) {
+update_NG <- function(conj_prior, ft, Qt, y, parms = list()) {
   mu0 <- (conj_prior$c0 * conj_prior$mu0 + y) / (conj_prior$c0 + 1)
   c0 <- conj_prior$c0 + 1
   alpha <- conj_prior$alpha + 0.5
@@ -268,6 +270,9 @@ update_NG <- function(conj_prior, y, parms = list()) {
 normal_gamma_pred <- function(conj_param, outcome = NULL, parms = list(), pred_cred = 0.95) {
   pred.flag <- !is.na(pred_cred)
   like.flag <- !is.null(outcome)
+  if (!like.flag & !pred.flag) {
+    return(list())
+  }
 
   c0 <- conj_param$c0
   mu0 <- conj_param$mu0
@@ -310,7 +315,7 @@ normal_gamma_pred <- function(conj_param, outcome = NULL, parms = list(), pred_c
   )
 }
 
-##### Normal with known variance ####
+##### Normal with known variance #####
 
 #' convert_dummy_prior
 #'
@@ -352,17 +357,14 @@ convert_dummy_post <- function(conj_prior, parms) {
 #' Calculate posterior parameter for the Normal, assuming that the observed values came from a Normal model from which the covariance is known and the prior distribuition for the mean vector have Normal distribuition
 #'
 #' @param conj_prior list: A vector containing the concentration parameters of the Normal.
+#' @param ft vector: A vector representing the means from the normal distribution. Not used in the default method.
+#' @param Qt matrix: A matrix representing the covariance matrix of the normal distribution. Not used in the default method.
 #' @param y vector: A vector containing the observations.
 #' @param parms list: A list of extra known parameters of the distribuition. For this kernel, parms should containg the covariance matrix parameter (Sigma) for the observational Normal model.
 #'
 #' @return The parameters of the posterior distribution.
 #' @export
-update_Normal_dummy <- function(conj_prior, y, parms) {
-  r_star <- length(conj_prior)
-  r <- (-1 + sqrt(1 + 4 * r_star)) / 2
-  ft <- conj_prior[1:r]
-  Qt <- conj_prior[(r + 1):(r * r + r)] %>% matrix(r, r)
-
+update_Normal_dummy <- function(conj_prior, ft, Qt, y, parms) {
   Sigma <- parms$Sigma
   if (length(Sigma) == 1) {
     null.flag <- Sigma == 0
@@ -417,35 +419,40 @@ update_Normal_dummy <- function(conj_prior, y, parms) {
 normal_pred <- function(conj_param, outcome = NULL, parms = list(), pred_cred = 0.95) {
   pred.flag <- !is.na(pred_cred)
   like.flag <- !is.null(outcome)
+  if (!like.flag & !pred.flag) {
+    return(list())
+  }
 
   if (is.null(dim(conj_param))) {
     conj_param <- conj_param %>% matrix(1, length(conj_param))
   }
   r <- dim(conj_param)[2]
   r <- (-1 + sqrt(1 + 4 * r)) / 2
-  T <- dim(conj_param)[1]
+  t <- dim(conj_param)[1]
 
   pred <- t(conj_param[, 1:r] %>% as.matrix())
   var.pred <- conj_param[(r + 1):(r * r + r)] %>%
     t() %>%
-    array(c(r, r, T))
-  icl.pred <- matrix(NA, T, r)
-  icu.pred <- matrix(NA, T, r)
-  log.like <- rep(NA, T)
-  outcome <- matrix(outcome, T, r)
-  for (t in 1:T) {
-    mu <- pred[, t]
-    sigma2 <- (var.pred[, , t] + parms$Sigma) %>% matrix(r, r)
+    array(c(r, r, t))
+  icl.pred <- matrix(NA, t, r)
+  icu.pred <- matrix(NA, t, r)
+  log.like <- rep(NA, t)
+  if (like.flag) {
+    outcome <- matrix(outcome, t, r)
+  }
+  for (i in 1:t) {
+    mu <- pred[, i]
+    sigma2 <- (var.pred[, , i] + parms$Sigma) %>% matrix(r, r)
     if (pred.flag) {
-      var.pred[, , t] <- sigma2
+      var.pred[, , i] <- sigma2
       if (length(sigma2) > 1) {
         sigma2 <- diag(sigma2)
       }
-      icl.pred[t, ] <- qnorm((1 - pred_cred) / 2) * sqrt(sigma2) + mu
-      icu.pred[t, ] <- qnorm(1 - (1 - pred_cred) / 2) * sqrt(sigma2) + mu
+      icl.pred[i, ] <- qnorm((1 - pred_cred) / 2) * sqrt(sigma2) + mu
+      icu.pred[i, ] <- qnorm(1 - (1 - pred_cred) / 2) * sqrt(sigma2) + mu
     }
     if (like.flag) {
-      log.like[t] <- dmvnorm(outcome[t, ], mu, sigma2, log = TRUE)
+      log.like[i] <- dmvnorm(outcome[i, ], mu, sigma2, log = TRUE)
     }
   }
   if (!pred.flag) {
@@ -465,4 +472,115 @@ normal_pred <- function(conj_param, outcome = NULL, parms = list(), pred_cred = 
     "icu.pred" = icu.pred,
     "log.like" = log.like
   )
+}
+
+#### Alternative Method ####
+
+#' Normal
+#'
+#' Creates an outcome with Normal distribuition with the chosen parameters (can only specify 2,).
+#'
+#' @param mu character: Name of the linear preditor associated with the mean parameter of the Normal distribuition. The parameter is treated as unknowed and equal to the associated linear preditor.
+#' @param tau character: Name of the linear preditor associated with the precision parameter of the Normal distribuition. The parameter is treated as unknowed and equal to the exponential of the associated linear preditor. It cannot be specified with sigma or sigma2
+#' @param sigma character: Name of the linear preditor associated with the scale parameter of the Normal distribuition. The parameter is treated as unknowed and equal to the exponential of the associated linear preditor. It cannot be specified with tau or sigma2.
+#' @param sigma2 character or numeric: Name of the linear preditor associated with the variance parameter of the Normal distribuition. If numeric, this parameter is treated as knowed and equal to the value passed. If a character, the parameter is treated as unknowed and equal to the exponential of the associated linear preditor. It cannot be specified with sigma or tau.
+#' @param outcome vector: Values of the observed data.
+#' @param offset vector: The offset at each observation. Must have the same shape as outcome.
+#'
+#' @return A object of the class dlm_distr
+#' @export
+#'
+#' @examples
+#'
+#' # Normal case
+#' T <- 200
+#' mu <- rnorm(T, 0, 0.1)
+#' data <- rnorm(T, cumsum(mu))
+#'
+#' level <- polynomial_block(
+#'   mu = 1,
+#'   D = 1 / 0.95
+#' )
+#' variance <- polynomial_block(
+#'   sigma2 = 1
+#' )
+#'
+#' # Known variance
+#' outcome <- Normal_alt(mu = "mu", sigma2 = 1, outcome = data)
+#'
+#' fitted_data <- fit_model(level, outcomes = outcome)
+#' summary(fitted_data)
+#'
+#' show_fit(fitted_data, smooth = TRUE)$plot
+#'
+#' # Unknown variance
+#' outcome <- Normal_alt(mu = "mu", sigma2 = "sigma2", outcome = data)
+#'
+#' fitted_data <- fit_model(level, variance, outcomes = outcome)
+#' summary(fitted_data)
+#'
+#' show_fit(fitted_data, smooth = TRUE)$plot
+Normal_alt <- function(mu, tau = NA, sigma = NA, sigma2 = NA, outcome, offset = outcome**0) {
+  distr <- Normal(mu, tau, sigma, sigma2, outcome, offset)
+
+  if (!is.numeric(sigma2)) {
+    distr$update <- update_NG_alt
+    distr$alt_method <- TRUE
+  }
+  return(distr)
+}
+
+##### Normal with unknown variance #####
+
+#' update_NG_alt
+#'
+#' Calculate posterior parameter for the Normal-Gamma, assuming that the observed values came from a Normal model from which the prior distribuition for the mean and the precision have joint distribuition Normal-Gamma
+#'
+#' @param conj_prior list: A vector containing the parameters of the Normal-Gamma (mu0,c0,alpha,beta). Not used in the alternative method.
+#' @param ft vector: A vector representing the means from the normal distribution.
+#' @param Qt matrix: A matrix representing the covariance matrix of the normal distribution.
+#' @param y vector: A vector containing the observations.
+#' @param parms list: A list of extra known parameters of the distribuition. Not used in this kernel.
+#'
+#' @return The parameters of the posterior distribution.
+#' @export
+update_NG_alt <- function(conj_prior, ft, Qt, y, parms = list()) {
+  f0 <- ft
+  Q0 <- Qt
+  S0 <- ginv(Qt)
+
+  mu1 <- ft[1]
+  mu2 <- ft[2]
+  sigma1 <- Qt[1, 1]
+  sigma2 <- Qt[2, 2]
+  rho <- Qt[1, 2] / sqrt(sigma1 * sigma2)
+
+  f <- function(x2) {
+    mu1_cond <- mu1 + rho * sqrt(sigma1 / sigma2) * (log(x2) - mu2)
+    sigma1_cond <- (1 - rho**2) * sigma1
+
+    prec_obs <- x2
+    prec_mu <- 1 / sigma1_cond
+    mu1_cond_update <- (prec_obs * y + prec_mu * mu1_cond) / (prec_obs + prec_mu)
+    sigma1_cond_update <- 1 / (prec_obs + prec_mu)
+
+    prob <- exp(dnorm(y, mu1_cond, sqrt(sigma1_cond + 1 / x2), log = TRUE) + dlnorm(x2, mu2, sqrt(sigma2), log = TRUE))
+
+
+    rbind(
+      prob,
+      mu1_cond_update * prob,
+      log(x2) * prob,
+      (sigma1_cond_update + mu1_cond_update**2) * prob,
+      (mu1_cond_update * log(x2)) * prob,
+      (mu1_cond_update * log(x2)) * prob,
+      (log(x2)**2) * prob
+    )
+  }
+
+  val <- cubintegrate(f, c(0), c(Inf), fDim = 7, nVec = 1000)$integral
+  ft <- matrix(val[2:3] / val[1], 2, 1)
+  Qt <- matrix(val[4:7], 2, 2) / val[1] - ft %*% t(ft)
+
+  return(list("ft" = ft, "Qt" = Qt))
 }

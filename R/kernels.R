@@ -128,7 +128,7 @@ analytic_filter <- function(outcomes, m0 = 0, C0 = 1, FF, G, D, W, p_monit = NA,
     param_names <- outcomes[[outcome_name]]$param_names(outcomes[[outcome_name]]$outcome)
     outcomes[[outcome_name]]$conj_prior_param <- matrix(NA, T, length(param_names)) %>% as.data.frame()
     names(outcomes[[outcome_name]]$conj_prior_param) <- param_names
-    outcomes[[outcome_name]]$conj_post_param <- outcomes[[outcome_name]]$conj_prior_param
+    # outcomes[[outcome_name]]$conj_post_param <- outcomes[[outcome_name]]$conj_prior_param
 
     outcomes[[outcome_name]]$log.like.null <- rep(NA, T)
     outcomes[[outcome_name]]$log.like.alt <- rep(NA, T)
@@ -201,10 +201,18 @@ analytic_filter <- function(outcomes, m0 = 0, C0 = 1, FF, G, D, W, p_monit = NA,
           "Qt_step" = next_step$Qt,
           "FF_step" = lin_pred$FF,
           "conj_prior" = conj_prior,
-          "log_like" = outcome$calc_pred(conj_prior, outcome$outcome[t, ], parms = outcome$parms, pred_cred = NA)$log.like
+          "log_like" = outcome$calc_pred(conj_prior, if (is.na(p_monit)) {
+            NULL
+          } else {
+            outcome$outcome[t, ]
+          }, parms = outcome$parms, pred_cred = NA)$log.like
         )
       }
-      outcomes[[outcome_name]]$log.like.null[t] <- models$null_model$log_like
+      outcomes[[outcome_name]]$log.like.null[t] <- if (is.na(p_monit)) {
+        NA
+      } else {
+        models$null_model$log_like
+      }
       outcomes[[outcome_name]]$log.like.alt[t] <- if (is.na(p_monit)) {
         -Inf
       } else {
@@ -242,15 +250,19 @@ analytic_filter <- function(outcomes, m0 = 0, C0 = 1, FF, G, D, W, p_monit = NA,
       # outcomes[[outcome_name]]$conj_prior_param[t, ] <- conj_prior
       if (na.flag) {
         norm_post <- list(ft = ft_step, Qt = Qt_step)
-        outcomes[[outcome_name]]$conj_post_param[t, ] <- conj_prior
+        # outcomes[[outcome_name]]$conj_post_param[t, ] <- conj_prior
       } else {
         ft_canom <- outcome$convert_mat_canom %*% ft_step
         Qt_canom <- outcome$convert_mat_canom %*% Qt_step %*% t(outcome$convert_mat_canom)
         conj_prior <- outcome$conj_prior(ft_canom, Qt_canom, parms = outcome$parms)
-        conj_post <- outcome$update(conj_prior, outcome$outcome[t, ], parms = outcome$parms)
+        conj_post <- outcome$update(conj_prior, ft = ft_canom, Qt = Qt_canom, y = outcome$outcome[t, ], parms = outcome$parms)
 
-        outcomes[[outcome_name]]$conj_post_param[t, ] <- conj_post
-        norm_post <- outcome$conj_post(conj_post, parms = outcome$parms)
+        # outcomes[[outcome_name]]$conj_post_param[t, ] <- conj_post
+        if (outcome$alt_method) {
+          norm_post <- conj_post
+        } else {
+          norm_post <- outcome$conj_post(conj_post, parms = outcome$parms)
+        }
 
         ft_star <- norm_post$ft <- outcome$convert_mat_default %*% norm_post$ft
         Qt_star <- norm_post$Qt <- outcome$convert_mat_default %*% norm_post$Qt %*% t(outcome$convert_mat_default)
@@ -351,4 +363,30 @@ calc_lin_pred <- function(at, Rt, FF) {
   ft <- (t(FF_step) %*% at)
   Qt <- as.matrix(t(FF_step) %*% Rt %*% FF_step)
   list("ft" = ft - charge, "Qt" = Qt, "FF" = FF_step)
+}
+
+format_ft <- function(ft, Qt, parms) {
+  return(do.call(c, list(ft, Qt)))
+}
+
+format_param <- function(conj_param, parms) {
+  if (is.null(dim(conj_param))) {
+    r_star <- length(conj_param)
+    r <- (-1 + sqrt(1 + 4 * r_star)) / 2
+    t <- 1
+    ft <- conj_param[1:r] %>% matrix(r, t)
+    Qt <- conj_param[(r + 1):(r * r + r)] %>% array(c(r, r, t))
+  } else {
+    r_star <- dim(conj_param)[2]
+    t <- dim(conj_param)[1]
+    r <- (-1 + sqrt(1 + 4 * r_star)) / 2
+    ft <- conj_param[, 1:r] %>%
+      data.frame.to_matrix() %>%
+      t()
+    Qt <- conj_param[, (r + 1):(r * r + r)] %>%
+      data.frame.to_matrix() %>%
+      t() %>%
+      array(c(r, r, t))
+  }
+  return(list("ft" = ft, "Qt" = Qt))
 }
