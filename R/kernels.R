@@ -250,7 +250,7 @@ analytic_filter <- function(outcomes, m0 = 0, C0 = 1, FF, G, D, W, p_monit = NA,
       # outcomes[[outcome_name]]$conj_prior_param[t, ] <- conj_prior
       if (na.flag) {
         norm_post <- list(ft = ft_step, Qt = Qt_step)
-        outcomes[[outcome_name]]$conj_post_param[t, ] <- conj_prior
+        # outcomes[[outcome_name]]$conj_post_param[t, ] <- conj_prior
       } else {
         ft_canom <- outcome$convert_mat_canom %*% ft_step
         Qt_canom <- outcome$convert_mat_canom %*% Qt_step %*% t(outcome$convert_mat_canom)
