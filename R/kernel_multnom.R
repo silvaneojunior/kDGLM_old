@@ -194,6 +194,7 @@ update_Multinom <- function(conj_prior, ft, Qt, y, parms = list()) {
 #'    \item log.like vector: the The log likelihood for the outcome given the conjugated parameters.
 #' }
 #'
+#' @importFrom Rfast data.frame.to_matrix
 #' @export
 #'
 #' @examples
