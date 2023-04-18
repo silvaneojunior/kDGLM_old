@@ -83,27 +83,6 @@ Multinom <- function(p, outcome, offset = outcome**0) {
   return(distr)
 }
 
-#' system_multinom
-#'
-#' Evaluate the compatibilizing equation for the multinomial model (see Ref. Raíra).
-#'
-#' @param x vector: current tau values.
-#' @param parms list: auxiliary values for the system.
-#'
-#' @return a vector with the values of the system (see Ref. Raíra).
-system_multinom <- function(x, parms) {
-  x <- exp(x)
-  digamma_last <- digamma(x[length(x)] - sum(x[-length(x)]))
-  digamma_vec <- digamma(x)
-
-  f_all <- parms$ft - digamma_vec[-length(x)] + digamma_last
-  last_guy <- parms$media.log - digamma_last + digamma_vec[length(x)]
-
-  f_all <- c(f_all, last_guy)
-
-  return(f_all)
-}
-
 #' convert_Multinom_Normal
 #'
 #' Calculate the parameters of the Dirichlet that best approximates the given log-Normal distribuition.
@@ -117,8 +96,10 @@ system_multinom <- function(x, parms) {
 #' @return The parameters of the conjugated distribuition of the linear predictor.
 #' @export
 convert_Multinom_Normal <- function(ft, Qt, parms = list()) {
+
   calc_helper <- 1 + sum(exp(ft))
-  r <- length(ft)
+  k <- length(ft)
+  r <- k+1
 
   H <- exp(ft) %*% t(exp(ft)) / (calc_helper**2)
   diag(H) <- diag(H) - exp(ft) / calc_helper
@@ -126,14 +107,45 @@ convert_Multinom_Normal <- function(ft, Qt, parms = list()) {
   media.log <-
     -log(calc_helper) + sum(diag(0.5 * (H %*% Qt)))
 
-  parms <- list("ft" = ft, "media.log" = media.log)
+  system_multinom <- function(x) {
+    x <- exp(x)
+    digamma_last <- digamma(x[r] - sum(x[-r]))
+    digamma_vec <- digamma(x)
 
-  ss1 <- multiroot(f = system_multinom, start = log(c(rep(0.01, r), 0.01 * (r + 1))), parms = parms, maxiter = 1000, rtol = 10**-20)
+    f_all <- ft - digamma_vec[-r] + digamma_last
+    last_guy <- media.log - digamma_last + digamma_vec[r]
+
+    f_all <- c(f_all, last_guy)
+
+    return(f_all)
+  }
+
+  jacob_multinom <- function(x) {
+    x <- exp(x)
+    trigamma_last <- trigamma(x[r] - sum(x[-r]))
+    trigamma_vec <- trigamma(x)
+
+    jacob=diag(trigamma_vec)
+    jacob[-r,-r]=-jacob[-r,-r]-trigamma_last
+    jacob[r,-r]=trigamma_last
+    jacob[-r,r]=trigamma_last
+    jacob[r,r]=jacob[r,r]-trigamma_last
+
+    t(jacob*x)
+  }
+
+  p0=exp(c(ft,0))
+  p=p0/sum(p0)
+
+  ss1 <- f_root(system_multinom,
+                jacob_multinom,
+                # start = log(c(rep(0.01, r-1), 0.01 * r)))
+                start = log(c(p[-r], 1)*1))
 
   tau <- exp(as.numeric(ss1$root))
 
   alpha <- tau
-  alpha[r + 1] <- tau[r + 1] - sum(tau[-r - 1])
+  alpha[r] <- tau[r] - sum(tau[-r])
   return(alpha)
 }
 
@@ -149,10 +161,11 @@ convert_Multinom_Normal <- function(ft, Qt, parms = list()) {
 #' @export
 convert_Normal_Multinom <- function(conj_prior, parms = list()) {
   alpha <- conj_prior
-  r <- length(alpha) - 1
-  ft <- digamma(alpha[-r - 1]) - digamma(alpha[r + 1])
-  Qt <- matrix(trigamma(alpha[r + 1]), r, r)
-  diag(Qt) <- trigamma(alpha[-r - 1]) + trigamma(alpha[r + 1])
+  r <- length(alpha)
+  k <- r-1
+  ft <- digamma(alpha[-r]) - digamma(alpha[r])
+  Qt <- matrix(trigamma(alpha[r]), k, k)
+  diag(Qt) <- trigamma(alpha[-r]) + trigamma(alpha[r])
   return(list("ft" = ft, "Qt" = Qt))
 }
 
@@ -330,6 +343,7 @@ Multinom_alt <- function(p, outcome, offset = outcome**0) {
   return(distr)
 }
 
+
 #' update_Multinom_alt
 #'
 #' Calculate posterior parameter for the Dirichlet, assuming that the observed values came from a Multinomial model from which the number of trials is known and the prior distribuition for the probabilities of each category have joint distribuition Dirichlet.
@@ -340,9 +354,12 @@ Multinom_alt <- function(p, outcome, offset = outcome**0) {
 #' @param y vector: A vector containing the observations.
 #' @param parms list: A list of extra known parameters of the distribuition. Not used in this kernel.
 #'
+#' @importFrom Rfast spdinv
+#'
 #' @return The parameters of the posterior distribution.
 #' @export
 update_Multinom_alt <- function(conj_prior, ft, Qt, y, parms = list()) {
+
   f0 <- ft
   S0 <- ginv(Qt)
   n <- sum(y)
@@ -357,7 +374,7 @@ update_Multinom_alt <- function(conj_prior, ft, Qt, y, parms = list()) {
 
   d1.log.like <- function(x) {
     p0 <- c(x, 0)
-    # p0 <- p0-max(p0)
+    p0 <- p0-max(p0)
     p0 <- exp(p0)
     p <- p0 / sum(p0)
 
@@ -365,29 +382,33 @@ update_Multinom_alt <- function(conj_prior, ft, Qt, y, parms = list()) {
       -S0 %*% (x - f0)
   }
 
-  # d2.log.like <- function(x) {
-  #   p0 <- c(x, 0)
-  #   # p0 <- p0-max(p0)
-  #   p0=exp(p0)
-  #   p <- p0 / sum(p0)
-  #
-  #   mat <- -n * p[-r] %*% t(p[-r]) +
-  #     -S0
-  #   mat
-  # }
-
   d2.log.like <- function(x) {
-    mat <- matrix(NA, r - 1, r - 1)
-    dev.ref <- d1.log.like(x)
-    for (i in 1:(r - 1)) {
-      x.dev <- x
-      x.dev[i] <- x[i] + 1e-8
-      mat[, i] <- (d1.log.like(x.dev) - dev.ref) / (1e-8)
-    }
+    p0 <- c(x, 0)
+    p0 <- p0-max(p0)
+    p0=exp(p0)
+    p <- p0 / sum(p0)
+    pre_mat = diag(r-1)
+    diag(pre_mat)=p[-r]
+
+    mat <- n * (p[-r] %*% t(p[-r])) - n*pre_mat +
+      -S0
     mat
   }
 
-  mode <- f_root(d1.log.like, d2.log.like, start = f0)$root
+  # Calculating good initialization
+  alpha0=sum(y+0.01)
+  mean=digamma(y+0.01)-digamma(alpha0)
+  var=diag(trigamma(y+0.01))-trigamma(alpha0)
+
+  A=cbind(diag(r-1),-1)
+
+  mean=A%*%mean
+  var=A%*%var%*%t(A)
+  tau=spdinv(var)
+
+  f_start=spdinv(tau+S0)%*%(tau%*%mean+S0%*%f0)
+
+  mode <- f_root(d1.log.like, d2.log.like, start = f_start)$root
   H <- d2.log.like(mode)
   S <- spdinv(-H)
   return(list("ft" = matrix(mode, length(mode), 1), "Qt" = S))

@@ -4,7 +4,15 @@
 \alias{correlation_block}
 \title{correlation_block}
 \usage{
-correlation_block(var_names, name = "Var_cor", D = 1, W = 0, m0 = 0, C0 = 1)
+correlation_block(
+  var_names,
+  order,
+  name = "Var_cor",
+  D = 1,
+  W = 0,
+  m0 = 0,
+  C0 = 1
+)
 }
 \arguments{
 \item{var_names}{Vector: Name of the linear predictors associated with this block.}

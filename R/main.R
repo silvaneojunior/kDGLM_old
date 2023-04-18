@@ -717,7 +717,7 @@ dlm_sampling <- function(model, sample_size) {
       inv_link = model$outcomes[[outcome_name]]$inv_link_function,
       apply_offset = model$outcomes[[outcome_name]]$apply_offset,
       offset = model$outcomes[[outcome_name]]$offset,
-      l = dim(model$outcomes[[outcome_name]]$conj_prior_param)[2]
+      l = model$outcomes[[outcome_name]]$k
     )
   }
   alt_chol_local <- if (n == 1) {

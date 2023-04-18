@@ -334,7 +334,7 @@ FT_block <- function(..., charges, name = "Var_FT", D = 1, W = 0, m0 = 0, C0 = 1
 #' @export
 #' @examples
 #' # EXAMPLE
-correlation_block <- function(var_names, name = "Var_cor", D = 1, W = 0, m0 = 0, C0 = 1) {
+correlation_block <- function(var_names, order=1, name = "Var_cor", D = 1, W = 0, m0 = 0, C0 = 1) {
   k <- length(var_names)
   arg_list <- c(rep(0, k), list(order = k, name = name, D = D, W = W, m0 = m0, C0 = C0))
   names(arg_list) <- c(var_names, "order", "name", "D", "W", "m0", "C0")
@@ -347,9 +347,8 @@ correlation_block <- function(var_names, name = "Var_cor", D = 1, W = 0, m0 = 0,
   simplify = FALSE
   ))
 
-  coef <- 0
   W <- 1
-  block$G <- array(diag(c(rep(1, k), coef)), c(k, k, block$t))
+  block$G <- array(diag(c(rep(1, k), 0)), c(k+1, k+1, block$t))
   block$D <- simplify2array(apply(block$D, 3, function(x) {
     as.matrix(bdiag(x, 1))
   },
@@ -360,14 +359,24 @@ correlation_block <- function(var_names, name = "Var_cor", D = 1, W = 0, m0 = 0,
   },
   simplify = FALSE
   ))
-  block$m0 <- c(block$m0, 1 / (1 - coef))
-  block$C0 <- as.matrix(bdiag(block$C0, W))
+  block$m0 <- c(block$m0, 0)
+  block$C0 <- as.matrix(bdiag(block$C0, 1))
   block$k <- k
 
   n <- k + 1
   block$names[[name]] <- c(block$names[[name]], n)
-  block$order <- NULL
+  block$order <- order
   block$n <- n
+  if(order>1){
+    block_ref=block
+    for(i in 2:order){
+      block_copy=block_ref
+      block_copy$m0[1:(i-1)]=0
+      block_copy$C0[1:(i-1),]=0
+      block_copy$C0[,1:(i-1)]=0
+      block=block+block_copy
+    }
+  }
 
 
   block$type <- "Correlation"

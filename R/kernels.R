@@ -152,6 +152,7 @@ analytic_filter <- function(outcomes, m0 = 0, C0 = 1, FF, G, D, W, p_monit = NA,
   last_C_D <- last_C
 
   for (t in 1:T) {
+    cat(paste0(t,'\r'))
     model_list <- if (is.na(p_monit)) {
       c("null_model")
     } else {
@@ -347,22 +348,35 @@ calc_lin_pred <- function(at, Rt, FF) {
   n <- dim(FF)[1]
   k <- dim(FF)[2]
 
-  FF_step <- FF
-  FF_flags <- is.na(FF)
-  at_mod <- at
-  at_mod[at_mod == 0] <- 0
-  at_matrix <- matrix(at_mod, n, k)
-  at_matrix[!FF_flags] <- 1
-  charge <- colProd(at_matrix) - colProd(!FF_flags)
+  charge=matrix(0,k,1)
+  at_mod=at[,1]
+  for(i in 1:k){
+    FF_step=FF[,i]
+    FF_flags <- is.na(FF_step)
+    vals_na=(1:n)[FF_flags]
+    n_na=length(vals_na)
+    if(n_na>1){
+      vals_coef=vals_na[((1:(n_na/2)*2)-1)]
+      vals_noise=vals_na[((1:(n_na/2))*2)]
+      flags_na=diag(Rt)[vals_noise]==1 & diag(Rt)[vals_coef]>0
 
-  index <- which(FF_flags)
-  aux_k <- length(index)
-  index_alt <- index[(1:aux_k) + rep(c(1, -1), aux_k / 2)]
-  FF_step[index] <- at_matrix[index_alt]
+      FF[vals_coef,i]=ifelse(flags_na,
+                             exp(at_mod[vals_noise]+at_mod[vals_coef]),
+                             exp(at_mod[vals_noise]))
+      FF[vals_noise,i]=ifelse(flags_na,
+                              exp(at_mod[vals_noise]+at_mod[vals_coef]),
+                              exp(at_mod[vals_noise])*at_mod[vals_coef]
+                              )
+      charge[i,1]=charge[i,1]+sum(ifelse(flags_na,
+                                         exp(at_mod[vals_noise]+at_mod[vals_coef]),
+                                         exp(at_mod[vals_noise])*at_mod[vals_coef]
+      ))
+    }
+  }
 
-  ft <- (t(FF_step) %*% at)
-  Qt <- as.matrix(t(FF_step) %*% Rt %*% FF_step)
-  list("ft" = ft - charge, "Qt" = Qt, "FF" = FF_step)
+  ft <- (t(FF) %*% at)
+  Qt <- as.matrix(t(FF) %*% Rt %*% FF)
+  list("ft" = ft - charge, "Qt" = Qt, "FF" = FF)
 }
 
 format_ft <- function(ft, Qt, parms) {

@@ -158,7 +158,6 @@ Normal <- function(mu, tau = NA, sigma = NA, sigma2 = NA, outcome, offset = outc
     }
   }
   distr$var_names <- var_names
-  distr$family <- family
   distr$r <- 1
   distr$k <- k
   distr$t <- t
@@ -583,4 +582,339 @@ update_NG_alt <- function(conj_prior, ft, Qt, y, parms = list()) {
   Qt <- matrix(val[4:7], 2, 2) / val[1] - ft %*% t(ft)
 
   return(list("ft" = ft, "Qt" = Qt))
+}
+
+#### Multi normal ####
+
+#### Default Method ####
+
+#' Normal
+#'
+#'
+#' @param mu character: Name of the linear preditor associated with the mean parameter of the Normal distribuition. The parameter is treated as unknowed and equal to the associated linear preditor.
+#' @param tau character: Name of the linear preditor associated with the precision parameter of the Normal distribuition. The parameter is treated as unknowed and equal to the exponential of the associated linear preditor. It cannot be specified with sigma or sigma2
+#' @param sigma character: Name of the linear preditor associated with the scale parameter of the Normal distribuition. The parameter is treated as unknowed and equal to the exponential of the associated linear preditor. It cannot be specified with tau or sigma2.
+#' @param sigma2 character or numeric: Name of the linear preditor associated with the variance parameter of the Normal distribuition. If numeric, this parameter is treated as knowed and equal to the value passed. If a character, the parameter is treated as unknowed and equal to the exponential of the associated linear preditor. It cannot be specified with sigma or tau.
+#' @param outcome vector: Values of the observed data.
+#' @param offset vector: The offset at each observation. Must have the same shape as outcome.
+#'
+#' @return A object of the class dlm_distr
+#' @export
+#'
+#' @examples
+Multi_Normal <- function(mu, Sigma, outcome, offset = outcome**0,alt_method=FALSE) {
+
+  # Sigma=matrix(c('a','b','c',NA,'d','e',NA,NA,'f'),3,3)
+  # mu=c('mu_1','mu_2','mu_3')
+  # outcome=rnorm(3*200) %>% matrix(200,3)
+  # offset = outcome**0
+  # alt_method=FALSE
+
+  t <- dim(outcome)[1]
+  r <- dim(outcome)[2]
+  k=r+r*(r+1)/2
+
+  if(length(mu) != r){
+    stop(paste0('Error: Mean size is equal to the number of outcomes. Expected ',r,', got ',length(mu),'.'))
+  }
+  if(any(dim(Sigma) != r)){
+    stop(paste0('Error: Sigma size is comoatible with the number of outcomes. Expected ',r,'x',r,', got ',paste(dim(Sigma),collapse='x'),'.'))
+  }
+
+  flags_up=is.na(Sigma[upper.tri(Sigma)]) | is.null(Sigma[upper.tri(Sigma)])
+  Sigma[upper.tri(Sigma)]=ifelse(flags_up,Sigma[lower.tri(Sigma)],Sigma[upper.tri(Sigma)])
+
+  flags_down=is.na(Sigma[lower.tri(Sigma)]) | is.null(Sigma[lower.tri(Sigma)])
+  Sigma[lower.tri(Sigma)]=ifelse(flags_down,Sigma[upper.tri(Sigma)],Sigma[lower.tri(Sigma)])
+
+  if(any(Sigma[lower.tri(Sigma)]!=Sigma[upper.tri(Sigma)])){
+    stop(paste0('Error: Sigma is not symmetric.'))
+  }
+
+
+  if(any(is.na(Sigma) | is.null(Sigma))){
+    stop(paste0('Error: Sigma is under specified.'))
+  }
+  var_index=matrix(NA,r,r)
+  var_index[lower.tri(var_index,diag=TRUE)]=1:(k-r)+r
+  var_index=diag(var_index)
+
+  var_names <- c(mu, Sigma[lower.tri(Sigma,diag=TRUE)])
+  names(var_names) <- c(paste("mu_",1:r), paste("sigma_",paste0(matrix(1:r,r,r)[lower.tri(Sigma,diag=TRUE)],matrix(1:r,r,r,byrow = TRUE)[lower.tri(Sigma,diag=TRUE)])))
+    distr <- list(
+      "conj_prior" = format_ft,
+      "conj_post" = format_param,
+      "update" = update_multi_NG,
+      "smoother" = generic_smoother,
+      "calc_pred" = multi_normal_gamma_pred,
+      "apply_offset" = function(ft, Qt, offset) {
+        ft[1:r, ] <- ft[1:r, ] * offset
+        ft[var_index, ] <- ft[var_index, ] - log(offset)
+
+        Qt[1:r, ] <- Qt[1:r, ] * offset
+        Qt[, 1:r] <- Qt[, 1:r] * offset
+        return(
+          list("ft" = ft, "Qt" = Qt)
+        )
+      },
+      "link_function" = function(x) {
+        x[var_index, ]=log(x[var_index, ])
+        a=x[-c(1:r,var_index), ]
+        a=((a+1)/2)
+        a=log(a/(1-a))
+        x[-c(1:r,var_index), ]=a
+        return(x)
+      },
+      "inv_link_function" = function(x) {
+        x[var_index, ]=exp(x[var_index, ])
+        a=x[-c(1:r,var_index), ]
+        a=1/(1+exp(-a))
+        a=2*a-1
+        x[-c(1:r,var_index), ]=a
+        return(x)
+      },
+      "param_names" = function(y) {
+        c(
+          paste("ft_", 1:k, sep = ""),
+          paste("Qt_",
+                c(matrix(1:k, k, k)),
+                c(matrix(1:k, k, k, byrow = TRUE)),
+                sep = ""
+          )
+        )
+      }
+    )
+    parms <- list(alt_method=alt_method,var_index=var_index)
+    convert_mat_canom <- convert_mat_default <- diag(k)
+
+  distr$var_names <- var_names
+  distr$r <- r
+  distr$k <- k
+  distr$t <- t
+  distr$offset <- matrix(offset, t, r)
+  distr$outcome <- matrix(outcome, t, r)
+  distr$convert_mat_canom <- convert_mat_canom
+  distr$convert_mat_default <- convert_mat_default
+  distr$parms <- parms
+  distr$name <- "MultiNormal"
+
+  class(distr) <- "dlm_distr"
+
+  distr$alt_method <- TRUE
+
+  return(distr)
+}
+
+#' update_multi_NG
+#'
+#' @param conj_prior list: A vector containing the parameters of the Normal-Gamma (mu0,c0,alpha,beta).
+#' @param ft vector: A vector representing the means from the normal distribution. Not used in the default method.
+#' @param Qt matrix: A matrix representing the covariance matrix of the normal distribution. Not used in the default method.
+#' @param y vector: A vector containing the observations.
+#' @param parms list: A list of extra known parameters of the distribuition. Not used in this kernel.
+#'
+#' @importFrom Rfast lower_tri upper_tri lower_tri.assign spdinv
+#'
+#' @return The parameters of the posterior distribution.
+#' @export
+update_multi_NG <- function(conj_prior, ft, Qt, y, parms = list(alt_method=TRUE)) {
+  # r=2
+  # ft=rep(0,r+r*(r+1)/2)
+  # Qt=diag(r+r*(r+1)/2)
+  # parms = list(alt_method=FALSE)
+  #
+  #
+  # # C=matrix(c(3,0.1,-0.5,0.1,0.5,-0.2,-0.5,-0.2,1),3,3)
+  # #
+  # # y=Rfast::rmvnorm(1,c(1,-1,2),C)
+  # T=200
+  # data=Rfast::rmvnorm(T,c(1,-1),C)
+  # data=y
+  # for(j in 1:T){
+  # y=data[j,]
+
+  ft_up=ft
+  Qt_up=Qt
+
+  r=length(y)
+  k=r+r*(r+1)/2
+
+  A=matrix(0,k,2)
+  A[c(1,r+1),]=diag(2)
+
+  ft_now=t(A)%*%ft_up
+  Qt_now=t(A)%*%Qt_up%*%A
+
+  if(parms$alt_method){
+    post=update_NG_alt(param,ft_now,Qt_now,y[1])
+  }else{
+    param=convert_NG_Normal(ft_now,Qt_now)
+    up_param=update_NG(param,ft_now,Qt_now,y[1])
+    post=convert_Normal_NG(up_param)
+  }
+
+  ft_post=post$ft
+  Qt_post=post$Qt
+
+  At <- Qt_up %*% A %*% ginv(Qt_now)
+  ft_up=ft_up+At %*% (ft_post-ft_now)
+  Qt_up=Qt_up+At %*% (Qt_post-Qt_now) %*% t(At)
+
+  for(i in 2:r){
+
+    f=function(x){
+      mu=x[1:r]
+      Sigma=matrix(0,r,r)
+      # Sigma=lower_tri.assign(Sigma,x[(r+1):k],diag=TRUE)
+      # var=diag(exp(-diag(Sigma)/2))
+      # diag(Sigma)=1
+      # Sigma=lower_tri.assign(Sigma,2/(1+exp(-lower_tri(Sigma)))-1)
+      # Sigma=upper_tri.assign(Sigma,lower_tri(Sigma))
+      # Sigma=var%*%Sigma%*%var
+
+
+      Sigma=lower_tri.assign(Sigma,x[(r+1):k],diag=TRUE)
+      diag(Sigma)=exp(-diag(Sigma)/2)
+      Sigma=Sigma%*%t(Sigma)
+
+      S=spdinv(Sigma[1:(i-1),1:(i-1)])
+      mu_bar=mu[i]+Sigma[i,1:(i-1)]%*%S%*%(y[1:(i-1)]-mu[1:(i-1)])
+      S_bar=Sigma[i,i]+Sigma[i,1:(i-1)]%*%S%*%Sigma[1:(i-1),i]
+      return(c(mu_bar,log(1/S_bar)))
+    }
+
+    A=t(calculus::derivative(f,var=ft_up))
+
+    ft_now=f(ft_up)
+    Qt_now=t(A)%*%Qt_up%*%A
+
+    if(parms$alt_method){
+      post=update_NG_alt(param,ft_now,Qt_now,y[i])
+    }else{
+      param=convert_NG_Normal(ft_now,Qt_now)
+      up_param=update_NG(param,ft_now,Qt_now,y[i])
+      post=convert_Normal_NG(up_param)
+    }
+
+    ft_post=post$ft
+    Qt_post=post$Qt
+
+    At <- Qt_up %*% A %*% ginv(Qt_now)
+    ft_up=ft_up+At %*% (ft_post-ft_now)
+    Qt_up=Qt_up+At %*% (Qt_post-Qt_now) %*% t(At)
+  }
+  # }
+#
+#   ft_up
+#
+#   x=ft_up
+#   mu=x[1:r]
+#   Sigma=matrix(0,r,r)
+#   Sigma=lower_tri.assign(Sigma,x[(r+1):k],diag=TRUE)
+#   var=diag(exp(-diag(Sigma)/2))
+#   diag(Sigma)=1
+#   Sigma=lower_tri.assign(Sigma,2/(1+exp(-lower_tri(Sigma)))-1)
+#   Sigma=upper_tri.assign(Sigma,lower_tri(Sigma))
+#   Sigma=var%*%Sigma%*%var
+
+  # mu
+  # colMeans(data)
+  # Sigma
+  # var(data)
+
+
+
+  return(list("ft" = ft_up, "Qt" = Qt_up))
+}
+
+#' multi_normal_gamma_pred
+#'
+#' @param conj_param List or data.frame: The parameters of the conjugated distribuition (Normal-Gamma) of the linear predictor.
+#' @param outcome Vector or matrix (optional): The observed values at the current time.
+#' @param parms List (optional): A list of extra parameters for the model. Not used in this function.
+#' @param pred_cred Numeric: the desired credibility for the credibility interval.
+#'
+#' @return A list containing the following values:
+#' \itemize{
+#'    \item pred vector/matrix: the mean of the predictive distribuition of a next observation. Same type and shape as the parameter in model.
+#'    \item var.pred vector/matrix: the variance of the predictive distribuition of a next observation. Same type and shape as the parameter in model.
+#'    \item icl.pred vector/matrix: the percentile of 100*((1-pred_cred)/2)% of the predictive distribuition of a next observation. Same type and shape as the parameter in model.
+#'    \item icu.pred vector/matrix: the percentile of 100*(1-(1-pred_cred)/2)% of the predictive distribuition of a next observation. Same type and shape as the parameter in model.
+#'    \item log.like vector: the The log likelihood for the outcome given the conjugated parameters.
+#' }
+#'
+#' @importFrom Rfast rmvnorm cholesky dmvnorm upper_tri lower_tri upper_tri.assign lower_tri.assign
+#'
+#' @export
+#'
+#' @examples
+multi_normal_gamma_pred <- function(conj_param, outcome = NULL, parms = list(), pred_cred = 0.95) {
+  pred.flag <- !is.na(pred_cred)
+  like.flag <- !is.null(outcome)
+  if (!like.flag & !pred.flag) {
+    return(list())
+  }
+  print('a')
+
+  norm_param <- format_param(conj_param)
+  ft <- norm_param$ft
+  Qt <- norm_param$Qt
+  k <- dim(ft)[1]
+  t <- dim(ft)[2]
+  r <- -3/2+sqrt(9/4+2*k)
+
+  if (pred.flag) {
+    pred <- matrix(NA, r, t)
+    var.pred <- array(NA, c(r, r, t))
+    icl.pred <- matrix(NA, r, t)
+    icu.pred <- matrix(NA, r, t)
+  } else {
+    pred <- NULL
+    var.pred <- NULL
+    icl.pred <- NULL
+    icu.pred <- NULL
+  }
+  if (like.flag) {
+    outcome <- matrix(outcome, r, t)
+    log.like <- rep(NA, t)
+  } else {
+    log.like <- NULL
+  }
+
+  # N <- 5000
+  # sample <- matrix(rnorm(k * N), N, k)
+  # for (i in 1:t) {
+  #   ft_i <- sample %*% cholesky(Qt[, , i]) + matrix(ft[, i], N, k, byrow = TRUE)
+  #
+  #   mu=ft_i[,1:r]
+  #   Sigma=matrix(0,r,r)
+  #   Sigma=lower_tri.assign(Sigma,x[(r+1):k],diag=TRUE)
+  #   var=diag(exp(-diag(Sigma)/2))
+  #   diag(Sigma)=1
+  #   Sigma=lower_tri.assign(Sigma,2/(1+exp(-lower_tri(Sigma)))-1)
+  #   Sigma=upper_tri.assign(Sigma,lower_tri(Sigma))
+  #   Sigma=var%*%Sigma%*%var
+  #
+  #   sample_y <- rmvnorm(r*N) %>% matrix(N,r)
+  #   if (pred.flag) {
+  #     pred[, i] <- mean(sample_y)
+  #     var.pred[, , i] <- var(sample_y)
+  #     icl.pred[, i] <- quantile(sample_y, (1 - pred_cred) / 2)
+  #     icu.pred[, i] <- quantile(sample_y, 1 - (1 - pred_cred) / 2)
+  #   }
+  #   if (like.flag) {
+  #     log.like.list <- dmvnorm(outcome[, i], exp(ft_i[1, ]), exp(ft_i[1, ] - ft_i[2, ]), log = TRUE)
+  #     max.log.like <- max(log.like.list)
+  #     like.list <- exp(log.like.list - max.log.like)
+  #     log.like[i] <- log(mean(like.list)) + max.log.like
+  #   }
+  # }
+
+  list(
+    "pred"     = pred,
+    "var.pred" = var.pred,
+    "icl.pred" = icl.pred,
+    "icu.pred" = icu.pred,
+    "log.like" = log.like
+  )
 }
