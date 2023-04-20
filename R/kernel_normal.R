@@ -44,22 +44,115 @@
 #' summary(fitted_data)
 #'
 #' show_fit(fitted_data, smooth = TRUE)$plot
-Normal <- function(mu, tau = NA, sigma = NA, sigma2 = NA, outcome, offset = outcome**0) {
-  t <- length(outcome)
-  r <- 1
-  flags <- is.na(c(tau, sigma, sigma2))
-  if (all(flags)) {
-    stop("Error: Scale not specified.")
+Normal <- function(mu, tau = NA, sigma = NA, sigma2 = NA,covariance=NA,correlation=NA, outcome, offset = outcome**0,alt_method=FALSE) {
+
+  # r=3
+  # mu=paste0('mu_',1:r)
+  # tau=rgamma(r,1,1)
+  # sigma=NA
+  # sigma2=NA
+  # covariance=NA
+  # correlation=runif(r**2,-1,1) %>% matrix(3,3)
+  # correlation[upper.tri(correlation,diag=TRUE)]=NA
+  # outcome=matrix(0,200,r)
+  # offset = outcome**0
+
+
+  t <- if.null(dim(outcome)[1],length(outcome))
+  r <- if.null(dim(outcome)[2],1)
+
+  #### Consistancy check ####
+  {
+
+  ###### Dimensions check ######
+    if(length(mu)!=r){
+      stop('Error: The number of means does not match the number of series.')
+    }
+    if(all(is.na(covariance))){
+      if(any(dim(covariance)==r)){
+        stop('Error: The covariance size is not compatible with the number of series. Expected ',r,'x',r,', got ',paste0(dim(covariance),collapse='x'))
+      }
+    }
+    if(!all(is.na(correlation))){
+      if(!all(dim(correlation)==r)){
+        stop('Error: The covariance size is not compatible with the number of series. Expected ',r,'x',r,', got ',paste0(dim(correlation),collapse='x'))
+      }
+    }
+
+    covariance=matrix(covariance,r,r)
+    correlation=matrix(correlation,r,r)
+
+  ###### Symmetry test #####
+  flags_up=is.na(covariance[upper.tri(covariance)]) | is.null(covariance[upper.tri(covariance)])
+  covariance[upper.tri(covariance)]=ifelse(flags_up,covariance[lower.tri(covariance)],covariance[upper.tri(covariance)])
+
+  flags_down=is.na(covariance[lower.tri(covariance)]) | is.null(covariance[lower.tri(covariance)])
+  covariance[lower.tri(covariance)]=ifelse(flags_down,covariance[upper.tri(covariance)],covariance[lower.tri(covariance)])
+
+  if(any(covariance[lower.tri(covariance) & !is.na(covariance)]!=covariance[upper.tri(covariance) & !is.na(covariance)])){
+    if(!is.symmetric(covariance)){
+      stop(paste0('Error: Covariance matrix is not symmetric.'))
+    }
   }
-  if (sum(!flags) > 1) {
+
+  flags_up=is.na(correlation[upper.tri(correlation)]) | is.null(correlation[upper.tri(correlation)])
+  correlation[upper.tri(correlation)]=ifelse(flags_up,correlation[lower.tri(correlation)],correlation[upper.tri(correlation)])
+
+  flags_down=is.na(correlation[lower.tri(correlation)]) | is.null(correlation[lower.tri(correlation)])
+  correlation[lower.tri(correlation)]=ifelse(flags_down,correlation[upper.tri(correlation)],correlation[lower.tri(correlation)])
+
+  if(any(correlation[lower.tri(correlation) & !is.na(correlation)]!=correlation[upper.tri(correlation) & !is.na(correlation)])){
+     if(!is.symmetric(covariance)){
+      stop(paste0('Error: Correlation matrix is not symmetric.'))
+  }
+  }
+
+  ###### Over specification test #####
+  if(any(!is.na(correlation) & !is.na(covariance))){
+    stop(paste0('Error: Cannot especify both covariance AND correlation for a pair of series.'))
+  }
+  if(any(!is.na(diag(correlation)))){
+    warning("Correlation matrix has one or more non-NA elements in it's main diagonal. Ignoring the specified value.")
+    diag(correlation)=NA
+  }
+
+  ###### Parametrization check ######
+  val_mat=rbind(tau,sigma,sigma2,diag(as.matrix(covariance)))
+  var_mat=!is.na(val_mat)
+  if (any(colSums(var_mat)==0)) {
+    stop("Error: Scale not specified for all outcomes.")
+  }
+  if (any(colSums(var_mat)>1)) {
     stop("Error: Scale specified in more than one value.")
   }
-  val_type <- c("tau", "sigma", "sigma2")[!flags]
-  val <- c(tau, sigma, sigma2)[!flags]
-  if (is.numeric(val)) {
+  val_type <- matrix(c("tau", "sigma", "sigma2", "sigma2"),4,r)[var_mat]
+  val <- val_mat[var_mat]
+  if(any(sapply(val,is.numeric)) & !all(sapply(val,is.numeric))){
+    stop('Error: Cannot have the knowned and unknowned scales in the same outcome. Please, create a separate outcome for the series with known scale.')
+  }
+
+  }
+  #### Specifying atributes and methods ####
+  if (all(sapply(val,is.numeric))) {
     var_names <- c(mu)
     names(var_names) <- c("mu")
-    k <- 1
+    k <- r
+
+    if(any((is.na(covariance) & is.na(correlation))[upper.tri(covariance)])){
+      stop('Error: Scales are known, but covariance/correlation matrix is not fully known.')
+    }
+
+    variance=ifelse(val_type=='tau',
+                    1/val,
+                    ifelse(val_type=='sigma',
+                           val**2,
+                           val)
+                    )
+
+    diag(covariance)=variance
+    correlation=diag(sqrt(variance))%*%ifelse(is.na(correlation),0,correlation)%*%diag(sqrt(variance))
+    covariance[is.na(covariance)]=correlation[is.na(covariance)]
+
     distr <- list(
       "conj_prior" = convert_dummy_prior,
       "conj_post" = convert_dummy_post,
@@ -78,88 +171,138 @@ Normal <- function(mu, tau = NA, sigma = NA, sigma2 = NA, outcome, offset = outc
         if (t == 1) {
           Qt_off <- matrix(Qt_off, r, r)
         }
-
-        return(
-          list(
-            "ft" = ft_off,
-            "Qt" = Qt_off
-          )
-        )
+        return(list("ft" = ft_off,"Qt" = Qt_off))
       },
-      "link_function" = function(x) {
-        x
-      },
-      "inv_link_function" = function(x) {
-        x
-      },
-      "param_names" = function(y) {
-        c(
-          paste("ft_", 1:dim(y)[2], sep = ""),
-          paste("Qt_",
-            c(matrix(1:dim(y)[2], dim(y)[2], dim(y)[2])),
-            c(matrix(1:dim(y)[2], dim(y)[2], dim(y)[2], byrow = TRUE)),
-            sep = ""
-          )
+      "link_function" = function(x){x},
+      "inv_link_function" = function(x){x},
+      "param_names" = function(y) {c(
+        paste("ft_", 1:dim(y)[2], sep = ""),
+        paste("Qt_",c(matrix(1:dim(y)[2], dim(y)[2], dim(y)[2])),c(matrix(1:dim(y)[2], dim(y)[2], dim(y)[2], byrow = TRUE)),sep = "")
         )
       }
     )
-    parms <- list(Sigma = if (val_type == "tau") {
-      1 / val
-    } else if (val_type == "sigma") {
-      val**2
-    } else {
-      val
-    })
-    convert_mat_canom <- convert_mat_default <- diag(1)
+    parms <- list(Sigma = covariance)
+    convert_mat_canom <- convert_mat_default <- diag(r)
+
+    distr$alt_method <- FALSE
   } else {
-    var_names <- c(mu, val)
-    names(var_names) <- c("mu", val_type)
-    k <- 2
-    distr <- list(
-      "conj_prior" = convert_NG_Normal,
-      "conj_post" = convert_Normal_NG,
-      "update" = update_NG,
-      "smoother" = generic_smoother,
-      "calc_pred" = normal_gamma_pred,
-      "apply_offset" = function(ft, Qt, offset) {
-        ft[1, ] <- ft[1, ] * offset
-        ft[2, ] <- ft[2, ] - log(offset)
+    k <- r+r*(r+1)/2
+    var_index=matrix(NA,r,r)
+    var_index[lower.tri(var_index,diag=TRUE)]=1:(k-r)
+    var_index=diag(var_index)+r
 
-        Qt[1, ] <- Qt[1, ] * offset
-        Qt[, 1] <- Qt[, 1] * offset
-        return(
-          list("ft" = ft, "Qt" = Qt)
-        )
-      },
-      "link_function" = function(x) {
-        rbind(x[1, ], log(x[2, ]))
-      },
-      "inv_link_function" = function(x) {
-        rbind(x[1, ], exp(x[2, ]))
-      },
-      "param_names" = function(y) {
-        c("mu0", "c0", "alpha", "beta")
-      }
-    )
-    parms <- list()
-    convert_mat_canom <- if (val_type == "tau") {
-      diag(2)
-    } else if (val_type == "sigma") {
-      matrix(c(1, 0, 0, -2), 2, 2)
-    } else {
-      matrix(c(1, 0, 0, -1), 2, 2)
+    if(any((sapply(covariance,is.numeric) & sapply(correlation,is.numeric))[upper.tri(covariance)])){
+      stop('Error: Scales are unknown, but covariance/correlation matrix is not fully unknown.')
     }
-    convert_mat_default <- if (val_type == "tau") {
-      diag(2)
-    } else if (val_type == "sigma") {
-      matrix(c(1, 0, 0, -0.5), 2, 2)
-    } else {
-      matrix(c(1, 0, 0, -1), 2, 2)
+    if(any(!is.na(covariance)) & any(!is.na(correlation))){
+      stop('Error: Cannot specify mix parametrization by covariance with parametrization with correlation. Choose only one.')
     }
+
+    if(any(!is.na(covariance))){
+      var_names <- c(mu, covariance[lower.tri(covariance,diag=TRUE)])
+
+      names_mat=matrix(paste0('sigma_',matrix(1:r,r,r,byrow=TRUE),matrix(1:r,r,r)),r,r)
+      diag(names_mat)=paste0(val_type,'_',1:r)
+
+      names(var_names) <- c(paste0("mu_",1:r), names_mat[lower.tri(names_mat,diag=TRUE)])
+      distr <- list(
+        "conj_prior" = convert_multi_NG_Normal,
+        "conj_post" = convert_multi_Normal_NG,
+        "update" = update_multi_NG_covar,
+        "smoother" = generic_smoother,
+        "calc_pred" = multi_normal_gamma_pred,
+        "apply_offset" = function(ft, Qt, offset) {
+          ft[1:r, ] <- ft[1:r, ] * offset
+          ft[var_index, ] <- ft[var_index, ] - log(offset)
+
+          Qt[1:r, ] <- Qt[1:r, ] * offset
+          Qt[, 1:r] <- Qt[, 1:r] * offset
+          return(
+            list("ft" = ft, "Qt" = Qt)
+          )
+        },
+        "link_function" = function(x) {
+          x[var_index, ]=-log(x[var_index, ])
+          return(x)
+        },
+        "inv_link_function" = function(x) {
+          x[var_index, ]=exp(-x[var_index, ])
+          return(x)
+        },
+        "param_names" = if(r>1){function(y) {
+          paste0(rep(c("mu0_", "c0_", "alpha0_", "beta0_"),r),sort(rep(1:r,4)))
+        }}else{
+          function(y) {
+            c("mu0", "c0", "alpha0", "beta0")
+          }
+        }
+      )
+    }else{
+      diag(correlation)=val
+      var_names <- c(mu, correlation[lower.tri(correlation,diag=TRUE)])
+
+      names_mat=matrix(paste0('rho_',matrix(1:r,r,r,byrow=TRUE),matrix(1:r,r,r)),r,r)
+      diag(names_mat)=paste0(val_type,'_',1:r)
+
+      names(var_names) <- c(paste0("mu_",1:r), names_mat[lower.tri(names_mat,diag=TRUE)])
+      distr <- list(
+        "conj_prior" = convert_multi_NG_Normal,
+        "conj_post" = convert_multi_Normal_NG,
+        "update" = update_multi_NG_correl,
+        "smoother" = generic_smoother,
+        "calc_pred" = multi_normal_gamma_pred,
+        "apply_offset" = function(ft, Qt, offset) {
+          ft[1:r, ] <- ft[1:r, ] * offset
+          ft[var_index, ] <- ft[var_index, ] - log(offset)
+
+          Qt[1:r, ] <- Qt[1:r, ] * offset
+          Qt[, 1:r] <- Qt[, 1:r] * offset
+          return(
+            list("ft" = ft, "Qt" = Qt)
+          )
+        },
+        "link_function" = function(x) {
+          x[var_index, ]=log(x[var_index, ])
+          a=x[-c(1:r,var_index), ]
+          a=((a+1)/2)
+          a=log(a/(1-a))
+          x[-c(1:r,var_index), ]=a
+          return(x)
+        },
+        "inv_link_function" = function(x) {
+          x[var_index, ]=exp(x[var_index, ])
+          a=x[-c(1:r,var_index), ]
+          a=1/(1+exp(a))
+          a=2*a-1
+          x[-c(1:r,var_index), ]=a
+          return(x)
+        },
+        "param_names" = if(r>1){function(y) {
+          paste0(rep(c("mu0_", "c0_", "alpha0_", "beta0_"),r),sort(rep(1:r,4)))
+        }}else{
+          function(y) {
+            c("mu0", "c0", "alpha0", "beta0")
+          }
+        }
+      )
+    }
+
+    parms <- list(alt_method=alt_method,var_index=var_index)
+    convert_mat_canom <- convert_mat_default <- diag(k)
+
+    diag(convert_mat_canom)[var_index[val_type=='sigma']]=-2
+    diag(convert_mat_default)[var_index[val_type=='sigma']]=-0.5
+
+    diag(convert_mat_canom)[var_index[val_type=='sigma2']]=-1
+    diag(convert_mat_default)[var_index[val_type=='sigma2']]=-1
+
+    distr$alt_method <- TRUE
   }
+
   distr$var_names <- var_names
-  distr$r <- 1
+  distr$r <- r
   distr$k <- k
+  distr$l <- k
   distr$t <- t
   distr$offset <- matrix(offset, t, r)
   distr$outcome <- matrix(outcome, t, r)
@@ -169,8 +312,6 @@ Normal <- function(mu, tau = NA, sigma = NA, sigma2 = NA, outcome, offset = outc
   distr$name <- "Normal"
 
   class(distr) <- "dlm_distr"
-
-  distr$alt_method <- FALSE
 
   return(distr)
 }
@@ -404,7 +545,7 @@ update_Normal_dummy <- function(conj_prior, ft, Qt, y, parms) {
 #'    \item log.like vector: the The log likelihood for the outcome given the conjugated parameters.
 #' }
 #'
-#' @importFrom Rfast dmvnorm
+#' @importFrom Rfast dmvnorm cholesky
 #' @export
 #'
 #' @examples
@@ -444,14 +585,14 @@ normal_pred <- function(conj_param, outcome = NULL, parms = list(), pred_cred = 
     sigma2 <- (var.pred[, , i] + parms$Sigma) %>% matrix(r, r)
     if (pred.flag) {
       var.pred[, , i] <- sigma2
-      if (length(sigma2) > 1) {
-        sigma2 <- diag(sigma2)
-      }
-      icl.pred[i, ] <- qnorm((1 - pred_cred) / 2) * sqrt(sigma2) + mu
-      icu.pred[i, ] <- qnorm(1 - (1 - pred_cred) / 2) * sqrt(sigma2) + mu
+      # if (length(sigma2) > 1) {
+      #   sigma2 <- diag(sigma2)
+      # }
+      icl.pred[i, ] <- rep(qnorm((1 - pred_cred) / 2),r) * sqrt(diag(sigma2)) + mu
+      icu.pred[i, ] <- rep(qnorm(1 - (1 - pred_cred) / 2),r) * sqrt(diag(sigma2))  + mu
     }
     if (like.flag) {
-      log.like[i] <- dmvnorm(outcome[i, ], mu, sigma2, log = TRUE)
+      log.like[i] <- dmvnorm(outcome[i, ], mu, sigma2, logged  = TRUE)
     }
   }
   if (!pred.flag) {
@@ -586,126 +727,71 @@ update_NG_alt <- function(conj_prior, ft, Qt, y, parms = list()) {
 
 #### Multi normal ####
 
-#### Default Method ####
-
-#' Normal
+#' convert_NG_Normal
 #'
+#' Calculate the parameters of the Normal-Gamma that best approximates the given Normal distribution.
+#' The approximation is the best in the sense that it minimizes the KL divergence from the Normal to the Normal-Gamma.
+#' In this approach, we suppose that the first entry of the multivariate normal represents the mean of the observed data and the second represent the log variance.
 #'
-#' @param mu character: Name of the linear preditor associated with the mean parameter of the Normal distribuition. The parameter is treated as unknowed and equal to the associated linear preditor.
-#' @param tau character: Name of the linear preditor associated with the precision parameter of the Normal distribuition. The parameter is treated as unknowed and equal to the exponential of the associated linear preditor. It cannot be specified with sigma or sigma2
-#' @param sigma character: Name of the linear preditor associated with the scale parameter of the Normal distribuition. The parameter is treated as unknowed and equal to the exponential of the associated linear preditor. It cannot be specified with tau or sigma2.
-#' @param sigma2 character or numeric: Name of the linear preditor associated with the variance parameter of the Normal distribuition. If numeric, this parameter is treated as knowed and equal to the value passed. If a character, the parameter is treated as unknowed and equal to the exponential of the associated linear preditor. It cannot be specified with sigma or tau.
-#' @param outcome vector: Values of the observed data.
-#' @param offset vector: The offset at each observation. Must have the same shape as outcome.
+#' @param ft vector: A vector representing the means from the normal distribution.
+#' @param Qt matrix: A matrix representing the covariance matrix of the normal distribution.
+#' @param parms list: A list of extra known parameters of the distribution. Not used in this kernel.
 #'
-#' @return A object of the class dlm_distr
+#' @return The parameters of the conjugated distribution of the linear predictor.
 #' @export
-#'
-#' @examples
-Multi_Normal <- function(mu, Sigma, outcome, offset = outcome**0,alt_method=FALSE) {
+convert_multi_NG_Normal <- function(ft, Qt, parms) {
+  k=length(ft)
+  r <- -3/2+sqrt(9/4+2*k)
+  var_index=parms$var_index
 
-  # Sigma=matrix(c('a','b','c',NA,'d','e',NA,NA,'f'),3,3)
-  # mu=c('mu_1','mu_2','mu_3')
-  # outcome=rnorm(3*200) %>% matrix(200,3)
-  # offset = outcome**0
-  # alt_method=FALSE
+  ft_mean=ft[1:r]
+  ft_var=ft[var_index]
 
-  t <- dim(outcome)[1]
-  r <- dim(outcome)[2]
-  k=r+r*(r+1)/2
+  Qt_diag=diag(Qt)
+  Qt_mean=Qt_diag[1:r]
+  Qt_var=Qt_diag[var_index]
 
-  if(length(mu) != r){
-    stop(paste0('Error: Mean size is equal to the number of outcomes. Expected ',r,', got ',length(mu),'.'))
-  }
-  if(any(dim(Sigma) != r)){
-    stop(paste0('Error: Sigma size is comoatible with the number of outcomes. Expected ',r,'x',r,', got ',paste(dim(Sigma),collapse='x'),'.'))
-  }
+  Qt_cov=diag(Qt[1:r, var_index])
 
-  flags_up=is.na(Sigma[upper.tri(Sigma)]) | is.null(Sigma[upper.tri(Sigma)])
-  Sigma[upper.tri(Sigma)]=ifelse(flags_up,Sigma[lower.tri(Sigma)],Sigma[upper.tri(Sigma)])
+  ft <- matrix(ft, k, 1)
+  mu0 <- ft_mean + Qt_cov
+  c0 <- exp(-ft_var - Qt_var / 2) / (Qt_mean + 1e-40)
+  helper <- -3 + 3 * sqrt(1 + 2 * Qt_var / 3)
+  # helper=Qt[2,2]
+  alpha <- 1 / helper
+  beta <- alpha * exp(-ft_var - Qt_var / 2)
 
-  flags_down=is.na(Sigma[lower.tri(Sigma)]) | is.null(Sigma[lower.tri(Sigma)])
-  Sigma[lower.tri(Sigma)]=ifelse(flags_down,Sigma[upper.tri(Sigma)],Sigma[lower.tri(Sigma)])
+  vec_par=c(rbind(mu0,c0,alpha,beta))
 
-  if(any(Sigma[lower.tri(Sigma)]!=Sigma[upper.tri(Sigma)])){
-    stop(paste0('Error: Sigma is not symmetric.'))
-  }
-
-
-  if(any(is.na(Sigma) | is.null(Sigma))){
-    stop(paste0('Error: Sigma is under specified.'))
-  }
-  var_index=matrix(NA,r,r)
-  var_index[lower.tri(var_index,diag=TRUE)]=1:(k-r)+r
-  var_index=diag(var_index)
-
-  var_names <- c(mu, Sigma[lower.tri(Sigma,diag=TRUE)])
-  names(var_names) <- c(paste("mu_",1:r), paste("sigma_",paste0(matrix(1:r,r,r)[lower.tri(Sigma,diag=TRUE)],matrix(1:r,r,r,byrow = TRUE)[lower.tri(Sigma,diag=TRUE)])))
-    distr <- list(
-      "conj_prior" = format_ft,
-      "conj_post" = format_param,
-      "update" = update_multi_NG,
-      "smoother" = generic_smoother,
-      "calc_pred" = multi_normal_gamma_pred,
-      "apply_offset" = function(ft, Qt, offset) {
-        ft[1:r, ] <- ft[1:r, ] * offset
-        ft[var_index, ] <- ft[var_index, ] - log(offset)
-
-        Qt[1:r, ] <- Qt[1:r, ] * offset
-        Qt[, 1:r] <- Qt[, 1:r] * offset
-        return(
-          list("ft" = ft, "Qt" = Qt)
-        )
-      },
-      "link_function" = function(x) {
-        x[var_index, ]=log(x[var_index, ])
-        a=x[-c(1:r,var_index), ]
-        a=((a+1)/2)
-        a=log(a/(1-a))
-        x[-c(1:r,var_index), ]=a
-        return(x)
-      },
-      "inv_link_function" = function(x) {
-        x[var_index, ]=exp(x[var_index, ])
-        a=x[-c(1:r,var_index), ]
-        a=1/(1+exp(-a))
-        a=2*a-1
-        x[-c(1:r,var_index), ]=a
-        return(x)
-      },
-      "param_names" = function(y) {
-        c(
-          paste("ft_", 1:k, sep = ""),
-          paste("Qt_",
-                c(matrix(1:k, k, k)),
-                c(matrix(1:k, k, k, byrow = TRUE)),
-                sep = ""
-          )
-        )
-      }
-    )
-    parms <- list(alt_method=alt_method,var_index=var_index)
-    convert_mat_canom <- convert_mat_default <- diag(k)
-
-  distr$var_names <- var_names
-  distr$r <- r
-  distr$k <- k
-  distr$t <- t
-  distr$offset <- matrix(offset, t, r)
-  distr$outcome <- matrix(outcome, t, r)
-  distr$convert_mat_canom <- convert_mat_canom
-  distr$convert_mat_default <- convert_mat_default
-  distr$parms <- parms
-  distr$name <- "MultiNormal"
-
-  class(distr) <- "dlm_distr"
-
-  distr$alt_method <- TRUE
-
-  return(distr)
+  return(vec_par)
 }
 
-#' update_multi_NG
+convert_multi_Normal_NG <- function(conj_distr, parms = list()) {
+  r=dim(conj_distr)[2]/4
+  k=r+r*(r+1)/2
+
+  mu0=conj_distr[,seq(1,r*4-1,4)]
+  c0=conj_distr[,seq(1,r*4-2,4)+1]
+  alpha0=conj_distr[,seq(1,r*4-3,4)+2]
+  beta0=conj_distr[,seq(1,r*4,4)+3]
+
+  f1 <- mu0
+  f2 <- digamma(alpha0) - log(beta0 + 1e-40)
+  q1 <- beta0 / (c0 * alpha0)
+  q2 <- trigamma(alpha0)
+  q12 <- 0
+  if(r==1){
+    ft <- c(f1, f2)
+    Qt <- matrix(c(q1, q12, q12, q2), byrow = F, ncol = 2)
+  }else{
+    ft <- c(f1, diag(f2)[upper.tri(diag(f2))])
+    Qt=diag(k)
+    diag(Qt)=c(q1, diag(q2)[upper.tri(diag(q2))])
+  }
+  return(list("ft" = ft, "Qt" = Qt))
+}
+
+#' update_multi_NG_covar
 #'
 #' @param conj_prior list: A vector containing the parameters of the Normal-Gamma (mu0,c0,alpha,beta).
 #' @param ft vector: A vector representing the means from the normal distribution. Not used in the default method.
@@ -717,7 +803,7 @@ Multi_Normal <- function(mu, Sigma, outcome, offset = outcome**0,alt_method=FALS
 #'
 #' @return The parameters of the posterior distribution.
 #' @export
-update_multi_NG <- function(conj_prior, ft, Qt, y, parms = list(alt_method=TRUE)) {
+update_multi_NG_covar <- function(conj_prior, ft, Qt, y, parms = list(alt_method=TRUE)) {
   # r=2
   # ft=rep(0,r+r*(r+1)/2)
   # Qt=diag(r+r*(r+1)/2)
@@ -804,19 +890,142 @@ update_multi_NG <- function(conj_prior, ft, Qt, y, parms = list(alt_method=TRUE)
     Qt_up=Qt_up+At %*% (Qt_post-Qt_now) %*% t(At)
   }
   # }
-#
-#   ft_up
-#
-#   x=ft_up
-#   mu=x[1:r]
-#   Sigma=matrix(0,r,r)
-#   Sigma=lower_tri.assign(Sigma,x[(r+1):k],diag=TRUE)
-#   var=diag(exp(-diag(Sigma)/2))
-#   diag(Sigma)=1
-#   Sigma=lower_tri.assign(Sigma,2/(1+exp(-lower_tri(Sigma)))-1)
-#   Sigma=upper_tri.assign(Sigma,lower_tri(Sigma))
-#   Sigma=var%*%Sigma%*%var
+  #
+  #   ft_up
+  #
+  #   x=ft_up
+  #   mu=x[1:r]
+  #   Sigma=matrix(0,r,r)
+  #   Sigma=lower_tri.assign(Sigma,x[(r+1):k],diag=TRUE)
+  #   var=diag(exp(-diag(Sigma)/2))
+  #   diag(Sigma)=1
+  #   Sigma=lower_tri.assign(Sigma,2/(1+exp(-lower_tri(Sigma)))-1)
+  #   Sigma=upper_tri.assign(Sigma,lower_tri(Sigma))
+  #   Sigma=var%*%Sigma%*%var
 
+  # mu
+  # colMeans(data)
+  # Sigma
+  # var(data)
+
+
+
+  return(list("ft" = ft_up, "Qt" = Qt_up))
+}
+
+
+#' update_multi_NG_correl
+#'
+#' @param conj_prior list: A vector containing the parameters of the Normal-Gamma (mu0,c0,alpha,beta).
+#' @param ft vector: A vector representing the means from the normal distribution. Not used in the default method.
+#' @param Qt matrix: A matrix representing the covariance matrix of the normal distribution. Not used in the default method.
+#' @param y vector: A vector containing the observations.
+#' @param parms list: A list of extra known parameters of the distribuition. Not used in this kernel.
+#'
+#' @importFrom Rfast lower_tri upper_tri lower_tri.assign spdinv
+#'
+#' @return The parameters of the posterior distribution.
+#' @export
+update_multi_NG_correl <- function(conj_prior, ft, Qt, y, parms = list(alt_method=FALSE)) {
+  # r=2
+  # ft=rep(0,r+r*(r+1)/2)
+  # Qt=diag(r+r*(r+1)/2)
+  # parms = list(alt_method=FALSE)
+  #
+  #
+  # # C=matrix(c(3,0.1,-0.5,0.1,0.5,-0.2,-0.5,-0.2,1),3,3)
+  # #
+  # # y=Rfast::rmvnorm(1,c(1,-1,2),C)
+  # T=200
+  # data=Rfast::rmvnorm(T,c(1,-1,2),C)
+  # data=y
+  # ft=rep(0,r+r*(r+1)/2)
+  # Qt=diag(r+r*(r+1)/2)
+  # parms = list(alt_method=FALSE)
+
+
+  r=length(y)
+  k=r+r*(r+1)/2
+
+  ft_up=ft
+  Qt_up=Qt
+
+  # for(j in 1:T){
+  # y=data[j,]
+
+  A=matrix(0,k,2)
+  A[c(1,r+1),]=diag(2)
+
+  ft_now=t(A)%*%ft_up
+  Qt_now=t(A)%*%Qt_up%*%A
+
+  if(parms$alt_method){
+    post=update_NG_alt(param,ft_now,Qt_now,y[1])
+  }else{
+    param=convert_NG_Normal(ft_now,Qt_now)
+    up_param=update_NG(param,ft_now,Qt_now,y[1])
+    post=convert_Normal_NG(up_param)
+  }
+
+  ft_post=post$ft
+  Qt_post=post$Qt
+
+  At <- Qt_up %*% A %*% ginv(Qt_now)
+  ft_up=ft_up+At %*% (ft_post-ft_now)
+  Qt_up=Qt_up+At %*% (Qt_post-Qt_now) %*% t(At)
+
+  for(i in 2:r){
+
+    f=function(x){
+      mu=x[1:r]
+      Sigma=matrix(0,r,r)
+      Sigma=lower_tri.assign(Sigma,x[(r+1):k],diag=TRUE)
+      var=diag(exp(-diag(Sigma)/2))
+      diag(Sigma)=1
+      Sigma=lower_tri.assign(Sigma,2/(1+exp(-lower_tri(Sigma)))-1)
+      Sigma=upper_tri.assign(Sigma,lower_tri(Sigma))
+      Sigma=var%*%Sigma%*%var
+
+      S=spdinv(Sigma[1:(i-1),1:(i-1)])
+      mu_bar=mu[i]+Sigma[i,1:(i-1)]%*%S%*%(y[1:(i-1)]-mu[1:(i-1)])
+      S_bar=Sigma[i,i]+Sigma[i,1:(i-1)]%*%S%*%Sigma[1:(i-1),i]
+      return(c(mu_bar,-log(S_bar)))
+    }
+
+    A=t(calculus::derivative(f,var=ft_up))
+
+    ft_now=f(ft_up)
+    Qt_now=t(A)%*%Qt_up%*%A
+
+    if(parms$alt_method){
+      post=update_NG_alt(param,ft_now,Qt_now,y[i])
+    }else{
+      param=convert_NG_Normal(ft_now,Qt_now)
+      up_param=update_NG(param,ft_now,Qt_now,y[i])
+      post=convert_Normal_NG(up_param)
+    }
+
+    ft_post=post$ft
+    Qt_post=post$Qt
+
+    At <- Qt_up %*% A %*% ginv(Qt_now)
+    ft_up=ft_up+At %*% (ft_post-ft_now)
+    Qt_up=Qt_up+At %*% (Qt_post-Qt_now) %*% t(At)
+  }
+  # }
+  #
+  #   ft_up
+  #
+  #   x=ft_up
+  #   mu=x[1:r]
+  #   Sigma=matrix(0,r,r)
+  #   Sigma=lower_tri.assign(Sigma,x[(r+1):k],diag=TRUE)
+  #   var=diag(exp(-diag(Sigma)/2))
+  #   diag(Sigma)=1
+  #   Sigma=lower_tri.assign(Sigma,2/(1+exp(-lower_tri(Sigma)))-1)
+  #   Sigma=upper_tri.assign(Sigma,lower_tri(Sigma))
+  #   Sigma=var%*%Sigma%*%var
+  #
   # mu
   # colMeans(data)
   # Sigma
@@ -854,20 +1063,29 @@ multi_normal_gamma_pred <- function(conj_param, outcome = NULL, parms = list(), 
   if (!like.flag & !pred.flag) {
     return(list())
   }
-  print('a')
 
-  norm_param <- format_param(conj_param)
-  ft <- norm_param$ft
-  Qt <- norm_param$Qt
-  k <- dim(ft)[1]
-  t <- dim(ft)[2]
-  r <- -3/2+sqrt(9/4+2*k)
+  t <- if.null(dim(conj_param)[1],1)
+  r <- if.null(dim(conj_param)[2],length(conj_param))/4
+  k <- r+r*(r+1)/2
+
+  conj_param=as.matrix(conj_param)
+  if(dim(conj_param)[2]==1){
+    conj_param=conj_param%>% t
+  }
+
+  mu0=conj_param[,seq(1,r*4-1,4)]
+  c0=conj_param[,seq(1,r*4-2,4)+1]
+  alpha0=conj_param[,seq(1,r*4-3,4)+2]
+  beta0=conj_param[,seq(1,r*4,4)+3]
+  nu=2 * alpha0
+  sigma2 <- (beta0 / alpha0) * (1 + 1 / c0)
 
   if (pred.flag) {
-    pred <- matrix(NA, r, t)
-    var.pred <- array(NA, c(r, r, t))
-    icl.pred <- matrix(NA, r, t)
-    icu.pred <- matrix(NA, r, t)
+    pred <- mu0 %>% t
+    var.pred <- matrix(sigma2,t,r) %>% apply(1,diag) %>% array(c(r,r,t))
+
+    icl.pred <- (qt((1 - pred_cred) / 2, nu) * sqrt(sigma2) + mu) %>% t
+    icu.pred <- (qt(1 - (1 - pred_cred) / 2, nu) * sqrt(sigma2) + mu) %>% t
   } else {
     pred <- NULL
     var.pred <- NULL
@@ -875,40 +1093,11 @@ multi_normal_gamma_pred <- function(conj_param, outcome = NULL, parms = list(), 
     icu.pred <- NULL
   }
   if (like.flag) {
-    outcome <- matrix(outcome, r, t)
-    log.like <- rep(NA, t)
+    outcome <- matrix(outcome, t, r)
+    log.like <- colSums(dt((outcome-mu0)*sqrt(alpha0/beta0),nu,log=TRUE))
   } else {
     log.like <- NULL
   }
-
-  # N <- 5000
-  # sample <- matrix(rnorm(k * N), N, k)
-  # for (i in 1:t) {
-  #   ft_i <- sample %*% cholesky(Qt[, , i]) + matrix(ft[, i], N, k, byrow = TRUE)
-  #
-  #   mu=ft_i[,1:r]
-  #   Sigma=matrix(0,r,r)
-  #   Sigma=lower_tri.assign(Sigma,x[(r+1):k],diag=TRUE)
-  #   var=diag(exp(-diag(Sigma)/2))
-  #   diag(Sigma)=1
-  #   Sigma=lower_tri.assign(Sigma,2/(1+exp(-lower_tri(Sigma)))-1)
-  #   Sigma=upper_tri.assign(Sigma,lower_tri(Sigma))
-  #   Sigma=var%*%Sigma%*%var
-  #
-  #   sample_y <- rmvnorm(r*N) %>% matrix(N,r)
-  #   if (pred.flag) {
-  #     pred[, i] <- mean(sample_y)
-  #     var.pred[, , i] <- var(sample_y)
-  #     icl.pred[, i] <- quantile(sample_y, (1 - pred_cred) / 2)
-  #     icu.pred[, i] <- quantile(sample_y, 1 - (1 - pred_cred) / 2)
-  #   }
-  #   if (like.flag) {
-  #     log.like.list <- dmvnorm(outcome[, i], exp(ft_i[1, ]), exp(ft_i[1, ] - ft_i[2, ]), log = TRUE)
-  #     max.log.like <- max(log.like.list)
-  #     like.list <- exp(log.like.list - max.log.like)
-  #     log.like[i] <- log(mean(like.list)) + max.log.like
-  #   }
-  # }
 
   list(
     "pred"     = pred,

@@ -4,7 +4,17 @@
 \alias{Normal}
 \title{Normal}
 \usage{
-Normal(mu, tau = NA, sigma = NA, sigma2 = NA, outcome, offset = outcome^0)
+Normal(
+  mu,
+  tau = NA,
+  sigma = NA,
+  sigma2 = NA,
+  covariance = NA,
+  correlation = NA,
+  outcome,
+  offset = outcome^0,
+  alt_method = FALSE
+)
 }
 \arguments{
 \item{mu}{character: Name of the linear preditor associated with the mean parameter of the Normal distribuition. The parameter is treated as unknowed and equal to the associated linear preditor.}

@@ -618,10 +618,10 @@ eval_past <- function(model, smooth = FALSE, h = 0, pred_cred = 0.95) {
       Qt_canom <- outcome$convert_mat_canom %*% cur_step$Qt %*% t(outcome$convert_mat_canom)
 
 
-      conj_distr <- outcome$conj_prior(ft_canom, Qt_canom)
+      conj_distr <- outcome$conj_prior(ft_canom, Qt_canom, parms = outcome$parms)
       prediction <- outcome$calc_pred(conj_distr, outcome$outcome[i, , drop = FALSE], pred_cred, parms = outcome$parms)
 
-      pred[(r_acum + 1):(r_acum + r_cur), i] <- prediction$pred
+            pred[(r_acum + 1):(r_acum + r_cur), i] <- prediction$pred
       var.pred[(r_acum + 1):(r_acum + r_cur), (r_acum + 1):(r_acum + r_cur), i] <- prediction$var.pred
       icl.pred[(r_acum + 1):(r_acum + r_cur), i] <- prediction$icl.pred
       icu.pred[(r_acum + 1):(r_acum + r_cur), i] <- prediction$icu.pred
@@ -679,6 +679,8 @@ eval_past <- function(model, smooth = FALSE, h = 0, pred_cred = 0.95) {
 #'    \item ft Array: An array containing the samples of linear predictors. Dimensions are m x T x sample_size, where m is the number of linear predictors in the model and T is the number of observed values.
 #'    \item param Array: An array containing the samples of the parameters of the observational model. Dimensions are k x T x sample_size, where k is the number of parameters in the observational model and T is the number of observed values.
 #' }
+#'
+#' @importFrom Rfast cholesky
 #' @export
 #'
 #' @examples
@@ -717,7 +719,7 @@ dlm_sampling <- function(model, sample_size) {
       inv_link = model$outcomes[[outcome_name]]$inv_link_function,
       apply_offset = model$outcomes[[outcome_name]]$apply_offset,
       offset = model$outcomes[[outcome_name]]$offset,
-      l = model$outcomes[[outcome_name]]$k
+      l = model$outcomes[[outcome_name]]$l
     )
   }
   alt_chol_local <- if (n == 1) {
@@ -731,6 +733,7 @@ dlm_sampling <- function(model, sample_size) {
 
   Ct_chol <- tryCatch(
     {
+      # Usar função base do R, pois o Rfast não avisa quando da erro.
       chol(model$Ct[, , T_len])
     },
     error = function(e) {
@@ -775,7 +778,6 @@ dlm_sampling <- function(model, sample_size) {
   ft_sample[, T_len, ] <- ft_sample_i
 
   for (t in (T_len - 1):1) {
-    na.flag <- any(is.null(offset_step) | any(offset_step == 0) | any(is.na(offset_step)))
 
     Rt <- model$Rt[, , t + 1]
     Ct <- model$Ct[, , t]
@@ -798,6 +800,7 @@ dlm_sampling <- function(model, sample_size) {
     Cts <- Ct - simple_Rt_inv %*% Rt %*% t(simple_Rt_inv)
     Ct_chol <- tryCatch(
       {
+        # Usar função base do R, pois o Rfast não avisa quando da erro.
         chol(Cts)
       },
       error = function(e) {

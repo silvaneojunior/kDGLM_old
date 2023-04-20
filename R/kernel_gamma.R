@@ -109,6 +109,7 @@ Gamma <- function(phi = NA, mu = NA, alpha = NA, beta = NA, sigma = NA, outcome,
   distr$var_names <- var_names
   distr$r <- r
   distr$k <- k
+  distr$l <- k
   distr$t <- t
   distr$offset <- matrix(offset, t, r)
   distr$outcome <- matrix(outcome, t, r)

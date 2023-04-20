@@ -46,6 +46,7 @@ Multinom <- function(p, outcome, offset = outcome**0) {
     family = family,
     r = r,
     k = k,
+    l = r,
     t = t,
     offset = matrix(offset, t, r),
     outcome = matrix(outcome, t, r),
