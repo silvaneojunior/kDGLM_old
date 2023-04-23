@@ -52,6 +52,7 @@ Multinom <- function(p, outcome, offset = outcome**0) {
     outcome = matrix(outcome, t, r),
     convert_mat_canom = convert_mat_canom,
     convert_mat_default = convert_mat_default,
+    convert_canom_flag = FALSE,
     parms = parms,
     name = "Multinomial",
     conj_prior = convert_Multinom_Normal,
@@ -93,14 +94,13 @@ Multinom <- function(p, outcome, offset = outcome**0) {
 #' @param Qt matrix: A matrix representing the covariance matrix of the normal distribution.
 #' @param parms list: A list of extra known parameters of the distribuition. Not used in this kernel.
 #'
-#' @importFrom rootSolve multiroot
+#' @importFrom Rfast transpose
 #' @return The parameters of the conjugated distribuition of the linear predictor.
 #' @export
 convert_Multinom_Normal <- function(ft, Qt, parms = list()) {
-
   calc_helper <- 1 + sum(exp(ft))
   k <- length(ft)
-  r <- k+1
+  r <- k + 1
 
   H <- exp(ft) %*% t(exp(ft)) / (calc_helper**2)
   diag(H) <- diag(H) - exp(ft) / calc_helper
@@ -126,22 +126,23 @@ convert_Multinom_Normal <- function(ft, Qt, parms = list()) {
     trigamma_last <- trigamma(x[r] - sum(x[-r]))
     trigamma_vec <- trigamma(x)
 
-    jacob=diag(trigamma_vec)
-    jacob[-r,-r]=-jacob[-r,-r]-trigamma_last
-    jacob[r,-r]=trigamma_last
-    jacob[-r,r]=trigamma_last
-    jacob[r,r]=jacob[r,r]-trigamma_last
+    jacob <- diag(trigamma_vec)
+    jacob[-r, -r] <- -jacob[-r, -r] - trigamma_last
+    jacob[r, -r] <- trigamma_last
+    jacob[-r, r] <- trigamma_last
+    jacob[r, r] <- jacob[r, r] - trigamma_last
 
-    t(jacob*x)
+    transpose(jacob * x)
   }
 
-  p0=exp(c(ft,0))
-  p=p0/sum(p0)
+  p0 <- exp(c(ft, 0))
+  p <- p0 / sum(p0)
 
   ss1 <- f_root(system_multinom,
-                jacob_multinom,
-                # start = log(c(rep(0.01, r-1), 0.01 * r)))
-                start = log(c(p[-r], 1)*1))
+    jacob_multinom,
+    # start = log(c(rep(0.01, r-1), 0.01 * r)))
+    start = log(c(p[-r], 1) * 1)
+  )
 
   tau <- exp(as.numeric(ss1$root))
 
@@ -163,7 +164,7 @@ convert_Multinom_Normal <- function(ft, Qt, parms = list()) {
 convert_Normal_Multinom <- function(conj_prior, parms = list()) {
   alpha <- conj_prior
   r <- length(alpha)
-  k <- r-1
+  k <- r - 1
   ft <- digamma(alpha[-r]) - digamma(alpha[r])
   Qt <- matrix(trigamma(alpha[r]), k, k)
   diag(Qt) <- trigamma(alpha[-r]) + trigamma(alpha[r])
@@ -355,12 +356,9 @@ Multinom_alt <- function(p, outcome, offset = outcome**0) {
 #' @param y vector: A vector containing the observations.
 #' @param parms list: A list of extra known parameters of the distribuition. Not used in this kernel.
 #'
-#' @importFrom Rfast spdinv
-#'
 #' @return The parameters of the posterior distribution.
 #' @export
 update_Multinom_alt <- function(conj_prior, ft, Qt, y, parms = list()) {
-
   f0 <- ft
   S0 <- ginv(Qt)
   n <- sum(y)
@@ -370,12 +368,12 @@ update_Multinom_alt <- function(conj_prior, ft, Qt, y, parms = list()) {
     p0 <- c(exp(x), 1)
     p <- p0 / sum(p0)
 
-    sum(y * log(p)) - 0.5 * t(x - f0) %*% S0 %*% (x - f0)
+    sum(y * log(p)) - 0.5 * crossprod(x - f0, S0) %*% (x - f0)
   }
 
   d1.log.like <- function(x) {
     p0 <- c(x, 0)
-    p0 <- p0-max(p0)
+    p0 <- p0 - max(p0)
     p0 <- exp(p0)
     p <- p0 / sum(p0)
 
@@ -385,32 +383,34 @@ update_Multinom_alt <- function(conj_prior, ft, Qt, y, parms = list()) {
 
   d2.log.like <- function(x) {
     p0 <- c(x, 0)
-    p0 <- p0-max(p0)
-    p0=exp(p0)
+    p0 <- p0 - max(p0)
+    p0 <- exp(p0)
     p <- p0 / sum(p0)
-    pre_mat = diag(r-1)
-    diag(pre_mat)=p[-r]
+    pre_mat <- diag(r - 1)
+    diag(pre_mat) <- p[-r]
 
-    mat <- n * (p[-r] %*% t(p[-r])) - n*pre_mat +
+    mat <- n * (p[-r] %*% t(p[-r])) - n * pre_mat +
       -S0
     mat
   }
 
   # Calculating good initialization
-  alpha0=sum(y+0.01)
-  mean=digamma(y+0.01)-digamma(alpha0)
-  var=diag(trigamma(y+0.01))-trigamma(alpha0)
+  alpha0 <- sum(y + 0.01)
+  mean <- digamma(y + 0.01) - digamma(alpha0)
+  var <- diag(trigamma(y + 0.01)) - trigamma(alpha0)
 
-  A=cbind(diag(r-1),-1)
+  mini_A
+  A <- cbind(mini_A, -1)
+  A_t <- rbind(mini_A, -1)
 
-  mean=A%*%mean
-  var=A%*%var%*%t(A)
-  tau=spdinv(var)
+  mean <- A %*% mean
+  var <- crossprod(A_t, var) %*% A_t
+  tau <- ginv(var)
 
-  f_start=spdinv(tau+S0)%*%(tau%*%mean+S0%*%f0)
+  f_start <- ginv(tau + S0) %*% (tau %*% mean + S0 %*% f0)
 
   mode <- f_root(d1.log.like, d2.log.like, start = f_start)$root
   H <- d2.log.like(mode)
-  S <- spdinv(-H)
+  S <- ginv(-H)
   return(list("ft" = matrix(mode, length(mode), 1), "Qt" = S))
 }

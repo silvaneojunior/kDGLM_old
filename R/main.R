@@ -147,6 +147,19 @@ fit_model <- function(..., outcomes, pred_cred = 0.95, smooth_flag = TRUE, p_mon
   if (t != structure$t) {
     stop(paste0("Error: outcome does not have the same time length as structure: got ", n_outcomes, " from outcome, expected ", structure$t))
   }
+
+  var_names_out <- c()
+  for (outcome in outcomes) {
+    var_names_out <- c(var_names_out, outcome$var_names)
+  }
+  unique(var_names_out)
+  if (any(!(var_names_out %in% structure$var_names))) {
+    stop("Error: One or more linear predictor in outcomes are not present in the model structure.")
+  }
+  if (any(!(structure$var_names %in% var_names_out))) {
+    warning("One or more linear predictor in the model structure are not used in the outcomes.")
+  }
+
   model <- analytic_filter(
     outcomes = outcomes,
     m0 = structure$m0,
@@ -215,9 +228,9 @@ fit_model <- function(..., outcomes, pred_cred = 0.95, smooth_flag = TRUE, p_mon
 #'    \item plot (if so choosed): A plotly object.
 #' }
 #' @import ggplot2
-#' @importFrom plotly ggplotly
 #' @import dplyr
 #' @import tidyr
+#' @importFrom Rfast transpose
 #' @export
 #'
 #' @examples
@@ -374,8 +387,13 @@ forecast <- function(model, t = 1, outcome = NULL, offset = NULL, FF = NULL, G =
         lin_pred$Qt[pred_index, pred_index, drop = FALSE],
         outcome_forecast[[outcome_name]]$offset[t_i, ]
       )
-      ft_canom <- model_i$convert_mat_canom %*% lin_pred_offset$ft
-      Qt_canom <- model_i$convert_mat_canom %*% lin_pred_offset$Qt %*% t(model_i$convert_mat_canom)
+      if (model_i$convert_canom_flag) {
+        ft_canom <- model_i$convert_mat_canom %*% lin_pred_offset$ft
+        Qt_canom <- model_i$convert_mat_canom %*% lin_pred_offset$Qt %*% transpose(model_i$convert_mat_canom)
+      } else {
+        ft_canom <- lin_pred_offset$ft
+        Qt_canom <- lin_pred_offset$Qt
+      }
 
       conj_prior <- model_i$conj_prior(ft_canom, Qt_canom, parms = model_i$parms)
       outcome_forecast[[outcome_name]]$conj_param[t_i, ] <- conj_prior
@@ -522,6 +540,7 @@ forecast <- function(model, t = 1, outcome = NULL, offset = NULL, FF = NULL, G =
 #'    \item icl.pred Matrix: A matrix with the lower bound of the I.C. based on the credibility given in the arguments. Dimensions are k x t, where k is the number of outcomes.
 #'    \item icu.pred Matrix: A matrix with the upper bound of the I.C. based on the credibility given in the arguments. Dimensions are k x t, where k is the number of outcomes.
 #' }
+#' @importFrom Rfast transpose
 #' @export
 #'
 #' @examples
@@ -614,14 +633,19 @@ eval_past <- function(model, smooth = FALSE, h = 0, pred_cred = 0.95) {
 
       cur_step <- outcome$apply_offset(lin_pred$ft[pred_index, , drop = FALSE], lin_pred$Qt[pred_index, pred_index, drop = FALSE], outcome$offset[i, ])
 
-      ft_canom <- outcome$convert_mat_canom %*% cur_step$ft
-      Qt_canom <- outcome$convert_mat_canom %*% cur_step$Qt %*% t(outcome$convert_mat_canom)
+      if (outcome$convert_canom_flag) {
+        ft_canom <- outcome$convert_mat_canom %*% cur_step$ft
+        Qt_canom <- outcome$convert_mat_canom %*% cur_step$Qt %*% transpose(outcome$convert_mat_canom)
+      } else {
+        ft_canom <- cur_step$ft
+        Qt_canom <- cur_step$Qt
+      }
 
 
       conj_distr <- outcome$conj_prior(ft_canom, Qt_canom, parms = outcome$parms)
       prediction <- outcome$calc_pred(conj_distr, outcome$outcome[i, , drop = FALSE], pred_cred, parms = outcome$parms)
 
-            pred[(r_acum + 1):(r_acum + r_cur), i] <- prediction$pred
+      pred[(r_acum + 1):(r_acum + r_cur), i] <- prediction$pred
       var.pred[(r_acum + 1):(r_acum + r_cur), (r_acum + 1):(r_acum + r_cur), i] <- prediction$var.pred
       icl.pred[(r_acum + 1):(r_acum + r_cur), i] <- prediction$icl.pred
       icu.pred[(r_acum + 1):(r_acum + r_cur), i] <- prediction$icu.pred
@@ -680,7 +704,7 @@ eval_past <- function(model, smooth = FALSE, h = 0, pred_cred = 0.95) {
 #'    \item param Array: An array containing the samples of the parameters of the observational model. Dimensions are k x T x sample_size, where k is the number of parameters in the observational model and T is the number of observed values.
 #' }
 #'
-#' @importFrom Rfast cholesky
+#' @importFrom Rfast transpose
 #' @export
 #'
 #' @examples
@@ -719,28 +743,23 @@ dlm_sampling <- function(model, sample_size) {
       inv_link = model$outcomes[[outcome_name]]$inv_link_function,
       apply_offset = model$outcomes[[outcome_name]]$apply_offset,
       offset = model$outcomes[[outcome_name]]$offset,
-      l = model$outcomes[[outcome_name]]$l
+      l = model$outcomes[[outcome_name]]$l,
+      convert_mat_canom = model$outcomes[[outcome_name]]$convert_mat_canom,
+      convert_canom_flag = model$outcomes[[outcome_name]]$convert_canom_flag
     )
   }
   alt_chol_local <- if (n == 1) {
     sqrt
   } else {
-    alt_chol
+    chol_fast
   }
 
   mt_sample <- rnorm(n * T_len * sample_size) %>% array(c(n, T_len, sample_size))
   ft_sample <- array(NA, c(k, T_len, sample_size))
 
-  Ct_chol <- tryCatch(
-    {
-      # Usar função base do R, pois o Rfast não avisa quando da erro.
-      chol(model$Ct[, , T_len])
-    },
-    error = function(e) {
-      alt_chol_local(model$Ct[, , T_len])
-    }
-  )
-  mt_sample_i <- t(Ct_chol) %*% mt_sample[, T_len, ] + mt[, T_len]
+  Ct_chol <- alt_chol_local(model$Ct[, , T_len])
+  # mt_sample_i <- transpose(Ct_chol) %*% mt_sample[, T_len, ] + mt[, T_len]
+  mt_sample_i <- crossprod(Ct_chol, mt_sample[, T_len, ]) + mt[, T_len]
   if (any(is.na(FF[, , T_len]))) {
     FF_step <- FF[, , T_len]
     ft_sample_i <- matrix(NA, k, sample_size)
@@ -748,7 +767,7 @@ dlm_sampling <- function(model, sample_size) {
       ft_sample_i[, j] <- calc_lin_pred(mt_sample_i[, j], Ct_chol * 0, FF_step)$ft
     }
   } else {
-    ft_sample_i <- t(FF[, , T_len]) %*% mt_sample_i
+    ft_sample_i <- crossprod(FF[, , T_len], mt_sample_i)
   }
 
   var_names <- colnames(FF)
@@ -764,8 +783,14 @@ dlm_sampling <- function(model, sample_size) {
       offset_step <- 1
     }
 
+    if (outcomes[[outcome_name]]$convert_canom_flag) {
+      ft_sample_i_canom <- outcomes[[outcome_name]]$convert_mat_canom %*% ft_sample_i
+    } else {
+      ft_sample_i_canom <- ft_sample_i
+    }
+
     ft_sample_i_out <- outcomes[[outcome_name]]$apply_offset(
-      ft_sample_i[outcomes[[outcome_name]]$pred_index, , drop = FALSE],
+      ft_sample_i_canom[outcomes[[outcome_name]]$pred_index, , drop = FALSE],
       diag(k) * 0,
       offset_step
     )$ft
@@ -778,7 +803,6 @@ dlm_sampling <- function(model, sample_size) {
   ft_sample[, T_len, ] <- ft_sample_i
 
   for (t in (T_len - 1):1) {
-
     Rt <- model$Rt[, , t + 1]
     Ct <- model$Ct[, , t]
 
@@ -794,20 +818,16 @@ dlm_sampling <- function(model, sample_size) {
         G_diff[index_col] <- -mt_now[index_col] * mt_now[index_col + 1]
       }
     }
-    simple_Rt_inv <- Ct %*% t(G_now) %*% ginv(Rt)
+    # simple_Rt_inv <- Ct %*% transpose(G_now) %*% ginv(Rt)
+    simple_Rt_inv_t <- solve(Rt, G_now %*% Ct)
+    simple_Rt_inv <- transpose(simple_Rt_inv_t)
+
 
     mts <- mt[, t] + simple_Rt_inv %*% (mt_sample_i - at[, t + 1])
-    Cts <- Ct - simple_Rt_inv %*% Rt %*% t(simple_Rt_inv)
-    Ct_chol <- tryCatch(
-      {
-        # Usar função base do R, pois o Rfast não avisa quando da erro.
-        chol(Cts)
-      },
-      error = function(e) {
-        alt_chol_local(Cts)
-      }
-    )
-    mt_sample_i <- t(Ct_chol) %*% mt_sample[, t, ] + mts
+    # Cts <- Ct - simple_Rt_inv %*% Rt %*% simple_Rt_inv_t
+    Cts <- Ct - crossprod(simple_Rt_inv_t, Rt) %*% simple_Rt_inv_t
+    Ct_chol <- alt_chol_local(Cts)
+    mt_sample_i <- transpose(Ct_chol) %*% mt_sample[, t, ] + mts
     if (any(is.na(FF[, , t]))) {
       FF_step <- FF[, , t]
       ft_sample_i <- matrix(NA, k, sample_size)
@@ -815,7 +835,7 @@ dlm_sampling <- function(model, sample_size) {
         ft_sample_i[, j] <- calc_lin_pred(mt_sample_i[, j], Ct_chol * 0, FF_step)$ft
       }
     } else {
-      ft_sample_i <- t(FF[, , t]) %*% mt_sample_i
+      ft_sample_i <- crossprod(FF[, , t], mt_sample_i)
     }
 
     for (outcome_name in names(outcomes)) {
@@ -823,8 +843,14 @@ dlm_sampling <- function(model, sample_size) {
       if (any(is.na(offset_step))) {
         offset_step <- 1
       }
+      if (outcomes[[outcome_name]]$convert_canom_flag) {
+        ft_sample_i_canom <- outcomes[[outcome_name]]$convert_mat_canom %*% ft_sample_i
+      } else {
+        ft_sample_i_canom <- ft_sample_i
+      }
+
       ft_sample_i_out <- outcomes[[outcome_name]]$apply_offset(
-        ft_sample_i[outcomes[[outcome_name]]$pred_index, , drop = FALSE],
+        ft_sample_i_canom[outcomes[[outcome_name]]$pred_index, , drop = FALSE],
         diag(k) * 0,
         offset_step
       )$ft

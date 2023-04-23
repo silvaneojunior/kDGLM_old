@@ -43,6 +43,7 @@ Dirichlet <- function(alpha, outcome, offset = outcome**0) {
     outcome = matrix(outcome, t, r),
     convert_mat_canom = convert_mat_canom,
     convert_mat_default = convert_mat_default,
+    convert_canom_flag = FALSE,
     parms = parms,
     name = "Dirichlet",
     conj_prior = convert_Dirichlet_Normal,
@@ -97,8 +98,6 @@ convert_Dirichlet_Normal <- function(ft, Qt, parms) {
 #' @param y vector: A vector containing the observations.
 #' @param parms list: A list of extra known parameters of the distribuition. For this kernel, parms should containg the shape parameter (phi) for the observational gamma model.
 #'
-#' @importFrom Rfast spdinv
-#' @importFrom MASS ginv
 #'
 #' @return The parameters of the posterior distribution.
 #' @export
@@ -109,7 +108,7 @@ update_Dirichlet <- function(conj_prior, ft, Qt, y, parms) {
   # log.like=function(x){
   #   alpha=exp(x)
   #
-  #   lgamma(sum(alpha))+sum((alpha-1)*log(y)-lgamma(alpha))-0.5*t(x-f0)%*%S0%*%(x-f0)
+  #   lgamma(sum(alpha))+sum((alpha-1)*log(y)-lgamma(alpha))-0.5*crossprod(x-f0,S0)%*%(x-f0)
   # }
 
   d1.log.like <- function(x) {
@@ -133,7 +132,7 @@ update_Dirichlet <- function(conj_prior, ft, Qt, y, parms) {
 
   mode <- f_root(d1.log.like, d2.log.like, start = f0)$root
   H <- d2.log.like(mode)
-  S <- spdinv(-H)
+  S <- ginv(-H)
 
   return(list("ft" = matrix(mode, length(mode), 1), "Qt" = S))
   # return(list("ft" = ft, "Qt" = Qt))
@@ -159,7 +158,6 @@ update_Dirichlet <- function(conj_prior, ft, Qt, y, parms) {
 #' }
 #'
 #' @importFrom extraDistr rdirichlet ddirichlet
-#' @importFrom Rfast cholesky
 #' @export
 #'
 #' @examples
@@ -209,7 +207,7 @@ Dirichlet_pred <- function(conj_param, outcome = NULL, parms = list(), pred_cred
   outcome <- matrix(outcome, r, t)
   sample <- matrix(rnorm(r * N), N, r)
   for (i in 1:t) {
-    ft_i <- sample %*% cholesky(Qt[, , i]) + matrix(ft[, i], N, r, byrow = TRUE)
+    ft_i <- sample %*% chol_fast(Qt[, , i]) + matrix(ft[, i], N, r, byrow = TRUE)
     sample_y <- rdirichlet(N, alpha = exp(ft_i))
     if (pred.flag) {
       pred[, i] <- colmeans(sample_y)

@@ -5,12 +5,76 @@ if.null <- function(vec, val) {
   ifelse(is.null(vec), val, vec)
 }
 
-#' alt_chol
+#' if.na
 #'
-alt_chol <- function(S) {
-  eig_decomp <- eigen(S)
-  eig_decomp$values <- Re(ifelse(Re(eig_decomp$values) < 0, 0, eig_decomp$values))
-  return(eig_decomp$vectors %*% diag(sqrt(eig_decomp$values)) %*% t(eig_decomp$vectors))
+#' This function is wrapper for ifelse(is.null(.),.,.)
+if.na <- function(vec, val) {
+  ifelse(is.na(vec), val, vec)
+}
+
+
+#' if.nan
+#'
+#' This function is wrapper for ifelse(is.null(.),.,.)
+if.nan <- function(vec, val) {
+  ifelse(is.nan(vec), val, vec)
+}
+
+#' chol_fast
+#'
+#' @importFrom Rfast cholesky transpose
+#'
+chol_fast <- function(S) {
+  Chol_decomp <- cholesky(S)
+  if (prod(if.nan(diag(Chol_decomp), 0)) == 0) {
+    svd_decomp <- svd(S)
+    # return(svd_decomp$u%*%diag(svd_decomp$d)%*%t(svd_decomp$u))
+    d <- svd_decomp$d
+    u_t <- transpose(svd_decomp$u)
+    return(crossprod(u_t %*% diag(d)) %*% u_t)
+  } else {
+    return(Chol_decomp)
+  }
+}
+
+#' ginv
+#'
+#' @importFrom Rfast cholesky
+#'
+ginv <- function(S) {
+  Chol_decomp <- cholesky(S)
+  if (prod(if.nan(diag(Chol_decomp), 0)) == 0) {
+    svd_decomp <- svd(S, nv = 0)
+    # Q=(svd_decomp$u+svd_decomp$v)/2
+    # Q=svd_decomp$u
+    Q_t <- transpose(svd_decomp$u)
+    D <- svd_decomp$d
+    D <- ifelse(D > 0, 1 / D, 0)
+    # D <- 1/D
+    return(crossprod(Q_t %*% diag(D)) %*% Q_t)
+  } else {
+    return(chol2inv(Chol_decomp))
+  }
+}
+
+
+
+#' bdiag
+#'
+bdiag <- function(...) {
+  mats <- list(...)
+  ns <- sapply(mats, function(x) {
+    if.null(dim(x)[1], 1)
+  })
+  n <- sum(ns)
+  mat_final <- matrix(0, n, n)
+  n0 <- 0
+  for (mat in mats) {
+    n_i <- if.null(dim(mat)[1], 1)
+    mat_final[(n0 + 1):(n0 + n_i), (n0 + 1):(n0 + n_i)] <- mat
+    n0 <- n0 + n_i
+  }
+  mat_final
 }
 
 #' colProd
@@ -87,7 +151,6 @@ rowQuantile <- function(X, q) {
   max_index <- ceiling(k * q)
   (rownth(X, rep(min_index, n)) + rownth(X, rep(max_index, n))) / 2
 }
-
 
 #' f_root
 #'

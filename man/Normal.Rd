@@ -6,11 +6,9 @@
 \usage{
 Normal(
   mu,
-  tau = NA,
-  sigma = NA,
-  sigma2 = NA,
-  covariance = NA,
-  correlation = NA,
+  Tau = NA,
+  Sigma = NA,
+  Std = NA,
   outcome,
   offset = outcome^0,
   alt_method = FALSE
@@ -19,15 +17,15 @@ Normal(
 \arguments{
 \item{mu}{character: Name of the linear preditor associated with the mean parameter of the Normal distribuition. The parameter is treated as unknowed and equal to the associated linear preditor.}
 
+\item{outcome}{vector: Values of the observed data.}
+
+\item{offset}{vector: The offset at each observation. Must have the same shape as outcome.}
+
 \item{tau}{character: Name of the linear preditor associated with the precision parameter of the Normal distribuition. The parameter is treated as unknowed and equal to the exponential of the associated linear preditor. It cannot be specified with sigma or sigma2}
 
 \item{sigma}{character: Name of the linear preditor associated with the scale parameter of the Normal distribuition. The parameter is treated as unknowed and equal to the exponential of the associated linear preditor. It cannot be specified with tau or sigma2.}
 
 \item{sigma2}{character or numeric: Name of the linear preditor associated with the variance parameter of the Normal distribuition. If numeric, this parameter is treated as knowed and equal to the value passed. If a character, the parameter is treated as unknowed and equal to the exponential of the associated linear preditor. It cannot be specified with sigma or tau.}
-
-\item{outcome}{vector: Values of the observed data.}
-
-\item{offset}{vector: The offset at each observation. Must have the same shape as outcome.}
 }
 \value{
 A object of the class dlm_distr

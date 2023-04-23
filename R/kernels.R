@@ -10,7 +10,8 @@
 #'
 #' @return List: The smoothed mean (mts) and covariance (Cts) of the latent variables at each time. Their dimension follows, respectivelly, the dimensions of mt and Ct.
 #' @export
-#' @importFrom MASS ginv
+#'
+#' @importFrom Rfast transpose
 #'
 #' @examples
 #' T <- 20
@@ -28,8 +29,6 @@ generic_smoother <- function(mt, Ct, at, Rt, G) {
   mts <- mt
   Cts <- Ct
 
-  # var_index <- matrix(apply(Ct, 3, diag), n, T) != 0
-
   for (t in (T - 1):1) {
     mt_now <- mt[, t]
     G_sep <- G[, , t + 1]
@@ -43,22 +42,17 @@ generic_smoother <- function(mt, Ct, at, Rt, G) {
         G_diff[index_row] <- G_diff[index_row] - mt_now[index_col] * mt_now[index_col + 1]
       }
     }
-    # var_ref <- var_index[, t]
-    # restricted_Rt <- Rt[var_ref, var_ref, t + 1]
-    # restricted_Ct <- Ct[var_ref, var_ref, t]
-    # print(Ct[, , t])
     restricted_Rt <- Rt[, , t + 1]
     restricted_Ct <- Ct[, , t]
 
-    # simple_Rt_inv <- restricted_Ct %*% t(G_now[var_ref, var_ref]) %*% ginv(restricted_Rt)
-    simple_Rt_inv <- restricted_Ct %*% t(G_now) %*% ginv(restricted_Rt)
-
-    # mts[var_ref, t] <- mt_now[var_ref] + simple_Rt_inv %*% (mts[var_ref, t + 1] - at[var_ref, t + 1])
-    # Cts[var_ref, var_ref, t] <- restricted_Ct - simple_Rt_inv %*% (restricted_Rt - Cts[var_ref, var_ref, t + 1]) %*% t(simple_Rt_inv)
-
+    simple_Rt_inv <- restricted_Ct %*% transpose(G_now) %*% ginv(restricted_Rt)
+    simple_Rt_inv_t <- transpose(simple_Rt_inv)
+    # simple_Rt_inv_t=solve(restricted_Rt,G_now %*% restricted_Ct)
+    # simple_Rt_inv <- transpose(simple_Rt_inv_t)
 
     mts[, t] <- mt_now + simple_Rt_inv %*% (mts[, t + 1] - at[, t + 1])
-    Cts[, , t] <- restricted_Ct + simple_Rt_inv %*% (Cts[, , t + 1] - restricted_Rt) %*% t(simple_Rt_inv)
+    # Cts[, , t] <- restricted_Ct + simple_Rt_inv %*% (Cts[, , t + 1] - restricted_Rt) %*% simple_Rt_inv_t
+    Cts[, , t] <- restricted_Ct + crossprod(simple_Rt_inv_t, (Cts[, , t + 1] - restricted_Rt)) %*% simple_Rt_inv_t
   }
   return(list("mts" = mts, "Cts" = Cts))
 }
@@ -76,6 +70,8 @@ generic_smoother <- function(mt, Ct, at, Rt, G) {
 #' @param W Array: A 3D-array containing the covariance matrix of the noise for each time. It's dimension should be the same as D.
 #' @param p_monit numeric (optional): The prior probability of changes in the latent space variables that are not part of it's dinamic.
 #' @param c_monit numeric (optional, if p_monit is not specified): The relative cost of false alarm in the monitoring compared to the cost of not detecting anormalities.
+#'
+#' @importFrom Rfast transpose
 #'
 #' @return A list containing the following values:
 #' \itemize{
@@ -128,7 +124,6 @@ analytic_filter <- function(outcomes, m0 = 0, C0 = 1, FF, G, D, W, p_monit = NA,
     param_names <- outcomes[[outcome_name]]$param_names(outcomes[[outcome_name]]$outcome)
     outcomes[[outcome_name]]$conj_prior_param <- matrix(NA, T, length(param_names)) %>% as.data.frame()
     names(outcomes[[outcome_name]]$conj_prior_param) <- param_names
-    # outcomes[[outcome_name]]$conj_post_param <- outcomes[[outcome_name]]$conj_prior_param
 
     outcomes[[outcome_name]]$log.like.null <- rep(NA, T)
     outcomes[[outcome_name]]$log.like.alt <- rep(NA, T)
@@ -152,7 +147,6 @@ analytic_filter <- function(outcomes, m0 = 0, C0 = 1, FF, G, D, W, p_monit = NA,
   last_C_D <- last_C
 
   for (t in 1:T) {
-    cat(paste0(t,'\r'))
     model_list <- if (is.na(p_monit)) {
       c("null_model")
     } else {
@@ -183,15 +177,22 @@ analytic_filter <- function(outcomes, m0 = 0, C0 = 1, FF, G, D, W, p_monit = NA,
         Rt_step <- models[[model]]$Rt_step
 
         lin_pred <- calc_lin_pred(at_step, Rt_step, FF_step)
-        next_step <- outcome$apply_offset(lin_pred$ft, lin_pred$Qt, if (na.flag) {
+
+        if (outcome$convert_canom_flag) {
+          ft_canom <- outcome$convert_mat_canom %*% lin_pred$ft
+          Qt_canom <- outcome$convert_mat_canom %*% lin_pred$Qt %*% transpose(outcome$convert_mat_canom)
+        } else {
+          ft_canom <- lin_pred$ft
+          Qt_canom <- lin_pred$Qt
+        }
+
+        next_step <- outcome$apply_offset(ft_canom, Qt_canom, if (na.flag) {
           1
         } else {
           offset_step
         })
-        ft_canom <- outcome$convert_mat_canom %*% next_step$ft
-        Qt_canom <- outcome$convert_mat_canom %*% next_step$Qt %*% t(outcome$convert_mat_canom)
 
-        conj_prior <- outcome$conj_prior(ft_canom, Qt_canom, parms = outcome$parms)
+        conj_prior <- outcome$conj_prior(next_step$ft, next_step$Qt, parms = outcome$parms)
 
         models[[model]] <- list(
           "at" = models[[model]]$at,
@@ -244,33 +245,40 @@ analytic_filter <- function(outcomes, m0 = 0, C0 = 1, FF, G, D, W, p_monit = NA,
 
       mt_step <- model$at_step
       Ct_step <- model$Rt_step
-      # ft[, t] <- ft_step <- model$ft_step
-      # Qt[, , t] <- Qt_step <- model$Qt_step
       ft_step <- model$ft_step
       Qt_step <- model$Qt_step
-      # outcomes[[outcome_name]]$conj_prior_param[t, ] <- conj_prior
       if (na.flag) {
         norm_post <- list(ft = ft_step, Qt = Qt_step)
-        # outcomes[[outcome_name]]$conj_post_param[t, ] <- conj_prior
       } else {
-        ft_canom <- outcome$convert_mat_canom %*% ft_step
-        Qt_canom <- outcome$convert_mat_canom %*% Qt_step %*% t(outcome$convert_mat_canom)
+        if (outcome$convert_canom_flag) {
+          ft_canom <- outcome$convert_mat_canom %*% ft_step
+          Qt_canom <- outcome$convert_mat_canom %*% Qt_step %*% transpose(outcome$convert_mat_canom)
+        } else {
+          ft_canom <- ft_step
+          Qt_canom <- Qt_step
+        }
         conj_prior <- outcome$conj_prior(ft_canom, Qt_canom, parms = outcome$parms)
         conj_post <- outcome$update(conj_prior, ft = ft_canom, Qt = Qt_canom, y = outcome$outcome[t, ], parms = outcome$parms)
 
-        # outcomes[[outcome_name]]$conj_post_param[t, ] <- conj_post
         if (outcome$alt_method) {
           norm_post <- conj_post
         } else {
           norm_post <- outcome$conj_post(conj_post, parms = outcome$parms)
         }
 
-        ft_star <- norm_post$ft <- outcome$convert_mat_default %*% norm_post$ft
-        Qt_star <- norm_post$Qt <- outcome$convert_mat_default %*% norm_post$Qt %*% t(outcome$convert_mat_default)
-
+        if (outcome$convert_canom_flag) {
+          ft_star <- norm_post$ft <- outcome$convert_mat_default %*% norm_post$ft
+          Qt_star <- norm_post$Qt <- outcome$convert_mat_default %*% norm_post$Qt %*% transpose(outcome$convert_mat_default)
+        } else {
+          ft_star <- norm_post$ft <- norm_post$ft
+          Qt_star <- norm_post$Qt <- norm_post$Qt
+        }
         At <- Ct_step %*% model$FF %*% ginv(Qt_step)
+        At_t <- t(At)
+        # At_t <- solve(Qt_step,t(model$FF) %*% Ct_step)
+        # At <- t(At_t)
         models[["null_model"]]$at_step <- mt_step <- mt_step + At %*% (ft_star - ft_step)
-        models[["null_model"]]$Rt_step <- Ct_step <- Ct_step + At %*% (Qt_star - Qt_step) %*% t(At)
+        models[["null_model"]]$Rt_step <- Ct_step <- Ct_step + crossprod(At_t, (Qt_star - Qt_step)) %*% At_t
 
         last_C_D <- Ct_step
       }
@@ -293,16 +301,22 @@ analytic_filter <- function(outcomes, m0 = 0, C0 = 1, FF, G, D, W, p_monit = NA,
           ft = lin_pred_ref$ft[pred_index, , drop = FALSE],
           Qt = lin_pred_ref$Qt[pred_index, pred_index, drop = FALSE]
         )
-        next_step <- outcome$apply_offset(lin_pred$ft, lin_pred$Qt, if (na.flag) {
+
+        if (outcome$convert_canom_flag) {
+          ft_canom <- outcome$convert_mat_canom %*% lin_pred$ft
+          Qt_canom <- outcome$convert_mat_canom %*% lin_pred$Qt %*% transpose(outcome$convert_mat_canom)
+        } else {
+          ft_canom <- lin_pred$ft
+          Qt_canom <- lin_pred$Qt
+        }
+
+        next_step <- outcome$apply_offset(ft_canom, Qt_canom, if (na.flag) {
           1
         } else {
           offset_step
         })
 
-        ft_canom <- outcome$convert_mat_canom %*% next_step$ft
-        Qt_canom <- outcome$convert_mat_canom %*% next_step$Qt %*% t(outcome$convert_mat_canom)
-
-        conj_prior <- outcome$conj_prior(ft_canom, Qt_canom, parms = outcome$parms)
+        conj_prior <- outcome$conj_prior(next_step$ft, next_step$Qt, parms = outcome$parms)
         outcomes[[outcome_name]]$conj_prior_param[t, ] <- conj_prior
       }
 
@@ -322,6 +336,10 @@ analytic_filter <- function(outcomes, m0 = 0, C0 = 1, FF, G, D, W, p_monit = NA,
   return(result)
 }
 
+#' one_step_evolve
+#'
+#' @importFrom Rfast transpose
+#'
 one_step_evolve <- function(m0, C0, G, D, W) {
   n <- dim(G)[1]
   G_now <- G
@@ -335,7 +353,8 @@ one_step_evolve <- function(m0, C0, G, D, W) {
     }
   }
   at <- (G_now %*% m0) + G_diff
-  Pt <- G_now %*% C0 %*% (t(G_now))
+  G_now_t <- transpose(G_now)
+  Pt <- crossprod(G_now_t, C0) %*% G_now_t
   Rt <- as.matrix(D * Pt) + W
 
   list("at" = at, "Rt" = Rt)
@@ -348,34 +367,35 @@ calc_lin_pred <- function(at, Rt, FF) {
   n <- dim(FF)[1]
   k <- dim(FF)[2]
 
-  charge=matrix(0,k,1)
-  at_mod=at[,1]
-  for(i in 1:k){
-    FF_step=FF[,i]
+  charge <- matrix(0, k, 1)
+  at_mod <- at[, 1]
+  for (i in 1:k) {
+    FF_step <- FF[, i]
     FF_flags <- is.na(FF_step)
-    vals_na=(1:n)[FF_flags]
-    n_na=length(vals_na)
-    if(n_na>1){
-      vals_coef=vals_na[((1:(n_na/2)*2)-1)]
-      vals_noise=vals_na[((1:(n_na/2))*2)]
-      flags_na=diag(Rt)[vals_noise]==1 & diag(Rt)[vals_coef]>0
+    vals_na <- (1:n)[FF_flags]
+    n_na <- length(vals_na)
+    if (n_na > 1) {
+      vals_coef <- vals_na[((1:(n_na / 2) * 2) - 1)]
+      vals_noise <- vals_na[((1:(n_na / 2)) * 2)]
+      flags_na <- diag(Rt)[vals_noise] == W_correl & diag(Rt)[vals_coef] > 0
 
-      FF[vals_coef,i]=ifelse(flags_na,
-                             exp(at_mod[vals_noise]+at_mod[vals_coef]),
-                             exp(at_mod[vals_noise]))
-      FF[vals_noise,i]=ifelse(flags_na,
-                              exp(at_mod[vals_noise]+at_mod[vals_coef]),
-                              exp(at_mod[vals_noise])*at_mod[vals_coef]
-                              )
-      charge[i,1]=charge[i,1]+sum(ifelse(flags_na,
-                                         exp(at_mod[vals_noise]+at_mod[vals_coef]),
-                                         exp(at_mod[vals_noise])*at_mod[vals_coef]
+      FF[vals_coef, i] <- ifelse(flags_na,
+        (at_mod[vals_noise]) * exp(at_mod[vals_coef]),
+        (at_mod[vals_noise])
+      )
+      FF[vals_noise, i] <- ifelse(flags_na,
+        exp(at_mod[vals_coef]),
+        at_mod[vals_coef]
+      )
+      charge[i, 1] <- charge[i, 1] + sum(ifelse(flags_na,
+        (at_mod[vals_noise]) * exp(at_mod[vals_coef]),
+        (at_mod[vals_noise]) * at_mod[vals_coef]
       ))
     }
   }
 
-  ft <- (t(FF) %*% at)
-  Qt <- as.matrix(t(FF) %*% Rt %*% FF)
+  ft <- crossprod(FF, at)
+  Qt <- as.matrix(crossprod(FF, Rt) %*% FF)
   list("ft" = ft - charge, "Qt" = Qt, "FF" = FF)
 }
 

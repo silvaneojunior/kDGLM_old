@@ -6,7 +6,7 @@
 \usage{
 correlation_block(
   var_names,
-  order,
+  order = 1,
   name = "Var_cor",
   D = 1,
   W = 0,

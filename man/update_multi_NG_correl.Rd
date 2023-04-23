@@ -4,7 +4,7 @@
 \alias{update_multi_NG_correl}
 \title{update_multi_NG_correl}
 \usage{
-update_multi_NG_correl(conj_prior, ft, Qt, y, parms = list(alt_method = FALSE))
+update_multi_NG_correl(conj_prior, ft, Qt, y, parms)
 }
 \arguments{
 \item{conj_prior}{list: A vector containing the parameters of the Normal-Gamma (mu0,c0,alpha,beta).}

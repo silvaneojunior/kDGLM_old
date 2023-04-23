@@ -61,6 +61,7 @@ Poisson <- function(lambda, outcome, offset = outcome**0) {
     outcome = matrix(outcome, t, r),
     convert_mat_canom = convert_mat_canom,
     convert_mat_default = convert_mat_default,
+    convert_canom_flag = FALSE,
     parms = list(),
     name = "Poisson"
   )
@@ -283,15 +284,14 @@ Poisson_alt <- function(lambda, outcome, offset = outcome**0) {
 #' @param Qt matrix: A matrix representing the covariance matrix of the normal distribution.
 #' @param parms list: A list of extra known parameters of the distribuition. Not used in this kernel.
 #'
-#' @importFrom MASS ginv
 #' @importFrom cubature cubintegrate
 #'
 #' @return The parameters of the posterior distribution.
 #' @export
 update_Poisson_alt <- function(conj_prior, ft, Qt, y, parms) {
-  f0 <- ft
-  Q0 <- Qt
-  S0 <- ginv(Qt)
+  # f0 <- ft
+  # Q0 <- Qt
+  # S0 <- ginv(Qt)
 
   # val_const=lgamma(y+1)
   c_val <- -Inf

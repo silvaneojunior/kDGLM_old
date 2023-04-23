@@ -33,3 +33,18 @@ A list containing the following values:
 \description{
 multi_normal_gamma_pred
 }
+\examples{
+
+conj_param <- data.frame(
+  "mu0_1" = rep(0, 3),
+  "c0_1" = rep(1, 3),
+  "alpha_1" = rep(3, 3),
+  "beta_1" = rep(3, 3),
+  "mu0_2" = rep(2, 3),
+  "c0_2" = rep(1, 3),
+  "alpha_2" = rep(5, 3),
+  "beta_2" = rep(1, 3)
+)
+
+normal_gamma_pred(conj_param)
+}

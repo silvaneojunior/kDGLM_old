@@ -68,6 +68,7 @@ Gamma <- function(phi = NA, mu = NA, alpha = NA, beta = NA, sigma = NA, outcome,
     }
     var_names <- c(mu)
     convert_mat_default <- convert_mat_canom <- diag(1)
+    convert_canom_flag <- FALSE
     distr <- list(
       "conj_prior" = convert_Gamma_Normal,
       "conj_post" = convert_Normal_Gamma,
@@ -102,6 +103,7 @@ Gamma <- function(phi = NA, mu = NA, alpha = NA, beta = NA, sigma = NA, outcome,
     }
     convert_mat_default <- matrix(c(1, 0, 0, 1, 1, 0, 1, -1, -2, 2), 2, 5)[, flags]
     convert_mat_canom <- solve(convert_mat_default)
+    convert_canom_flag <- !all(flags[c(1, 2)])
     parms <- list()
     var_names <- c(phi, mu, alpha, beta, sigma)[flags]
   }
@@ -667,8 +669,6 @@ Gamma_alt <- function(phi = NA, mu = NA, alpha = NA, beta = NA, sigma = NA, outc
 #' @param y vector: A vector containing the observations.
 #' @param parms list: A list of extra known parameters of the distribuition. For this kernel, parms should containg the shape parameter (phi) for the observational gamma model.
 #'
-#' @importFrom MASS ginv
-#'
 #' @return The parameters of the posterior distribution.
 #' @export
 update_FGamma_alt <- function(conj_prior, ft, Qt, y, parms) {
@@ -683,7 +683,7 @@ update_FGamma_alt <- function(conj_prior, ft, Qt, y, parms) {
   #   phi=exp(x[1])
   #   mu=exp(x[2])
   #
-  #   phi*log(phi)-phi*log(mu)-lgamma(phi)+(phi-1)*log(y)-phi*y/mu-0.5*t(x-f0)%*%S0%*%(x-f0)
+  #   phi*log(phi)-phi*log(mu)-lgamma(phi)+(phi-1)*log(y)-phi*y/mu-0.5*crossprod(x-f0,S0)%*%(x-f0)
   # }
 
   d1.log.like <- function(x) {
@@ -724,7 +724,7 @@ update_FGamma_alt <- function(conj_prior, ft, Qt, y, parms) {
 
   mode <- f_root(d1.log.like, d2.inv, f0)$root
   H <- d2.inv(mode)
-  S <- spdinv(-H)
+  S <- ginv(-H)
 
   return(list("ft" = matrix(mode, 2, 1), "Qt" = S))
 }
@@ -748,7 +748,6 @@ update_FGamma_alt <- function(conj_prior, ft, Qt, y, parms) {
 #'    \item icu.pred vector/matrix: the percentile of 100*(1-(1-pred_cred)/2)% of the predictive distribuition of a next observation. Same type and shape as the parameter in model.
 #' }
 #'
-#' @importFrom Rfast cholesky
 #' @export
 #'
 #' @examples
@@ -796,7 +795,7 @@ Fgamma_pred_alt <- function(conj_param, outcome = NULL, parms = list(), pred_cre
   N <- 5000
   sample <- matrix(rnorm(k * N), N, k)
   for (i in 1:t) {
-    ft_i <- sample %*% cholesky(Qt[, , i]) + matrix(ft[, i], N, k, byrow = TRUE)
+    ft_i <- sample %*% chol_fast(Qt[, , i]) + matrix(ft[, i], N, k, byrow = TRUE)
     sample_y <- rgamma(N, exp(ft_i[, 1]), exp(ft_i[, 1] - ft_i[, 2]))
     if (pred.flag) {
       pred[, i] <- mean(sample_y)
@@ -834,15 +833,14 @@ Fgamma_pred_alt <- function(conj_param, outcome = NULL, parms = list(), pred_cre
 #' @param y vector: A vector containing the observations.
 #' @param parms list: A list of extra known parameters of the distribution. For this kernel, parms should containg the shape parameter (phi) for the observational gamma model.
 #'
-#' @importFrom MASS ginv
 #' @importFrom cubature cubintegrate
 #'
 #' @return The parameters of the posterior distribution.
 #' @export
 update_Gamma_alt <- function(conj_prior, ft, Qt, y, parms) {
-  f0 <- ft
-  Q0 <- Qt
-  S0 <- ginv(Qt)
+  # f0 <- ft
+  # Q0 <- Qt
+  # S0 <- ginv(Qt)
 
   f <- function(x) {
     prob <- exp(dgamma(y, parms$phi, parms$phi / x, log = TRUE) + dlnorm(x, ft, sqrt(Qt), log = TRUE))
