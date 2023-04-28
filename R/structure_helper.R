@@ -129,6 +129,7 @@ polynomial_block <- function(..., order = 1, name = "Var_Poly", D = 1, W = 0, m0
   block <- list(
     "FF" = FF,
     "G" = array(G, c(order, order, t)),
+    "G_labs" = matrix('const', order, order),
     "D" = D,
     "W" = W,
     "m0" = m0,
@@ -229,76 +230,49 @@ harmonic_block <- function(..., period, name = "Var_Sazo", D = 1, W = 0, m0 = 0,
 #' @export
 #' @examples
 #' # EXAMPLE
-AR_block <- function(..., order, name = "Var_AR", D = 1, W = 0, m0 = 0, C0 = 1) {
-  block <- polynomial_block(..., order = 2 * order, name = name, D = D, W = W, m0 = m0, C0 = C0)
+AR_block <- function(..., order,noise_var,pulse=0, name = "Var_AR",AR_type='constrained', D = 1, W = 0, m0 = 0, C0 = 1,m0_states=0,C0_states=1,m0_pulse=0,C0_pulse=1,D_pulse=1,W_pulse=0) {
+  block <-
+    polynomial_block(..., order =order, name = paste0(name,'_State'),m0=m0_states,C0=C0_states,D=1,W=noise_var)+
+    polynomial_block(..., order =order, name = paste0(name,'_Coeff'),m0=m0,C0=C0,D=D,W=W)
   k <- block$k
 
   if (order == 1) {
     G <- diag(2)
+    G_labs <- matrix('const',2,2)
     G[1, 1] <- NA
+    G_labs[1, 1] <- tolower(AR_type)
   } else {
     G <- matrix(0, 2 * order, 2 * order)
+    G_labs <- matrix('const', 2 * order, 2 * order)
     G[1, 1:order] <- NA
+    G[1, 1:order] <- tolower(AR_type)
     G[2:order, -(order:(2 * order))] <- diag(order - 1)
     G[(order + 1):(2 * order), (order + 1):(2 * order)] <- diag(order)
     index <- sort(c(c(1:order), c(1:order)))
     G <- G[index + c(0, order), index + c(0, order)]
   }
   block$G <- array(G, c(2 * order, 2 * order, block$t))
+  block$G_labs = G_labs
   block$order <- order
   block$type <- "AR"
-  return(block)
-}
-
-#' FT_block
-#'
-#' DESCRIPTION
-#'
-#' @param ... Named values for the planing matrix.
-#' @param order Positive integer: DESCRIPTION.
-#' @param name String: An optional argument providing the name for this block. Can be useful to identify the models with meaningful labels, also, the name used will be used in some auxiliary functions.
-#' @param D Array, Matrix, vector or  scalar: The values for the discount factors at each time. If D is a array, it's dimensions should be nxnxt, where n is the order of the polynomial block and t is the length of the outcomes. If D is a matrix, it's dimesions should be nxn and it's values will be used for each time. If D is a vector or scalar, a discount factor matrix will be created as a diagonal matrix with the values of D in the diagonal.
-#' @param W Array, Matrix, vector or  scalar: The values for the covariance matrix for the noise factor at each time. If W is a array, it's dimensions should be nxnxt, where n is the order of the polynomial block and t is the length of the outcomes. If W is a matrix, it's dimesions should be nxn and it's values will be used for each time. If W is a vector or scalar, a discount factor matrix will be created as a diagonal matrix with the values of W in the diagonal.
-#' @param m0 Vector or scalar: The prior mean for the latent variables associated with this block. If m0 is a vector, it's dimesion should be equal to the order of the polynomial block. If m0 is a scalar, it's value will be used for all latent variables.
-#' @param C0 Matrix, vector or scalar: The prior covariance matrix for the latent variables associated with this block. If C0 is a matrix, it's dimesions should be nxn. If W is a vector or scalar, a covariance matrix will be created as a diagonal matrix with the values of C0 in the diagonal.
-#'
-#' @return An object of the class dlm_block containing the following values:
-#' \itemize{
-#'    \item FF Array: A 3D-array containing the regression matrix for each time. It's dimension should be n x m x T, where n is the number of latent variables, m is the number of outcomes in the model and T is the time series length.
-#'    \item G Matrix: The state evolution matrix.
-#'    \item D Array: A 3D-array containing the discount factor matrix for each time. It's dimension should be n x n x T, where n is the number of latent variables and T is the time series length.
-#'    \item W Array: A 3D-array containing the covariance matrix of the noise for each time. It's dimension should be the same as D.
-#'    \item m0 Vector: The prior mean for the latent vector.
-#'    \item C0 Matrix: The prior covariance matrix for the latent vector.
-#'    \item names list: A list containg the variables indexes by their name.
-#'    \item order Positive integer: Same as argument.
-#'    \item n Positive integer: The number of latent variables associated with this block (2).
-#'    \item t Positive integer: The number of time steps associated with this block. If 1, the block is compatible with blocks of any time length, but if t is greater than 1, this block can only be used with blocks of the same time length.
-#'    \item k Positive integer: The number of outcomes associated with this block. This block can only be used with blocks with the same outcome length.
-#'    \item var_names Vector: The name of the linear predictors associated with this block,
-#'    \item type Character: The type of block (FT).
-#' }
-#'
-#' @export
-#' @examples
-#' # EXAMPLE
-FT_block <- function(..., charges, name = "Var_FT", D = 1, W = 0, m0 = 0, C0 = 1) {
-  block <- polynomial_block(..., order = 3, name = name, D = D, W = W, m0 = m0, C0 = C0)
-  k <- block$k
-  t <- length(charges)
-  if (block$t != t & block$t > 1) {
-    stop("Error: Length of charges are not compatible with length of regressors. Regressors should have length 1 or equal to charges.")
+  true_order=c(rbind(1:order,1:order+order))
+  block$m0=block$m0[true_order]
+  block$C0=block$C0[true_order,true_order]
+  block$D=block$D[true_order,true_order,]
+  block$W=block$W[true_order,true_order,]
+  block$names[[1]]=seq(1,2*order,2)[block$names[[1]]]
+  block$names[[2]]=seq(2,2*order,2)[block$names[[2]]-order]
+  if(any(pulse!=0)){
+    pulse_var=as.list(rep(0,length(list(...))))
+    names(pulse_var)=names(list(...))
+    block <- block+
+      do.call(function(...){
+        polynomial_block(..., order =1, name = paste0(name,'_Pulse'),m0=m0_pulse,C0=C0_pulse,D=D_pulse,W=W_pulse)
+      },
+      pulse_var
+      )
+    block$G[1,2*order+1,]=pulse
   }
-
-
-  G <- array(diag(3), c(3, 3, t))
-  G[1, 1, ] <- NA
-  G[1, 3, ] <- charges
-
-  block$G <- G
-  block$order <- order
-  block$type <- "FT"
-  block$t <- t
   return(block)
 }
 
@@ -438,6 +412,7 @@ block_merge <- function(...) {
 
   FF <- array(0, c(n, k, t), dimnames = list(NULL, var_names, NULL))
   G <- array(0, c(n, n, t))
+  G_labs <- matrix('const', n, n)
   D <- array(0, c(n, n, t))
   W <- array(0, c(n, n, t))
   m0 <- c()
@@ -449,13 +424,14 @@ block_merge <- function(...) {
     FF[current_range, var_names %in% block$var_names, ] <- block$FF[, (1:k_i)[order(block$var_names)], ]
 
     G[current_range, current_range, ] <- block$G
+    G_labs[current_range, current_range] <- block$G_labs
     D[current_range, current_range, ] <- block$D
     W[current_range, current_range, ] <- block$W
     m0 <- c(m0, block$m0)
     C0[current_range, current_range] <- block$C0
     position <- position + block$n
   }
-  block <- list("FF" = FF, "G" = G, "D" = D, "W" = W, "m0" = m0, "C0" = C0, "n" = n, "t" = t, "k" = k, "names" = names, "var_names" = var_names)
+  block <- list("FF" = FF, "G" = G, "G_labs" = G_labs, "D" = D, "W" = W, "m0" = m0, "C0" = C0, "n" = n, "t" = t, "k" = k, "names" = names, "var_names" = var_names)
   class(block) <- "dlm_block"
   return(block)
 }

@@ -36,8 +36,8 @@ summary.fitted_dlm <- function(fitted_dlm, t = fitted_dlm$t, smooth = fitted_dlm
 
     pred <- t(prediction$pred)
     out <- outcome$outcome[-(1:metric_cutoff), ]
-    out <- ifelse(out == 0, 1, out)
-    distr_rae[outcome_index] <- mean(abs((pred - out) / out), na.rm = TRUE)
+    out_div <- ifelse(out == 0, 1, out)
+    distr_rae[outcome_index] <- mean(abs((pred - out) / out_div), na.rm = TRUE)
   }
   distr_names_len <- max(sapply(names(distr_names), nchar))
 

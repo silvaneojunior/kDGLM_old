@@ -188,21 +188,33 @@ Normal <- function(mu, Tau = NA, Sigma = NA, Std = NA, outcome, offset = outcome
           list("ft" = ft, "Qt" = Qt)
         )
       },
-      "link_function" = function(x) {
-        x[var_index, ] <- log(x[var_index, ])
-        a <- x[cor_index, ]
-        a <- ((a + 1) / 2)
-        a <- log(a / (1 - a))
-        x[cor_index, ] <- a
+      "link_function" = if(r>1){
+        function(x) {
+          x[var_index, ] <- log(x[var_index, ])
+          a <- x[cor_index, ]
+          a <- ((a + 1) / 2)
+          a <- log(a / (1 - a))
+          x[cor_index, ] <- a
         return(x)
-      },
-      "inv_link_function" = function(x) {
-        x[var_index, ] <- exp(x[var_index, ])
-        a <- x[cor_index, ]
-        a <- 1 / (1 + exp(-a))
-        a <- 2 * a - 1
-        x[cor_index, ] <- a
+      }}else{
+        function(x) {
+          x[var_index, ] <- log(x[var_index, ])
         return(x)
+      }},
+      "inv_link_function" = if(r>1){
+        function(x) {
+          x[var_index, ] <- exp(x[var_index, ])
+          a <- x[cor_index, ]
+          a <- 1 / (1 + exp(-a))
+          a <- 2 * a - 1
+          x[cor_index, ] <- a
+        return(x)
+        }
+        }else{
+          function(x) {
+            x[var_index, ] <- exp(x[var_index, ])
+            return(x)
+          }
       },
       "param_names" = if (r > 1) {
         function(y) {
@@ -256,146 +268,6 @@ Normal <- function(mu, Tau = NA, Sigma = NA, Std = NA, outcome, offset = outcome
 
   return(distr)
 }
-
-##### Normal with unknown variance #####
-
-#' convert_NG_Normal
-#'
-#' Calculate the parameters of the Normal-Gamma that best approximates the given Normal distribuition.
-#' The approximation is the best in the sense that it minimizes the KL divergence from the Normal to the Normal-Gamma.
-#' In this approach, we suppose that the first entry of the multivariate normal represents the mean of the observed data and the second represent the log variance.
-#'
-#' @param ft vector: A vector representing the means from the normal distribution.
-#' @param Qt matrix: A matrix representing the covariance matrix of the normal distribution.
-#' @param parms list: A list of extra known parameters of the distribuition. Not used in this kernel.
-#'
-#' @return The parameters of the conjugated distribuition of the linear predictor.
-#' @export
-convert_NG_Normal <- function(ft, Qt, parms = list()) {
-  ft <- matrix(ft, 2, 1)
-  mu0 <- ft[1, ] + Qt[1, 2]
-  c0 <- exp(-ft[2, ] - Qt[2, 2] / 2) / (Qt[1, 1] + 1e-40)
-  helper <- -3 + 3 * sqrt(1 + 2 * Qt[2, 2] / 3)
-  # helper=Qt[2,2]
-  alpha <- 1 / helper
-  beta <- alpha * exp(-ft[2, ] - Qt[2, 2] / 2)
-  return(list("mu0" = mu0, "c0" = c0, "alpha" = alpha, "beta" = beta))
-}
-
-convert_Normal_NG <- function(conj_distr, parms = list()) {
-  # q12 <- conj_distr$mu0*(digamma(conj_distr$alpha)-log(conj_distr$beta))/(1-log(conj_distr$alpha)+log(conj_distr$beta))
-  f1 <- conj_distr$mu0 #-q12
-  f2 <- digamma(conj_distr$alpha) - log(conj_distr$beta + 1e-40)
-  # f2 <- log(conj_distr$alpha)-log(conj_distr$beta)
-  q1 <- conj_distr$beta / (conj_distr$c0 * conj_distr$alpha)
-  q2 <- trigamma(conj_distr$alpha)
-  q12 <- 0
-
-  ft <- c(f1, f2)
-  Qt <- matrix(c(q1, q12, q12, q2), byrow = F, ncol = 2)
-  return(list("ft" = ft, "Qt" = Qt))
-}
-
-#' update_NG
-#'
-#' Calculate posterior parameter for the Normal-Gamma, assuming that the observed values came from a Normal model from which the prior distribuition for the mean and the precision have joint distribuition Normal-Gamma
-#'
-#' @param conj_prior list: A vector containing the parameters of the Normal-Gamma (mu0,c0,alpha,beta).
-#' @param ft vector: A vector representing the means from the normal distribution. Not used in the default method.
-#' @param Qt matrix: A matrix representing the covariance matrix of the normal distribution. Not used in the default method.
-#' @param y vector: A vector containing the observations.
-#' @param parms list: A list of extra known parameters of the distribuition. Not used in this kernel.
-#'
-#' @return The parameters of the posterior distribution.
-#' @export
-update_NG <- function(conj_prior, ft, Qt, y, parms = list()) {
-  mu0 <- (conj_prior$c0 * conj_prior$mu0 + y) / (conj_prior$c0 + 1)
-  c0 <- conj_prior$c0 + 1
-  alpha <- conj_prior$alpha + 0.5
-  beta <- conj_prior$beta + 0.5 * conj_prior$c0 * ((conj_prior$mu0 - y)**2) / (conj_prior$c0 + 1)
-  return(list("mu0" = mu0, "c0" = c0, "alpha" = alpha, "beta" = beta))
-}
-
-#' normal_gamma_pred
-#'
-#' Calculate the values for the predictive distribuition given the values of the parameter of the conjugated distribuition of the linear predictor.
-#' The data is assumed to have Normal distribuition with it's mean and precision having joint distribuition Normal-Gamma with parameters mu0, c0, alpha, beta.
-#' In this scenario, the marginal distribuition of the data is t-student with 2*alpha degrees of freedoom, mu0 as the location parameter and (beta/alpha)*(1+1/c0) as the scale parameter.
-#'
-#' @param conj_param List or data.frame: The parameters of the conjugated distribuition (Normal-Gamma) of the linear predictor.
-#' @param outcome Vector or matrix (optional): The observed values at the current time.
-#' @param parms List (optional): A list of extra parameters for the model. Not used in this function.
-#' @param pred_cred Numeric: the desired credibility for the credibility interval.
-#'
-#' @return A list containing the following values:
-#' \itemize{
-#'    \item pred vector/matrix: the mean of the predictive distribuition of a next observation. Same type and shape as the parameter in model.
-#'    \item var.pred vector/matrix: the variance of the predictive distribuition of a next observation. Same type and shape as the parameter in model.
-#'    \item icl.pred vector/matrix: the percentile of 100*((1-pred_cred)/2)% of the predictive distribuition of a next observation. Same type and shape as the parameter in model.
-#'    \item icu.pred vector/matrix: the percentile of 100*(1-(1-pred_cred)/2)% of the predictive distribuition of a next observation. Same type and shape as the parameter in model.
-#'    \item log.like vector: the The log likelihood for the outcome given the conjugated parameters.
-#' }
-#'
-#' @export
-#'
-#' @examples
-#'
-#' conj_param <- data.frame(
-#'   "mu0" = rep(0, 3),
-#'   "c0" = rep(1, 3),
-#'   "alpha" = rep(3, 3),
-#'   "beta" = rep(3, 3)
-#' )
-#'
-#' normal_gamma_pred(conj_param)
-normal_gamma_pred <- function(conj_param, outcome = NULL, parms = list(), pred_cred = 0.95) {
-  pred.flag <- !is.na(pred_cred)
-  like.flag <- !is.null(outcome)
-  if (!like.flag & !pred.flag) {
-    return(list())
-  }
-
-  c0 <- conj_param$c0
-  mu0 <- conj_param$mu0
-  alpha <- conj_param$alpha
-  beta <- conj_param$beta
-
-  mu <- mu0
-  nu <- 2 * alpha
-  sigma2 <- (beta / alpha) * (1 + 1 / c0)
-
-  if (pred.flag) {
-    pred <- mu %>%
-      as.matrix() %>%
-      t()
-    var.pred <- (beta / (alpha - 1)) * (1 + 1 / c0) %>%
-      as.matrix() %>%
-      t()
-
-    icl.pred <- qt((1 - pred_cred) / 2, nu) * sqrt(sigma2) + mu
-    icu.pred <- qt(1 - (1 - pred_cred) / 2, nu) * sqrt(sigma2) + mu
-  } else {
-    pred <- NULL
-    var.pred <- NULL
-    icl.pred <- NULL
-    icu.pred <- NULL
-  }
-
-  if (like.flag) {
-    log.like <- dt((outcome - mu) / sqrt(sigma2), nu, log = TRUE)
-  } else {
-    log.like <- NULL
-  }
-
-  list(
-    "pred"     = pred,
-    "var.pred" = var.pred,
-    "icl.pred" = icl.pred,
-    "icu.pred" = icu.pred,
-    "log.like" = log.like
-  )
-}
-
 ##### Normal with known variance #####
 
 #' convert_dummy_prior
@@ -555,62 +427,6 @@ normal_pred <- function(conj_param, outcome = NULL, parms = list(), pred_cred = 
   )
 }
 
-#### Alternative Method ####
-
-#' Normal
-#'
-#' Creates an outcome with Normal distribuition with the chosen parameters (can only specify 2,).
-#'
-#' @param mu character: Name of the linear preditor associated with the mean parameter of the Normal distribuition. The parameter is treated as unknowed and equal to the associated linear preditor.
-#' @param tau character: Name of the linear preditor associated with the precision parameter of the Normal distribuition. The parameter is treated as unknowed and equal to the exponential of the associated linear preditor. It cannot be specified with sigma or sigma2
-#' @param sigma character: Name of the linear preditor associated with the scale parameter of the Normal distribuition. The parameter is treated as unknowed and equal to the exponential of the associated linear preditor. It cannot be specified with tau or sigma2.
-#' @param sigma2 character or numeric: Name of the linear preditor associated with the variance parameter of the Normal distribuition. If numeric, this parameter is treated as knowed and equal to the value passed. If a character, the parameter is treated as unknowed and equal to the exponential of the associated linear preditor. It cannot be specified with sigma or tau.
-#' @param outcome vector: Values of the observed data.
-#' @param offset vector: The offset at each observation. Must have the same shape as outcome.
-#'
-#' @return A object of the class dlm_distr
-#' @export
-#'
-#' @examples
-#'
-#' # Normal case
-#' T <- 200
-#' mu <- rnorm(T, 0, 0.1)
-#' data <- rnorm(T, cumsum(mu))
-#'
-#' level <- polynomial_block(
-#'   mu = 1,
-#'   D = 1 / 0.95
-#' )
-#' variance <- polynomial_block(
-#'   sigma2 = 1
-#' )
-#'
-#' # Known variance
-#' outcome <- Normal_alt(mu = "mu", sigma2 = 1, outcome = data)
-#'
-#' fitted_data <- fit_model(level, outcomes = outcome)
-#' summary(fitted_data)
-#'
-#' show_fit(fitted_data, smooth = TRUE)$plot
-#'
-#' # Unknown variance
-#' outcome <- Normal_alt(mu = "mu", sigma2 = "sigma2", outcome = data)
-#'
-#' fitted_data <- fit_model(level, variance, outcomes = outcome)
-#' summary(fitted_data)
-#'
-#' show_fit(fitted_data, smooth = TRUE)$plot
-Normal_alt <- function(mu, tau = NA, sigma = NA, sigma2 = NA, outcome, offset = outcome**0) {
-  distr <- Normal(mu, tau, sigma, sigma2, outcome, offset)
-
-  if (!is.numeric(sigma2)) {
-    distr$update <- update_NG_alt
-    distr$alt_method <- TRUE
-  }
-  return(distr)
-}
-
 ##### Normal with unknown variance #####
 
 #' update_NG_alt
@@ -667,7 +483,7 @@ update_NG_alt <- function(conj_prior, ft, Qt, y, parms = list()) {
     val <- cubintegrate(f, c(0), c(Inf), fDim = 7, nVec = 1000)$integral
     ft <- matrix(val[2:3] / val[1], 2, 1)
     Qt <- matrix(val[4:7], 2, 2) / val[1] - ft %*% t(ft)
-  } else {
+  } else{
     f0 <- ft
     S0 <- ginv(Qt)
 
@@ -713,9 +529,68 @@ update_NG_alt <- function(conj_prior, ft, Qt, y, parms = list()) {
   return(list("ft" = ft, "Qt" = Qt))
 }
 
-#### Multi normal ####
+##### Normal with unknown variance #####
 
 #' convert_NG_Normal
+#'
+#' Calculate the parameters of the Normal-Gamma that best approximates the given Normal distribuition.
+#' The approximation is the best in the sense that it minimizes the KL divergence from the Normal to the Normal-Gamma.
+#' In this approach, we suppose that the first entry of the multivariate normal represents the mean of the observed data and the second represent the log variance.
+#'
+#' @param ft vector: A vector representing the means from the normal distribution.
+#' @param Qt matrix: A matrix representing the covariance matrix of the normal distribution.
+#' @param parms list: A list of extra known parameters of the distribuition. Not used in this kernel.
+#'
+#' @return The parameters of the conjugated distribuition of the linear predictor.
+#' @export
+convert_NG_Normal <- function(ft, Qt, parms = list()) {
+  ft <- matrix(ft, 2, 1)
+  mu0 <- ft[1, ] + Qt[1, 2]
+  c0 <- exp(-ft[2, ] - Qt[2, 2] / 2) / (Qt[1, 1] + 1e-10)
+  helper <- -3 + 3 * sqrt(1 + 2 * Qt[2, 2] / 3)
+  # helper=Qt[2,2]
+  alpha <- 1 / helper
+  beta <- alpha * exp(-ft[2, ] - Qt[2, 2] / 2)
+  return(list("mu0" = mu0, "c0" = c0, "alpha" = alpha, "beta" = beta))
+}
+
+convert_Normal_NG <- function(conj_distr, parms = list()) {
+  # q12 <- conj_distr$mu0*(digamma(conj_distr$alpha)-log(conj_distr$beta))/(1-log(conj_distr$alpha)+log(conj_distr$beta))
+  f1 <- conj_distr$mu0 #-q12
+  f2 <- digamma(conj_distr$alpha) - log(conj_distr$beta + 1e-40)
+  # f2 <- log(conj_distr$alpha)-log(conj_distr$beta)
+  q1 <- conj_distr$beta / (conj_distr$c0 * conj_distr$alpha)
+  q2 <- trigamma(conj_distr$alpha)
+  q12 <- 0
+
+  ft <- c(f1, f2)
+  Qt <- matrix(c(q1, q12, q12, q2), byrow = F, ncol = 2)
+  return(list("ft" = ft, "Qt" = Qt))
+}
+
+#' update_NG
+#'
+#' Calculate posterior parameter for the Normal-Gamma, assuming that the observed values came from a Normal model from which the prior distribuition for the mean and the precision have joint distribuition Normal-Gamma
+#'
+#' @param conj_prior list: A vector containing the parameters of the Normal-Gamma (mu0,c0,alpha,beta).
+#' @param ft vector: A vector representing the means from the normal distribution. Not used in the default method.
+#' @param Qt matrix: A matrix representing the covariance matrix of the normal distribution. Not used in the default method.
+#' @param y vector: A vector containing the observations.
+#' @param parms list: A list of extra known parameters of the distribuition. Not used in this kernel.
+#'
+#' @return The parameters of the posterior distribution.
+#' @export
+update_NG <- function(conj_prior, ft, Qt, y, parms = list()) {
+  mu0 <- (conj_prior$c0 * conj_prior$mu0 + y) / (conj_prior$c0 + 1)
+  c0 <- conj_prior$c0 + 1
+  alpha <- conj_prior$alpha + 0.5
+  beta <- conj_prior$beta + 0.5 * conj_prior$c0 * ((conj_prior$mu0 - y)**2) / (conj_prior$c0 + 1)
+  return(list("mu0" = mu0, "c0" = c0, "alpha" = alpha, "beta" = beta))
+}
+
+#### Multi normal ####
+
+#' convert_multi_NG_Normal
 #'
 #' Calculate the parameters of the Normal-Gamma that best approximates the given Normal distribution.
 #' The approximation is the best in the sense that it minimizes the KL divergence from the Normal to the Normal-Gamma.
@@ -793,7 +668,6 @@ convert_multi_Normal_NG <- function(conj_distr, parms = list()) {
 #' @param parms list: A list of extra known parameters of the distribuition. Not used in this kernel.
 #'
 #' @importFrom Rfast lower_tri upper_tri lower_tri.assign upper_tri.assign
-#' @import einsum
 #'
 #' @return The parameters of the posterior distribution.
 #' @export
@@ -858,9 +732,10 @@ update_multi_NG_correl <- function(conj_prior, ft, Qt, y, parms) {
   ft_post <- post$ft
   Qt_post <- post$Qt
 
-  # At <- Qt_up[,c(1,r+1)] %*% ginv(Qt_now)
-  At_t <- solve(Qt_now, Qt_up[c(1, r + 1), ])
-  At <- t(At_t)
+  At <- Qt_up[,c(1,r+1)] %*% ginv(Qt_now)
+  At_t <- t(At)
+  # At_t <- solve(Qt_now, Qt_up[c(1, r + 1), ])
+  # At <- t(At_t)
   ft_up <- ft_up + At %*% (ft_post - ft_now)
   Qt_up <- Qt_up + crossprod(At_t, (Qt_post - Qt_now)) %*% At_t
 
@@ -882,54 +757,59 @@ update_multi_NG_correl <- function(conj_prior, ft, Qt, y, parms) {
       Sigma_rho <- Sigma[i, 1:(i - 1)]
       Sigma_part <- Sigma[1:(i - 1), 1:(i - 1)]
 
-      S <- ginv(Sigma_part)
-      e <- (y[1:(i - 1)] - x[1:(i - 1)])
-      Sigma_S <- c(Sigma_rho %*% S)
-      mu_bar <- x[i] + Sigma_S %*% e
-      S_bar <- Sigma[i, i] - Sigma_S %*% Sigma_rho
+      if(all(Sigma_part==0)){
+        ft_now <- x[c(i,i+r)]
+        Qt_now <- Qt_up[c(i,i+r),c(i,i+r)]
+      }else{
+        S=ginv(Sigma_part)
+        e <- (y[1:(i - 1)] - x[1:(i - 1)])
+        Sigma_S <- c(Sigma_rho %*% S)
+        mu_bar <- x[i] + Sigma_S %*% e
+        S_bar <- Sigma[i, i] - Sigma_S %*% Sigma_rho
 
-      A <- matrix(0, k, 2)
-      A[1:i, 1] <- c(-Sigma_S, 1)
+        A <- matrix(0, k, 2)
+        A[1:i, 1] <- c(-Sigma_S, 1)
 
-      dx <- array(0, c(r, r, r * (r + 1) / 2))
-      for (j in 1:i) {
-        dx[j, j, j] <- -0.5 * var[j, j]
+        dx <- array(0, c(r, r, r * (r + 1) / 2))
+        for (j in 1:i) {
+          dx[j, j, j] <- -0.5 * var[j, j]
+        }
+        ref_p <- c(p)[upper.flags.vec]
+        dx[vec_r[upper.flags.vec] + c(0:(k - 2 * r - 1)) * (r**2) + (r**3)] <-
+          dx[vec_r[lower.flags.vec] + c(0:(k - 2 * r - 1)) * (r**2) + (r**3)] <-
+          2 * ref_p * (1 - ref_p)
+
+        dSigma <- array(NA, c(r, r, r * (r + 1) / 2))
+        aux_1 <- rho %*% var
+
+        dSigma[, , 1:r] <- array_mult_left(dx[, , 1:r], aux_1)
+
+        dSigma[, , 1:r] <- dSigma[, , 1:r] + array_transp(dSigma[, , 1:r])
+        dSigma[, , -(1:r)] <- dx[, , -(1:r), drop = FALSE] %>%
+          array_mult_left(var) %>%
+          array_mult_right(var)
+
+        dSigma_part <- dSigma[(1:(i - 1)), (1:(i - 1)), , drop = FALSE]
+        dSigma_rho <- dSigma[i, (1:(i - 1)), ] %>% matrix(i - 1, r * (r + 1) / 2)
+
+        dSigma_p1 <- -array_mult_right(dSigma_part, S)
+        dSigma_p1 <- array_mult_left(dSigma_p1, S)
+        dSigma_p1 <- array_collapse_left(dSigma_p1, e)
+        dSigma_p1 <- c(Sigma_rho %*% dSigma_p1)
+
+        dSigma_p2 <- c(c(S %*% e) %*% dSigma_rho)
+        A[-(1:r), 1] <- dSigma_p1 + dSigma_p2
+
+        dSigma_p1 <- -array_collapse_right(dSigma_part, Sigma_S)
+        dSigma_p1 <- c(Sigma_S %*% dSigma_p1)
+
+        helper_p2 <- c(S %*% Sigma_rho)
+        dSigma_p2 <- 2 * c(helper_p2 %*% dSigma_rho)
+        A[-(1:r), 2] <- -(dSigma[i, i, ] - dSigma_p1 - dSigma_p2) / c(S_bar)
+
+        ft_now <- c(mu_bar, -log(S_bar))
+        Qt_now <- crossprod(A, Qt_up) %*% A
       }
-      ref_p <- c(p)[upper.flags.vec]
-      dx[vec_r[upper.flags.vec] + c(0:(k - 2 * r - 1)) * (r**2) + (r**3)] <-
-        dx[vec_r[lower.flags.vec] + c(0:(k - 2 * r - 1)) * (r**2) + (r**3)] <-
-        2 * ref_p * (1 - ref_p)
-
-      dSigma <- array(NA, c(r, r, r * (r + 1) / 2))
-      aux_1 <- rho %*% var
-
-      dSigma[, , 1:r] <- array_mult_left(dx[, , 1:r], aux_1)
-
-      dSigma[, , 1:r] <- dSigma[, , 1:r] + array_transp(dSigma[, , 1:r])
-      dSigma[, , -(1:r)] <- dx[, , -(1:r), drop = FALSE] %>%
-        array_mult_left(var) %>%
-        array_mult_right(var)
-
-      dSigma_part <- dSigma[(1:(i - 1)), (1:(i - 1)), , drop = FALSE]
-      dSigma_rho <- dSigma[i, (1:(i - 1)), ] %>% matrix(i - 1, r * (r + 1) / 2)
-
-      dSigma_p1 <- -array_mult_right(dSigma_part, S)
-      dSigma_p1 <- array_mult_left(dSigma_p1, S)
-      dSigma_p1 <- array_collapse_left(dSigma_p1, e)
-      dSigma_p1 <- c(Sigma_rho %*% dSigma_p1)
-
-      dSigma_p2 <- c(c(S %*% e) %*% dSigma_rho)
-      A[-(1:r), 1] <- dSigma_p1 + dSigma_p2
-
-      dSigma_p1 <- -array_collapse_right(dSigma_part, Sigma_S)
-      dSigma_p1 <- c(Sigma_S %*% dSigma_p1)
-
-      helper_p2 <- c(S %*% Sigma_rho)
-      dSigma_p2 <- 2 * c(helper_p2 %*% dSigma_rho)
-      A[-(1:r), 2] <- -(dSigma[i, i, ] - dSigma_p1 - dSigma_p2) / c(S_bar)
-
-      ft_now <- c(mu_bar, -log(S_bar))
-      Qt_now <- crossprod(A, Qt_up) %*% A
     }
 
     # {f=function(x){
@@ -1033,7 +913,7 @@ update_multi_NG_correl <- function(conj_prior, ft, Qt, y, parms) {
 #'   "beta_2" = rep(1, 3)
 #' )
 #'
-#' normal_gamma_pred(conj_param)
+#' multi_normal_gamma_pred(conj_param)
 multi_normal_gamma_pred <- function(conj_param, outcome = NULL, parms = list(), pred_cred = 0.95) {
   pred.flag <- !is.na(pred_cred)
   like.flag <- !is.null(outcome)
@@ -1085,4 +965,60 @@ multi_normal_gamma_pred <- function(conj_param, outcome = NULL, parms = list(), 
     "icu.pred" = icu.pred,
     "log.like" = log.like
   )
+}
+
+#### Alternative Method ####
+
+#' Normal
+#'
+#' Creates an outcome with Normal distribuition with the chosen parameters (can only specify 2,).
+#'
+#' @param mu character: Name of the linear preditor associated with the mean parameter of the Normal distribuition. The parameter is treated as unknowed and equal to the associated linear preditor.
+#' @param tau character: Name of the linear preditor associated with the precision parameter of the Normal distribuition. The parameter is treated as unknowed and equal to the exponential of the associated linear preditor. It cannot be specified with sigma or sigma2
+#' @param sigma character: Name of the linear preditor associated with the scale parameter of the Normal distribuition. The parameter is treated as unknowed and equal to the exponential of the associated linear preditor. It cannot be specified with tau or sigma2.
+#' @param sigma2 character or numeric: Name of the linear preditor associated with the variance parameter of the Normal distribuition. If numeric, this parameter is treated as knowed and equal to the value passed. If a character, the parameter is treated as unknowed and equal to the exponential of the associated linear preditor. It cannot be specified with sigma or tau.
+#' @param outcome vector: Values of the observed data.
+#' @param offset vector: The offset at each observation. Must have the same shape as outcome.
+#'
+#' @return A object of the class dlm_distr
+#' @export
+#'
+#' @examples
+#'
+#' # Normal case
+#' T <- 200
+#' mu <- rnorm(T, 0, 0.1)
+#' data <- rnorm(T, cumsum(mu))
+#'
+#' level <- polynomial_block(
+#'   mu = 1,
+#'   D = 1 / 0.95
+#' )
+#' variance <- polynomial_block(
+#'   sigma2 = 1
+#' )
+#'
+#' # Known variance
+#' outcome <- Normal_alt(mu = "mu", sigma2 = 1, outcome = data)
+#'
+#' fitted_data <- fit_model(level, outcomes = outcome)
+#' summary(fitted_data)
+#'
+#' show_fit(fitted_data, smooth = TRUE)$plot
+#'
+#' # Unknown variance
+#' outcome <- Normal_alt(mu = "mu", sigma2 = "sigma2", outcome = data)
+#'
+#' fitted_data <- fit_model(level, variance, outcomes = outcome)
+#' summary(fitted_data)
+#'
+#' show_fit(fitted_data, smooth = TRUE)$plot
+Normal_alt <- function(mu, tau = NA, sigma = NA, sigma2 = NA, outcome, offset = outcome**0) {
+  distr <- Normal(mu, tau, sigma, sigma2, outcome, offset)
+
+  if (!is.numeric(sigma2)) {
+    distr$update <- update_NG_alt
+    distr$alt_method <- TRUE
+  }
+  return(distr)
 }

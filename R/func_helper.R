@@ -31,7 +31,7 @@ chol_fast <- function(S) {
     # return(svd_decomp$u%*%diag(svd_decomp$d)%*%t(svd_decomp$u))
     d <- svd_decomp$d
     u_t <- transpose(svd_decomp$u)
-    return(crossprod(u_t %*% diag(d)) %*% u_t)
+    return(crossprod(u_t, diag(d)) %*% u_t)
   } else {
     return(Chol_decomp)
   }
@@ -51,7 +51,7 @@ ginv <- function(S) {
     D <- svd_decomp$d
     D <- ifelse(D > 0, 1 / D, 0)
     # D <- 1/D
-    return(crossprod(Q_t %*% diag(D)) %*% Q_t)
+    return(crossprod(Q_t, diag(D)) %*% Q_t)
   } else {
     return(chol2inv(Chol_decomp))
   }

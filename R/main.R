@@ -166,6 +166,7 @@ fit_model <- function(..., outcomes, pred_cred = 0.95, smooth_flag = TRUE, p_mon
     C0 = structure$C0,
     FF = structure$FF,
     G = structure$G,
+    G_labs = structure$G_labs,
     D = structure$D,
     W = structure$W,
     p_monit = p_monit,
@@ -280,6 +281,7 @@ forecast <- function(model, t = 1, outcome = NULL, offset = NULL, FF = NULL, G =
   #   warning("Warning: Prediction window is big, results will probabily be unreliable.")
   # }
 
+  G_labs=model$G_labs
   if (is.null(G)) {
     G <- array(model$G[, , t_last], c(n, n, t))
   }
@@ -369,7 +371,7 @@ forecast <- function(model, t = 1, outcome = NULL, offset = NULL, FF = NULL, G =
 
 
   for (t_i in c(1:t)) {
-    next_step <- one_step_evolve(last_m, last_C, G[, , t_i] %>% matrix(n, n), D[, , t_i]**0, W[, , t_i] + C0 * (D[, , t_i] - 1))
+    next_step <- one_step_evolve(last_m, last_C, G[, , t_i] %>% matrix(n, n), G_labs, D[, , t_i]**0, W[, , t_i] + C0 * (D[, , t_i] - 1))
     last_m <- next_step$at
     last_C <- next_step$Rt
 
@@ -618,10 +620,10 @@ eval_past <- function(model, smooth = FALSE, h = 0, pred_cred = 0.95) {
     next_step <- list("at" = mt, "Rt" = Ct)
     if (h >= 1) {
       for (t in c(1:h)) {
-        next_step <- one_step_evolve(next_step$at, next_step$Rt, G[, , i - t + 1], D[, , i - t + 1]**(t == 1), W[, , i - t + 1])
+        next_step <- one_step_evolve(next_step$at, next_step$Rt, G[, , i - t + 1], G_labs, D[, , i - t + 1]**(t == 1), W[, , i - t + 1])
       }
     }
-    # next_step <- one_step_evolve(mt, Ct, FF[, , i] %>% matrix(n, r), G, D[, , i], W[, , i])
+    # next_step <- one_step_evolve(mt, Ct, FF[, , i] %>% matrix(n, r), G, G_labs, D[, , i], W[, , i])
     lin_pred <- calc_lin_pred(next_step$at %>% matrix(n, 1), next_step$Rt, FF[, , i] %>% matrix(n, r))
 
     r_acum <- 0
@@ -729,7 +731,7 @@ eval_past <- function(model, smooth = FALSE, h = 0, pred_cred = 0.95) {
 #' show_fit(fitted_data, smooth = TRUE)$plot
 #'
 #' sample <- dlm_sampling(fitted_data, 2000)
-dlm_sampling <- function(model, sample_size) {
+dlm_sampling <- function(model, sample_size, filtered_distr=FALSE) {
   G <- model$G
   at <- model$at
   mt <- model$mt
@@ -806,28 +808,36 @@ dlm_sampling <- function(model, sample_size) {
     Rt <- model$Rt[, , t + 1]
     Ct <- model$Ct[, , t]
 
-    mt_now <- mt[, t]
-    G_ref <- G[, , t + 1]
-    G_now <- G_ref
-    G_diff <- rep(0, n)
-    if (any(is.na(G_ref))) {
-      for (index_col in (1:n)[colSums(is.na(G_ref)) > 0]) {
-        index_row <- (1:n)[is.na(G_now[, index_col])]
-        G_now[index_row, index_col] <- mt_now[index_col + 1]
-        G_now[index_row, index_col + 1] <- mt_now[index_col]
-        G_diff[index_col] <- -mt_now[index_col] * mt_now[index_col + 1]
+    if(filtered_distr){
+      mts <- mt[, t]
+      Cts <- Ct
+      Ct_chol <- alt_chol_local(Cts)
+      mt_sample_i <- transpose(Ct_chol) %*% mt_sample[, t, ] + mts
+    }else{
+      mt_now <- mt[, t]
+      G_ref <- G[, , t + 1]
+      G_now <- G_ref
+      G_diff <- rep(0, n)
+      if (any(is.na(G_ref))) {
+        for (index_col in (1:n)[colSums(is.na(G_ref)) > 0]) {
+          index_row <- (1:n)[is.na(G_now[, index_col])]
+          G_now[index_row, index_col] <- mt_now[index_col + 1]
+          G_now[index_row, index_col + 1] <- mt_now[index_col]
+          G_diff[index_col] <- -mt_now[index_col] * mt_now[index_col + 1]
+        }
       }
+      simple_Rt_inv <- Ct %*% transpose(G_now) %*% ginv(Rt)
+      simple_Rt_inv_t <- transpose(simple_Rt_inv)
+      # simple_Rt_inv_t <- solve(Rt, G_now %*% Ct)
+      # simple_Rt_inv <- transpose(simple_Rt_inv_t)
+
+
+      mts <- mt[, t] + simple_Rt_inv %*% (mt_sample_i - at[, t + 1])
+      # Cts <- Ct - simple_Rt_inv %*% Rt %*% simple_Rt_inv_t
+      Cts <- Ct - crossprod(simple_Rt_inv_t, Rt) %*% simple_Rt_inv_t
+      Ct_chol <- alt_chol_local(Cts)
+      mt_sample_i <- transpose(Ct_chol) %*% mt_sample[, t, ] + mts
     }
-    # simple_Rt_inv <- Ct %*% transpose(G_now) %*% ginv(Rt)
-    simple_Rt_inv_t <- solve(Rt, G_now %*% Ct)
-    simple_Rt_inv <- transpose(simple_Rt_inv_t)
-
-
-    mts <- mt[, t] + simple_Rt_inv %*% (mt_sample_i - at[, t + 1])
-    # Cts <- Ct - simple_Rt_inv %*% Rt %*% simple_Rt_inv_t
-    Cts <- Ct - crossprod(simple_Rt_inv_t, Rt) %*% simple_Rt_inv_t
-    Ct_chol <- alt_chol_local(Cts)
-    mt_sample_i <- transpose(Ct_chol) %*% mt_sample[, t, ] + mts
     if (any(is.na(FF[, , t]))) {
       FF_step <- FF[, , t]
       ft_sample_i <- matrix(NA, k, sample_size)

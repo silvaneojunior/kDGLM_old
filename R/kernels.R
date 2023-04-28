@@ -88,7 +88,7 @@ generic_smoother <- function(mt, Ct, at, Rt, G) {
 #'    \item outcome List: The same as the argument outcome (same values).
 #'    \item var_names Vector: The names of the linear predictors.
 #' }
-analytic_filter <- function(outcomes, m0 = 0, C0 = 1, FF, G, D, W, p_monit = NA, c_monit = 1) {
+analytic_filter <- function(outcomes, m0 = 0, C0 = 1, FF, G, G_labs, D, W, p_monit = NA, c_monit = 1) {
   # Defining quantities
   T <- dim(FF)[3]
   r <- sum(sapply(outcomes, function(x) {
@@ -155,8 +155,9 @@ analytic_filter <- function(outcomes, m0 = 0, C0 = 1, FF, G, D, W, p_monit = NA,
     for (model in model_list) {
       D_p <- D[, , t]
       D_p[!D_flags[, , t]] <- D_p[!D_flags[, , t]] * D_mult[[model]]
+      next_step <- one_step_evolve(last_m, last_C, G[, , t] %>% matrix(n, n), G_labs, D_p**0, W[, , t] + diag(n) * W_add[[model]] + last_C_D * (D_p - 1))
 
-      next_step <- one_step_evolve(last_m, last_C, G[, , t] %>% matrix(n, n), D_p**0, W[, , t] + diag(n) * W_add[[model]] + last_C_D * (D_p - 1))
+
       models[[model]] <- list(
         "at" = next_step$at,
         "Rt" = next_step$Rt,
@@ -322,6 +323,11 @@ analytic_filter <- function(outcomes, m0 = 0, C0 = 1, FF, G, D, W, p_monit = NA,
 
       mt[, t] <- last_m <- mt_step
       Ct[, , t] <- last_C <- Ct_step
+      eigen_Ct=eigen(last_C)$values
+      pos_eigen_Ct=eigen_Ct[eigen_Ct>0]
+      if(log10(max(pos_eigen_Ct))-log10(min(pos_eigen_Ct))>15){
+        warning('Covariance for the latent variables is numerical instable. Results may be unreliable.')
+      }
     }
   }
 
@@ -340,21 +346,28 @@ analytic_filter <- function(outcomes, m0 = 0, C0 = 1, FF, G, D, W, p_monit = NA,
 #'
 #' @importFrom Rfast transpose
 #'
-one_step_evolve <- function(m0, C0, G, D, W) {
+one_step_evolve <- function(m0, C0, G, G_labs, D, W) {
   n <- dim(G)[1]
   G_now <- G
   G_diff <- rep(0, n)
-  if (any(is.na(G))) {
+  if (any(G_labs!='const')) {
     for (index_col in (1:n)[colSums(is.na(G)) > 0]) {
       index_row <- (1:n)[is.na(G_now[, index_col])]
-      G_now[index_row, index_col] <- m0[index_col + 1]
-      G_now[index_row, index_col + 1] <- m0[index_col]
-      G_diff[index_row] <- G_diff[index_row] - m0[index_col] * m0[index_col + 1]
+      if(G_labs[index_row, index_col]=='constrained'){
+        p=1/(1+exp(-m0[index_col + 1]))
+        G_now[index_row, index_col] <- (2*p-1)
+        G_now[index_row, index_col + 1] <- 2*p*(1-p)*m0[index_col]
+        G_diff[index_row] <- G_diff[index_row] -2*p*(1-p)*m0[index_col]*m0[index_col+1]
+      }else{
+        G_now[index_row, index_col] <- m0[index_col+1]
+        G_now[index_row, index_col + 1] <- m0[index_col+1]*m0[index_col]
+        G_diff[index_row] <- G_diff[index_row] - m0[index_col+1]*m0[index_col]
+      }
     }
   }
   at <- (G_now %*% m0) + G_diff
   G_now_t <- transpose(G_now)
-  Pt <- crossprod(G_now_t, C0) %*% G_now_t
+  Pt <- G_now %*% C0 %*% G_now_t
   Rt <- as.matrix(D * Pt) + W
 
   list("at" = at, "Rt" = Rt)
