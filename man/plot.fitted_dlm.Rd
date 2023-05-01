@@ -4,8 +4,14 @@
 \alias{plot.fitted_dlm}
 \title{plot.fitted_dlm}
 \usage{
-\method{plot}{fitted_dlm}(model, pred_cred = 0.95, smooth = model$smooth, plotly = TRUE, h = 0)
+\method{plot}{fitted_dlm}(x, ...)
+}
+\arguments{
+\item{x}{A fitted_dlm object.}
+
+\item{...}{Arguments passed to show_fit.}
 }
 \description{
 plot method for class fitted_dlm
 }
+\keyword{internal}

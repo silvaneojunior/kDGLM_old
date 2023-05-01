@@ -10,6 +10,7 @@ analytic_filter(
   C0 = 1,
   FF,
   G,
+  G_labs,
   D,
   W,
   p_monit = NA,
@@ -27,13 +28,15 @@ analytic_filter(
 
 \item{G}{Array: A 3D-array containing the state evolution matrix at each time.}
 
+\item{G_labs}{Matrix: A character matrix containing the type associated with each value in G.}
+
 \item{D}{Array: A 3D-array containing the discount factor matrix for each time. It's dimension should be n x n x T, where n is the number of latent variables and T is the time series length.}
 
 \item{W}{Array: A 3D-array containing the covariance matrix of the noise for each time. It's dimension should be the same as D.}
 
-\item{p_monit}{numeric (optional): The prior probability of changes in the latent space variables that are not part of it's dinamic.}
+\item{p_monit}{numeric (optional): The prior probability of changes in the latent space variables that are not part of it's dynamic.}
 
-\item{c_monit}{numeric (optional, if p_monit is not specified): The relative cost of false alarm in the monitoring compared to the cost of not detecting anormalities.}
+\item{c_monit}{numeric (optional, if p_monit is not specified): The relative cost of false alarm in the monitoring compared to the cost of not detecting abnormalities.}
 }
 \value{
 A list containing the following values:
@@ -46,7 +49,7 @@ A list containing the following values:
    \item Qt Array: A 3D-array containing the one-step-ahead covariance matrix for the linear predictor for each time. Dimensions are m x m x T.
    \item FF Array: The same as the argument (same values).
    \item G Matrix: The same as the argument (same values).
-   \item D Array: The same as the argument (same values) when there is no monitoring. When monitoring for anormalities, the value in times where anormalities were detected is increased.
+   \item D Array: The same as the argument (same values) when there is no monitoring. When monitoring for abnormalities, the value in times where abnormalities were detected is increased.
    \item W Array: The same as the argument (same values).
    \item outcome List: The same as the argument outcome (same values).
    \item var_names Vector: The names of the linear predictors.
@@ -55,3 +58,18 @@ A list containing the following values:
 \description{
 Fit the model given the observed value and the model parameters.
 }
+\details{
+For the models covered in this package, we always use the approach described in \insertCite{ArtigokParametrico;textual}{kDGLM}, including, in particular, the filtering algorithm presented in that work.
+
+For the details about the implementation see \insertCite{ArtigoPacote;textual}{kDGLM}.
+
+For the details about the algorithm implemented see \insertCite{ArtigokParametrico;textual}{kDGLM}, \insertCite{Petris-DLM;textual}{kDGLM}, chapter 2, and \insertCite{WestHarr-DLM;textual}{kDGLM}, chapter 4.
+}
+\seealso{
+\code{\link{fit_model}}
+
+\code{\link{generic_smoother}}
+
+\code{\link{Kalman_filter_origins}}
+}
+\keyword{internal}

@@ -4,13 +4,14 @@
 \alias{summary.fitted_dlm}
 \title{summary.fitted_dlm}
 \usage{
-\method{summary}{fitted_dlm}(
-  fitted_dlm,
-  t = fitted_dlm$t,
-  smooth = fitted_dlm$smooth,
-  metric_cutoff = round(fitted_dlm$t/10)
-)
+\method{summary}{fitted_dlm}(object, ...)
+}
+\arguments{
+\item{object}{A fitted_dlm object.}
+
+\item{...}{Arguments passed to report_dlm}
 }
 \description{
-summary method for class fitted_dlm
+summary method for class fitted_dlm.
 }
+\keyword{internal}

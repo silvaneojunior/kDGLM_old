@@ -6,6 +6,12 @@
 \usage{
 if.na(vec, val)
 }
+\arguments{
+\item{vec}{A vector or matrix.}
+
+\item{val}{The value to replace NA with.}
+}
 \description{
 This function is wrapper for ifelse(is.null(.),.,.)
 }
+\keyword{internal}

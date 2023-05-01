@@ -11,12 +11,21 @@ convert_Gamma_Normal(ft, Qt, parms)
 
 \item{Qt}{matrix: A matrix representing the covariance matrix of the normal distribution.}
 
-\item{parms}{list: A list of extra known parameters of the distribuition. Not used in this function.}
+\item{parms}{list: A list of extra known parameters of the distribution. Not used in this function.}
 }
 \value{
-The parameters of the conjugated distribuition of the linear predictor.
+The parameters of the conjugated distribution of the linear predictor.
 }
 \description{
-Calculate the parameters of the Inverse-Gamma that best approximates the given log-Normal distribuition.
+Calculate the parameters of the Inverse-Gamma that best approximates the given log-Normal distribution.
 The approximation is the best in the sense that it minimizes the KL divergence from the log-Normal to the Inverse-Gamma
 }
+\seealso{
+Other {auxiliary functions for a Gamma outcome with known shape}: 
+\code{\link{convert_Normal_Gamma}()},
+\code{\link{gamma_pred}()},
+\code{\link{update_Gamma_alt}()},
+\code{\link{update_Gamma}()}
+}
+\concept{{auxiliary functions for a Gamma outcome with known shape}}
+\keyword{internal}

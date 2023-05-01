@@ -16,7 +16,7 @@ eval_past(model, smooth = FALSE, h = 0, pred_cred = 0.95)
 \item{pred_cred}{Numeric: The credibility level for the I.C. intervals.}
 }
 \value{
-A list containg:
+A list containing:
 \itemize{
    \item pred Matrix: A matrix with the predictive mean at each time. Dimensions are k x t, where k is the number of outcomes.
    \item var.pred Array: A 3D-array with the predictive covariance matrix at each time. Dimensions are k x k x t, where k is the number of outcomes.
@@ -46,4 +46,12 @@ outcome <- Multinom(p = c("p1", "p2"), outcome = y)
 fitted_data <- fit_model(level, season_2, outcomes = outcome)
 
 past <- eval_past(fitted_data, smooth = TRUE)
+
 }
+\seealso{
+Other {auxiliary functions for fitted_dlm objects}: 
+\code{\link{dlm_sampling}()},
+\code{\link{fit_model}()},
+\code{\link{forecast}()}
+}
+\concept{{auxiliary functions for fitted_dlm objects}}

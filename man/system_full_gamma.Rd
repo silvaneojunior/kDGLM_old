@@ -12,8 +12,9 @@ system_full_gamma(x, parms)
 \item{parms}{list: auxiliary values for the system.}
 }
 \value{
-a vector with the values of the system (see Ref. Raíra).
+A vector with the values of the system \insertCite{@see ArtigokParametrico;textual}{kDGLM}.
 }
 \description{
-Evaluate the compatibilizing equation for the full gamma model (see Ref. Raíra).
+Evaluate the compatibilizing equation for the full gamma model \insertCite{@see ArtigokParametrico;textual}{kDGLM}.
 }
+\keyword{internal}

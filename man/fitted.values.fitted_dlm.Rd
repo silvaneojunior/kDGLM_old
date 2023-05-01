@@ -4,8 +4,14 @@
 \alias{fitted.values.fitted_dlm}
 \title{fitted.values.fitted_dlm}
 \usage{
-\method{fitted}{values.fitted_dlm}(fitted_dlm, smooth = fitted_dlm$smooth, h = 0, pred_cred = 0.95)
+\method{fitted}{values.fitted_dlm}(object, ...)
+}
+\arguments{
+\item{object}{A fitted_dlm object.}
+
+\item{...}{Arguments passed to eval_past}
 }
 \description{
 fitted.values method for class fitted_dlm
 }
+\keyword{internal}

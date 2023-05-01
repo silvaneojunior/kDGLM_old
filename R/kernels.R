@@ -7,52 +7,45 @@
 #' @param at Matrix: A matrix containing the one-step-ahead mean of the latent variables at each time based upon the filtered mean. Each row should represent one variable.
 #' @param Rt Array: A 3D-array representing the one-step-ahead covariance matrix of the latent variables at each time based upon the filtered covariance matrix. The third dimension should represent the time index.
 #' @param G  Array: A 3D-array representing the transition matrix of the model at each time.
+#' @param G_labs  Matrix: A character matrix containing the type associated with each value in G.
 #'
-#' @return List: The smoothed mean (mts) and covariance (Cts) of the latent variables at each time. Their dimension follows, respectivelly, the dimensions of mt and Ct.
-#' @export
+#' @return List: The smoothed mean (mts) and covariance (Cts) of the latent variables at each time. Their dimension follows, respectively, the dimensions of mt and Ct.
 #'
 #' @importFrom Rfast transpose
+#' @keywords internal
 #'
-#' @examples
-#' T <- 20
+#' @details
 #'
-#' mt <- matrix(c(cumsum(rnorm(T) + 1), rep(1, T)), 2, T, byrow = TRUE)
-#' Ct <- array(diag(c(1, 1)), c(2, 2, T))
-#' G <- array(c(1, 0, 1, 1), c(2, 2, T))
-#' at <- G[, , 1] %*% mt
-#' Rt <- array(G[, , 1] %*% t(G[, , 1]) + diag(c(0.1, 0.1)), c(2, 2, T))
+#' For the models covered in this package, we always assume that the latent states have Multivariate Normal distribution. With that assumption, we can use Kalman Smoother algorithm to calculate the posterior of the states at each time, given everything that has been observed (assuming that we already know the filtered distribution of the states).
 #'
-#' smoothed_values <- generic_smoother(mt, Ct, at, Rt, G)
-generic_smoother <- function(mt, Ct, at, Rt, G) {
+#' For the details about the implementation see \insertCite{ArtigoPacote;textual}{kDGLM}.
+#'
+#' For the details about the algorithm implemented see \insertCite{Petris-DLM;textual}{kDGLM}, chapter 2, and \insertCite{WestHarr-DLM;textual}{kDGLM}, chapter 4.
+#'
+#' @seealso \code{\link{fit_model}}
+#' @seealso \code{\link{analytic_filter}}
+#' @seealso \code{\link{Kalman_filter_origins}}
+generic_smoother <- function(mt, Ct, at, Rt, G, G_labs) {
   T <- dim(mt)[2]
   n <- dim(mt)[1]
   mts <- mt
   Cts <- Ct
+  if(T>1){
+    for (t in (T - 1):1) {
+      mt_now <- mt[, t]
+      G_step <- calc_current_G(mt_now, G[, , t + 1], G_labs)$G
+      restricted_Rt <- Rt[, , t + 1]
+      restricted_Ct <- Ct[, , t]
 
-  for (t in (T - 1):1) {
-    mt_now <- mt[, t]
-    G_sep <- G[, , t + 1]
-    G_now <- G_sep
-    G_diff <- rep(0, n)
-    if (any(is.na(G_sep))) {
-      for (index_col in (1:n)[colSums(is.na(G_sep)) > 0]) {
-        index_row <- (1:n)[is.na(G_now[, index_col])]
-        G_now[index_row, index_col] <- mt_now[index_col + 1]
-        G_now[index_row, index_col + 1] <- mt_now[index_col]
-        G_diff[index_row] <- G_diff[index_row] - mt_now[index_col] * mt_now[index_col + 1]
-      }
+      simple_Rt_inv <- restricted_Ct %*% transpose(G_step) %*% ginv(restricted_Rt)
+      simple_Rt_inv_t <- transpose(simple_Rt_inv)
+      # simple_Rt_inv_t=solve(restricted_Rt,G_now %*% restricted_Ct)
+      # simple_Rt_inv <- transpose(simple_Rt_inv_t)
+
+      mts[, t] <- mt_now + simple_Rt_inv %*% (mts[, t + 1] - at[, t + 1])
+      # Cts[, , t] <- restricted_Ct + simple_Rt_inv %*% (Cts[, , t + 1] - restricted_Rt) %*% simple_Rt_inv_t
+      Cts[, , t] <- restricted_Ct + crossprod(simple_Rt_inv_t, (Cts[, , t + 1] - restricted_Rt)) %*% simple_Rt_inv_t
     }
-    restricted_Rt <- Rt[, , t + 1]
-    restricted_Ct <- Ct[, , t]
-
-    simple_Rt_inv <- restricted_Ct %*% transpose(G_now) %*% ginv(restricted_Rt)
-    simple_Rt_inv_t <- transpose(simple_Rt_inv)
-    # simple_Rt_inv_t=solve(restricted_Rt,G_now %*% restricted_Ct)
-    # simple_Rt_inv <- transpose(simple_Rt_inv_t)
-
-    mts[, t] <- mt_now + simple_Rt_inv %*% (mts[, t + 1] - at[, t + 1])
-    # Cts[, , t] <- restricted_Ct + simple_Rt_inv %*% (Cts[, , t + 1] - restricted_Rt) %*% simple_Rt_inv_t
-    Cts[, , t] <- restricted_Ct + crossprod(simple_Rt_inv_t, (Cts[, , t + 1] - restricted_Rt)) %*% simple_Rt_inv_t
   }
   return(list("mts" = mts, "Cts" = Cts))
 }
@@ -66,10 +59,11 @@ generic_smoother <- function(mt, Ct, at, Rt, G) {
 #' @param C0 Matrix: The prior covariance matrix for the latent vector.
 #' @param FF Array: A 3D-array containing the regression matrix for each time. It's dimension should be n x m x T, where n is the number of latent variables, m is the number of outcomes in the model and T is the time series length.
 #' @param G Array: A 3D-array containing the state evolution matrix at each time.
+#' @param G_labs Matrix: A character matrix containing the type associated with each value in G.
 #' @param D Array: A 3D-array containing the discount factor matrix for each time. It's dimension should be n x n x T, where n is the number of latent variables and T is the time series length.
 #' @param W Array: A 3D-array containing the covariance matrix of the noise for each time. It's dimension should be the same as D.
-#' @param p_monit numeric (optional): The prior probability of changes in the latent space variables that are not part of it's dinamic.
-#' @param c_monit numeric (optional, if p_monit is not specified): The relative cost of false alarm in the monitoring compared to the cost of not detecting anormalities.
+#' @param p_monit numeric (optional): The prior probability of changes in the latent space variables that are not part of it's dynamic.
+#' @param c_monit numeric (optional, if p_monit is not specified): The relative cost of false alarm in the monitoring compared to the cost of not detecting abnormalities.
 #'
 #' @importFrom Rfast transpose
 #'
@@ -83,11 +77,24 @@ generic_smoother <- function(mt, Ct, at, Rt, G) {
 #'    \item Qt Array: A 3D-array containing the one-step-ahead covariance matrix for the linear predictor for each time. Dimensions are m x m x T.
 #'    \item FF Array: The same as the argument (same values).
 #'    \item G Matrix: The same as the argument (same values).
-#'    \item D Array: The same as the argument (same values) when there is no monitoring. When monitoring for anormalities, the value in times where anormalities were detected is increased.
+#'    \item D Array: The same as the argument (same values) when there is no monitoring. When monitoring for abnormalities, the value in times where abnormalities were detected is increased.
 #'    \item W Array: The same as the argument (same values).
 #'    \item outcome List: The same as the argument outcome (same values).
 #'    \item var_names Vector: The names of the linear predictors.
 #' }
+#'
+#' @keywords internal
+#' @details
+#'
+#' For the models covered in this package, we always use the approach described in \insertCite{ArtigokParametrico;textual}{kDGLM}, including, in particular, the filtering algorithm presented in that work.
+#'
+#' For the details about the implementation see \insertCite{ArtigoPacote;textual}{kDGLM}.
+#'
+#' For the details about the algorithm implemented see \insertCite{ArtigokParametrico;textual}{kDGLM}, \insertCite{Petris-DLM;textual}{kDGLM}, chapter 2, and \insertCite{WestHarr-DLM;textual}{kDGLM}, chapter 4.
+#'
+#' @seealso \code{\link{fit_model}}
+#' @seealso \code{\link{generic_smoother}}
+#' @seealso \code{\link{Kalman_filter_origins}}
 analytic_filter <- function(outcomes, m0 = 0, C0 = 1, FF, G, G_labs, D, W, p_monit = NA, c_monit = 1) {
   # Defining quantities
   T <- dim(FF)[3]
@@ -100,6 +107,7 @@ analytic_filter <- function(outcomes, m0 = 0, C0 = 1, FF, G, G_labs, D, W, p_mon
   var_names <- colnames(FF)
   D_flags <- (D == 0)
   D <- ifelse(D == 0, 1, D)
+  D_inv <- 1 / D
   m0 <- matrix(m0, n, 1)
   C0 <- C0
   mt <- matrix(NA, nrow = n, ncol = T)
@@ -118,7 +126,7 @@ analytic_filter <- function(outcomes, m0 = 0, C0 = 1, FF, G, G_labs, D, W, p_mon
   monit_win <- 1
 
   for (outcome_name in names(outcomes)) {
-    if (class(outcomes[[outcome_name]]) != "dlm_distr") {
+    if (!inherits(outcomes[[outcome_name]], "dlm_distr")) {
       stop(paste0("Error: Outcome contains is not of the right class Expected a dlm_distr object, got a ", class(outcomes[[outcome_name]]), " object."))
     }
     param_names <- outcomes[[outcome_name]]$param_names(outcomes[[outcome_name]]$outcome)
@@ -153,7 +161,7 @@ analytic_filter <- function(outcomes, m0 = 0, C0 = 1, FF, G, G_labs, D, W, p_mon
       c("alt_model", "null_model")
     }
     for (model in model_list) {
-      D_p <- D[, , t]
+      D_p <- D_inv[, , t]
       D_p[!D_flags[, , t]] <- D_p[!D_flags[, , t]] * D_mult[[model]]
       next_step <- one_step_evolve(last_m, last_C, G[, , t] %>% matrix(n, n), G_labs, D_p**0, W[, , t] + diag(n) * W_add[[model]] + last_C_D * (D_p - 1))
 
@@ -179,12 +187,11 @@ analytic_filter <- function(outcomes, m0 = 0, C0 = 1, FF, G, G_labs, D, W, p_mon
 
         lin_pred <- calc_lin_pred(at_step, Rt_step, FF_step)
 
+        ft_canom <- lin_pred$ft
+        Qt_canom <- lin_pred$Qt
         if (outcome$convert_canom_flag) {
-          ft_canom <- outcome$convert_mat_canom %*% lin_pred$ft
-          Qt_canom <- outcome$convert_mat_canom %*% lin_pred$Qt %*% transpose(outcome$convert_mat_canom)
-        } else {
-          ft_canom <- lin_pred$ft
-          Qt_canom <- lin_pred$Qt
+          ft_canom <- outcome$convert_mat_canom %*% ft_canom
+          Qt_canom <- outcome$convert_mat_canom %*% Qt_canom %*% transpose(outcome$convert_mat_canom)
         }
 
         next_step <- outcome$apply_offset(ft_canom, Qt_canom, if (na.flag) {
@@ -211,6 +218,7 @@ analytic_filter <- function(outcomes, m0 = 0, C0 = 1, FF, G, G_labs, D, W, p_mon
           }, parms = outcome$parms, pred_cred = NA)$log.like
         )
       }
+
       outcomes[[outcome_name]]$log.like.null[t] <- if (is.na(p_monit)) {
         NA
       } else {
@@ -230,7 +238,7 @@ analytic_filter <- function(outcomes, m0 = 0, C0 = 1, FF, G, G_labs, D, W, p_mon
       if (bayes_factor < threshold) {
         model <- models$alt_model
         conj_prior <- models$alt_model$conj_prior
-        D[, , t] <- D[, , t] * D_mult$alt_model
+        D_inv[, , t] <- D_inv[, , t] * D_mult$alt_model
         W[, , t] <- W[, , t] * W_add$alt_model
         monit_win <- -5
         outcomes[[outcome_name]]$alt.flags[t] <- 1
@@ -251,15 +259,8 @@ analytic_filter <- function(outcomes, m0 = 0, C0 = 1, FF, G, G_labs, D, W, p_mon
       if (na.flag) {
         norm_post <- list(ft = ft_step, Qt = Qt_step)
       } else {
-        if (outcome$convert_canom_flag) {
-          ft_canom <- outcome$convert_mat_canom %*% ft_step
-          Qt_canom <- outcome$convert_mat_canom %*% Qt_step %*% transpose(outcome$convert_mat_canom)
-        } else {
-          ft_canom <- ft_step
-          Qt_canom <- Qt_step
-        }
-        conj_prior <- outcome$conj_prior(ft_canom, Qt_canom, parms = outcome$parms)
-        conj_post <- outcome$update(conj_prior, ft = ft_canom, Qt = Qt_canom, y = outcome$outcome[t, ], parms = outcome$parms)
+        conj_prior <- outcome$conj_prior(ft_step, Qt_step, parms = outcome$parms)
+        conj_post <- outcome$update(conj_prior, ft = ft_step, Qt = Qt_step, y = outcome$outcome[t, ], parms = outcome$parms)
 
         if (outcome$alt_method) {
           norm_post <- conj_post
@@ -267,19 +268,20 @@ analytic_filter <- function(outcomes, m0 = 0, C0 = 1, FF, G, G_labs, D, W, p_mon
           norm_post <- outcome$conj_post(conj_post, parms = outcome$parms)
         }
 
+        ft_star <- norm_post$ft <- norm_post$ft
+        Qt_star <- norm_post$Qt <- norm_post$Qt
+        error_ft <- (ft_star - ft_step)
+        error_Qt <- (Qt_star - Qt_step)
         if (outcome$convert_canom_flag) {
-          ft_star <- norm_post$ft <- outcome$convert_mat_default %*% norm_post$ft
-          Qt_star <- norm_post$Qt <- outcome$convert_mat_default %*% norm_post$Qt %*% transpose(outcome$convert_mat_default)
-        } else {
-          ft_star <- norm_post$ft <- norm_post$ft
-          Qt_star <- norm_post$Qt <- norm_post$Qt
+          error_ft <- outcome$convert_mat_default %*% error_ft
+          error_Qt <- outcome$convert_mat_default %*% error_Qt %*% transpose(outcome$convert_mat_default)
         }
         At <- Ct_step %*% model$FF %*% ginv(Qt_step)
         At_t <- t(At)
         # At_t <- solve(Qt_step,t(model$FF) %*% Ct_step)
         # At <- t(At_t)
-        models[["null_model"]]$at_step <- mt_step <- mt_step + At %*% (ft_star - ft_step)
-        models[["null_model"]]$Rt_step <- Ct_step <- Ct_step + crossprod(At_t, (Qt_star - Qt_step)) %*% At_t
+        models[["null_model"]]$at_step <- mt_step <- mt_step + At %*% error_ft
+        models[["null_model"]]$Rt_step <- Ct_step <- Ct_step + crossprod(At_t, error_Qt) %*% At_t
 
         last_C_D <- Ct_step
       }
@@ -323,10 +325,10 @@ analytic_filter <- function(outcomes, m0 = 0, C0 = 1, FF, G, G_labs, D, W, p_mon
 
       mt[, t] <- last_m <- mt_step
       Ct[, , t] <- last_C <- Ct_step
-      eigen_Ct=eigen(last_C)$values
-      pos_eigen_Ct=eigen_Ct[eigen_Ct>0]
-      if(log10(max(pos_eigen_Ct))-log10(min(pos_eigen_Ct))>15){
-        warning('Covariance for the latent variables is numerical instable. Results may be unreliable.')
+      eigen_Ct <- eigen(last_C)$values
+      pos_eigen_Ct <- eigen_Ct[eigen_Ct > 0]
+      if (log10(max(pos_eigen_Ct)) - log10(min(pos_eigen_Ct)) > 15) {
+        warning("Covariance for the latent variables is numerical instable. Results may be unreliable.")
       }
     }
   }
@@ -334,46 +336,52 @@ analytic_filter <- function(outcomes, m0 = 0, C0 = 1, FF, G, G_labs, D, W, p_mon
   result <- list(
     "mt" = mt, "Ct" = Ct,
     "at" = at, "Rt" = Rt,
-    # Consultar Mariane sobre oq fazer com o preditor linear.
+    # Consultar Mariane sobre oq fazer com o predictor linear.
     "ft" = ft, "Qt" = Qt,
-    "FF" = FF, "G" = G, "D" = D, "W" = W,
+    "FF" = FF, "G" = G, "G_labs" = G_labs,
+    "D" = D, "W" = W,
     "outcomes" = outcomes, "var_names" = var_names
   )
   return(result)
 }
 
-#' one_step_evolve
-#'
-#' @importFrom Rfast transpose
-#'
-one_step_evolve <- function(m0, C0, G, G_labs, D, W) {
-  n <- dim(G)[1]
-  G_now <- G
+calc_current_G <- function(m0, G, G_labs) {
+  n <- if.null(dim(G)[1], 1)
+  G_now <- G %>% as.matrix()
   G_diff <- rep(0, n)
-  if (any(G_labs!='const')) {
-    for (index_col in (1:n)[colSums(is.na(G)) > 0]) {
-      index_row <- (1:n)[is.na(G_now[, index_col])]
-      if(G_labs[index_row, index_col]=='constrained'){
-        p=1/(1+exp(-m0[index_col + 1]))
-        G_now[index_row, index_col] <- (2*p-1)
-        G_now[index_row, index_col + 1] <- 2*p*(1-p)*m0[index_col]
-        G_diff[index_row] <- G_diff[index_row] -2*p*(1-p)*m0[index_col]*m0[index_col+1]
-      }else{
-        G_now[index_row, index_col] <- m0[index_col+1]
-        G_now[index_row, index_col + 1] <- m0[index_col+1]*m0[index_col]
-        G_diff[index_row] <- G_diff[index_row] - m0[index_col+1]*m0[index_col]
+  if (any(G_labs != "const")) {
+    for (index_row in (1:n)[rowSums(is.na(G)) > 0]) {
+      index_col <- (1:n)[is.na(G_now[index_row, ])]
+      if (G_labs[index_row, index_col] == "constrained") {
+        p <- 1 / (1 + exp(-m0[index_col + 1]))
+        G_now[index_row, index_col] <- (2 * p - 1)
+        G_now[index_row, index_col + 1] <- 2 * p * (1 - p) * m0[index_col]
+        G_diff[index_row] <- G_diff[index_row] - 2 * p * (1 - p) * m0[index_col] * m0[index_col + 1]
+      } else {
+        G_now[index_row, index_col] <- m0[index_col + 1]
+        G_now[index_row, index_col + 1] <- m0[index_col]
+        G_diff[index_row] <- G_diff[index_row] - m0[index_col + 1] * m0[index_col]
       }
     }
   }
+  list("G" = G_now, "G_diff" = G_diff)
+}
+
+one_step_evolve <- function(m0, C0, G, G_labs, D_inv, W) {
+  G_vals <- calc_current_G(m0, G, G_labs)
+  G_now <- G_vals$G
+  G_diff <- G_vals$G_diff
+  # G_now=G
+  # G_diff=G_vals$G_diff*0
   at <- (G_now %*% m0) + G_diff
   G_now_t <- transpose(G_now)
   Pt <- G_now %*% C0 %*% G_now_t
-  Rt <- as.matrix(D * Pt) + W
+  Rt <- as.matrix(D_inv * Pt) + W
 
-  list("at" = at, "Rt" = Rt)
+  list("at" = at, "Rt" = Rt, "G" = G_now, "G_diff" = G_diff)
 }
 
-calc_lin_pred <- function(at, Rt, FF) {
+calc_current_F <- function(at, Rt, FF) {
   if (is.null(dim(FF))) {
     FF <- matrix(FF, length(FF), 1)
   }
@@ -390,7 +398,7 @@ calc_lin_pred <- function(at, Rt, FF) {
     if (n_na > 1) {
       vals_coef <- vals_na[((1:(n_na / 2) * 2) - 1)]
       vals_noise <- vals_na[((1:(n_na / 2)) * 2)]
-      flags_na <- diag(Rt)[vals_noise] == W_correl & diag(Rt)[vals_coef] > 0
+      flags_na <- diag(Rt)[vals_noise] == 1 & diag(Rt)[vals_coef] > 0
 
       FF[vals_coef, i] <- ifelse(flags_na,
         (at_mod[vals_noise]) * exp(at_mod[vals_coef]),
@@ -406,10 +414,17 @@ calc_lin_pred <- function(at, Rt, FF) {
       ))
     }
   }
+  list("FF" = FF, "FF_diff" = charge)
+}
 
-  ft <- crossprod(FF, at)
+calc_lin_pred <- function(at, Rt, FF) {
+  FF_vals <- calc_current_F(at, Rt, FF)
+  FF <- FF_vals$FF
+  FF_diff <- FF_vals$FF_diff
+
+  ft <- crossprod(FF, at) - FF_diff
   Qt <- as.matrix(crossprod(FF, Rt) %*% FF)
-  list("ft" = ft - charge, "Qt" = Qt, "FF" = FF)
+  list("ft" = ft, "Qt" = Qt, "FF" = FF, "FF_diff" = FF_diff)
 }
 
 format_ft <- function(ft, Qt, parms) {

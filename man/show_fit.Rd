@@ -2,7 +2,7 @@
 % Please edit documentation in R/plot_helper.R
 \name{show_fit}
 \alias{show_fit}
-\title{show_fit}
+\title{Visualizing a fitted kDGLM model}
 \usage{
 show_fit(
   model,
@@ -17,29 +17,29 @@ show_fit(
 
 \item{pred_cred}{Numeric: The credibility value for the credibility interval.}
 
-\item{smooth}{Bool: A flag indicating if the smoothed should be used. If false, the filtered distribuition will be used.}
+\item{smooth}{Bool: A flag indicating if the smoothed should be used. If false, the filtered distribution will be used.}
 
 \item{plotly}{Bool: A flag indicating if plotly should be used for creating plots.}
 
-\item{h}{Integer: A integer with the amount of steps ahead should be used for prediciton. Only used if smooth is false.}
+\item{h}{Integer: A integer with the amount of steps ahead should be used for prediction. Only used if smooth is false.}
 }
 \value{
-A list containg:
+A list containing:
 \itemize{
    \item data tibble object: A data frame containing the observations, predictions and credibility intervals at each time.
    \item plot ggplot or plotly object: A plot showing the predictive mean and credibility interval with the observed data.
 }
 }
 \description{
-Calculate the preditive mean and some quantiles for the observed data and show a plot.
+Calculate the predictive mean and some quantile for the observed data and show a plot.
 }
 \examples{
 T <- 200
 w <- (200 / 40) * 2 * pi
 data <- rpois(T, 20 * (sin(w * 1:T / T) + 2))
 
-level <- polynomial_block(rate = 1, D = 1 / 0.95)
-season <- harmonic_block(rate = 1, period = 40, D = 1 / 0.98)
+level <- polynomial_block(rate = 1, D = 0.95)
+season <- harmonic_block(rate = 1, period = 40, D = 0.98)
 
 outcome <- Poisson(lambda = "rate", outcome = data)
 
@@ -47,4 +47,13 @@ fitted_data <- fit_model(level, season, outcomes = outcome)
 summary(fitted_data)
 
 show_fit(fitted_data, smooth = TRUE)$plot
+
 }
+\seealso{
+Other {auxiliary visualization functions for the fitted_dlm class}: 
+\code{\link{plot_lat_var}()},
+\code{\link{plot_lin_pred}()},
+\code{\link{report_distr}()},
+\code{\link{report_dlm}()}
+}
+\concept{{auxiliary visualization functions for the fitted_dlm class}}

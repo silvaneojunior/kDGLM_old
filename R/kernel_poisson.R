@@ -1,15 +1,16 @@
 #### Default Method ####
 
-#' Poisson
+#' Poisson outcome for kDGLM models
 #'
-#' Creates an outcome with Poisson distribuition with the chosen parameter.
+#' Creates an outcome with Poisson distribution with the chosen parameter.
 #'
-#' @param lambda character: Name of the linear preditor associated with the rate (mean) parameter of the Poisson distribuition. The parameter is treated as unknowed and equal to the exponential of the associated linear preditor.
+#' @param lambda character: Name of the linear predictor associated with the rate (mean) parameter of the Poisson distribution. The parameter is treated as unknown and equal to the exponential of the associated linear predictor.
 #' @param outcome vector: Values of the observed data.
 #' @param offset vector: The offset at each observation. Must have the same shape as outcome.
 #'
 #' @return A object of the class dlm_distr
 #'
+#' @importFrom stats dpois
 #' @export
 #'
 #' @examples
@@ -19,8 +20,8 @@
 #' w <- (200 / 40) * 2 * pi
 #' data <- rpois(T, 20 * (sin(w * 1:T / T) + 2))
 #'
-#' level <- polynomial_block(rate = 1, D = 1 / 0.95)
-#' season <- harmonic_block(rate = 1, period = 40, D = 1 / 0.98)
+#' level <- polynomial_block(rate = 1, D = 0.95)
+#' season <- harmonic_block(rate = 1, period = 40, D = 0.98)
 #'
 #' outcome <- Poisson(lambda = "rate", outcome = data)
 #'
@@ -28,7 +29,19 @@
 #' summary(fitted_data)
 #'
 #' show_fit(fitted_data, smooth = TRUE)$plot
-Poisson <- function(lambda, outcome, offset = outcome**0) {
+#'
+#' @details
+#'
+#' For evaluating the posterior parameters, we use the method proposed in \insertCite{ArtigokParametrico;textual}{kDGLM}.
+#'
+#' For the details about the implementation see  \insertCite{ArtigoPacote;textual}{kDGLM}.
+#'
+#' @seealso \code{\link{fit_model}}
+#' @family {auxiliary functions for a creating outcomes}
+#'
+#' @references
+#'    \insertAllCited{}
+Poisson <- function(lambda, outcome, offset = outcome**0, alt_method = FALSE) {
   distr <- list()
   t <- length(outcome)
   r <- k <- 1
@@ -38,6 +51,9 @@ Poisson <- function(lambda, outcome, offset = outcome**0) {
     conj_prior = convert_Poisson_Normal,
     conj_post = convert_Normal_Poisson,
     update = update_Poisson,
+    log.like.cond = function(param, outcome) {
+      dpois(outcome, param, log = TRUE)
+    },
     smoother = generic_smoother,
     calc_pred = poisson_pred,
     apply_offset = function(ft, Qt, offset) {
@@ -52,7 +68,6 @@ Poisson <- function(lambda, outcome, offset = outcome**0) {
       c(paste0("alpha_", 1:dim(y)[2]), paste("beta_", 1:dim(y)[2]))
     },
     var_names = c(lambda),
-    family = family,
     r = r,
     k = k,
     l = k,
@@ -66,22 +81,27 @@ Poisson <- function(lambda, outcome, offset = outcome**0) {
     name = "Poisson"
   )
   class(distr) <- "dlm_distr"
-  distr$alt_method <- FALSE
+  distr$alt_method <- alt_method
+
+  if (alt_method) {
+    distr$update <- update_Poisson_alt
+  }
 
   return(distr)
 }
 
 #' convert_Poisson_Normal
 #'
-#' Calculate the parameters of the Gamma that best approximates the given log-Normal distribuition.
+#' Calculate the parameters of the Gamma that best approximates the given log-Normal distribution.
 #' The approximation is the best in the sense that it minimizes the KL divergence from the log-Normal to the Gamma
 #'
 #' @param ft vector: A vector representing the means from the normal distribution.
 #' @param Qt matrix: A matrix representing the covariance matrix of the normal distribution.
-#' @param parms list: A list of extra known parameters of the distribuition. Not used in this kernel.
+#' @param parms list: A list of extra known parameters of the distribution. Not used in this kernel.
 #'
-#' @return The parameters of the conjugated distribuition of the linear predictor.
-#' @export
+#' @return The parameters of the conjugated distribution of the linear predictor.
+#' @keywords internal
+#' @family {auxiliary functions for a Poisson outcome}
 convert_Poisson_Normal <- function(ft, Qt, parms) {
   # diag(Qt)=ifelse(diag(Qt)<0,0,diag(Qt))
   if (length(ft) > 1) {
@@ -96,39 +116,36 @@ convert_Poisson_Normal <- function(ft, Qt, parms) {
 
 #' convert_Normal_Poisson
 #'
-#' Calculate the parameters of the log-Normal that best approximates the given Gamma distribuition.
+#' Calculate the parameters of the log-Normal that best approximates the given Gamma distribution.
 #' The approximation is the best in the sense that it minimizes the KL divergence from the Gamma to the log-Normal
 #'
 #' @param conj_prior list: A vector containing the parameters of the Gamma (alpha,beta).
-#' @param parms list: A list of extra known parameters of the distribuition. Not used in this kernel.
+#' @param parms list: A list of extra known parameters of the distribution. Not used in this kernel.
 #'
-#' @return The parameters of the Normal distribuition of the linear predictor.
-#' @export
+#' @return The parameters of the Normal distribution of the linear predictor.
+#' @keywords internal
+#' @family {auxiliary functions for a Poisson outcome}
 convert_Normal_Poisson <- function(conj_prior, parms) {
   alpha <- conj_prior$alpha
   beta <- conj_prior$beta
   ft <- digamma(alpha) - log(beta)
   Qt <- trigamma(alpha)
-  if (length(alpha) > 1) {
-    Qt <- diag(Qt)
-    ft <- matrix(ft, r, 1)
-  }
-  # print(Qt)
   return(list("ft" = ft, "Qt" = Qt))
 }
 
 #' update_Poisson
 #'
-#' Calculate posterior parameter for the Gamma, assuming that the observed values came from a Poisson model from which the rate parameter (lambda) have prior distribuition Gamma.
+#' Calculate posterior parameter for the Gamma, assuming that the observed values came from a Poisson model from which the rate parameter (lambda) have prior distribution Gamma.
 #'
 #' @param conj_prior list: A vector containing the parameters of the Gamma (alpha,beta).
 #' @param ft vector: A vector representing the means from the normal distribution. Not used in the default method.
 #' @param Qt matrix: A matrix representing the covariance matrix of the normal distribution. Not used in the default method.
 #' @param y vector: A vector containing the observations.
-#' @param parms list: A list of extra known parameters of the distribuition. Not used in this kernel.
+#' @param parms list: A list of extra known parameters of the distribution. Not used in this kernel.
 #'
 #' @return The parameters of the posterior distribution.
-#' @export
+#' @keywords internal
+#' @family {auxiliary functions for a Poisson outcome}
 update_Poisson <- function(conj_prior, ft, Qt, y, parms) {
   alpha <- conj_prior$alpha
   beta <- conj_prior$beta
@@ -139,34 +156,27 @@ update_Poisson <- function(conj_prior, ft, Qt, y, parms) {
 
 #' poisson_pred
 #'
-#' Calculate the values for the predictive distribuition given the values of the parameter of the conjugated distribuition of the linear predictor.
-#' The data is assumed to have Poisson distribuition with it's mean having distribuition Gamma with shape parameter a e rate parameter b.
-#' In this scenario, the marginal distribuition of the data is Negative Binomial with a as the dispersion parameter and b/(b+1) as the probability.
+#' Calculate the values for the predictive distribution given the values of the parameter of the conjugated distribution of the linear predictor.
+#' The data is assumed to have Poisson distribution with it's mean having distribution Gamma with shape parameter a e rate parameter b.
+#' In this scenario, the marginal distribution of the data is Negative Binomial with a as the dispersion parameter and b/(b+1) as the probability.
 #'
-#' @param conj_param List or data.frame: The parameters of the conjugated distribuitions of the linear predictor.
+#' @param conj_param List or data.frame: The parameters of the conjugated distributions of the linear predictor.
 #' @param outcome Vector or matrix (optional): The observed values at the current time. Not used in this function.
 #' @param parms List (optional): A list of extra parameters for the model. Not used in this function.
 #' @param pred_cred Numeric: the desired credibility for the credibility interval.
 #'
 #' @return A list containing the following values:
 #' \itemize{
-#'    \item pred vector/matrix: the mean of the predictive distribuition of a next observation. Same type and shape as the parameter in model.
-#'    \item var.pred vector/matrix: the variance of the predictive distribuition of a next observation. Same type and shape as the parameter in model.
-#'    \item icl.pred vector/matrix: the percentile of 100*((1-pred_cred)/2)% of the predictive distribuition of a next observation. Same type and shape as the parameter in model.
-#'    \item icu.pred vector/matrix: the percentile of 100*(1-(1-pred_cred)/2)% of the predictive distribuition of a next observation. Same type and shape as the parameter in model.
+#'    \item pred vector/matrix: the mean of the predictive distribution of a next observation. Same type and shape as the parameter in model.
+#'    \item var.pred vector/matrix: the variance of the predictive distribution of a next observation. Same type and shape as the parameter in model.
+#'    \item icl.pred vector/matrix: the percentile of 100*((1-pred_cred)/2)% of the predictive distribution of a next observation. Same type and shape as the parameter in model.
+#'    \item icu.pred vector/matrix: the percentile of 100*(1-(1-pred_cred)/2)% of the predictive distribution of a next observation. Same type and shape as the parameter in model.
 #'    \item log.like vector: the The log likelihood for the outcome given the conjugated parameters.
 #' }
 #'
-#' @export
-#'
-#' @examples
-#'
-#' conj_param <- data.frame(
-#'   "a" = c(1:3),
-#'   "b" = c(3:1)
-#' )
-#'
-#' poisson_pred(conj_param)
+#' @importFrom stats rgamma rpois dpois qnbinom dnbinom var quantile
+#' @keywords internal
+#' @family {auxiliary functions for a Poisson outcome}
 poisson_pred <- function(conj_param, outcome = NULL, parms = list(), pred_cred = 0.95) {
   pred.flag <- !is.na(pred_cred)
   like.flag <- !is.null(outcome)
@@ -212,7 +222,7 @@ poisson_pred <- function(conj_param, outcome = NULL, parms = list(), pred_cred =
     }
     if (like.flag) {
       log.like.list <- dpois(outcome[i, 1], sample_lambda, log = TRUE)
-      max.like.list <- max(like.list)
+      max.like.list <- max(log.like.list)
 
       log.like[i] <- log(mean(exp(log.like.list - max.like.list))) + max.like.list
     }
@@ -238,56 +248,35 @@ poisson_pred <- function(conj_param, outcome = NULL, parms = list(), pred_cred =
 
 #### Alternative Method ####
 
-#' Poisson_alt
-#'
-#' Creates an outcome with Poisson distribuition with the chosen parameter.
-#'
-#' @param lambda character: Name of the linear preditor associated with the rate (mean) parameter of the Poisson distribuition. The parameter is treated as unknowed and equal to the exponential of the associated linear preditor.
-#' @param outcome vector: Values of the observed data.
-#' @param offset vector: The offset at each observation. Must have the same shape as outcome.
-#'
-#' @return A object of the class dlm_distr
-#'
-#' @export
-#'
-#' @examples
-#'
-#' # Poisson case
-#' T <- 200
-#' w <- (200 / 40) * 2 * pi
-#' data <- rpois(T, 20 * (sin(w * 1:T / T) + 2))
-#'
-#' level <- polynomial_block(rate = 1, D = 1 / 0.95)
-#' season <- harmonic_block(rate = 1, period = 40, D = 1 / 0.98)
-#'
-#' outcome <- Poisson_alt(lambda = "rate", outcome = data)
-#'
-#' fitted_data <- fit_model(level, season, outcomes = outcome)
-#' summary(fitted_data)
-#'
-#' show_fit(fitted_data, smooth = TRUE)$plot
-Poisson_alt <- function(lambda, outcome, offset = outcome**0) {
-  distr <- Poisson(lambda, outcome, offset)
-
-  distr$update <- update_Poisson_alt
-  distr$alt_method <- TRUE
-  return(distr)
-}
-
 #' update_Poisson_alt
 #'
-#' Calculate posterior parameter for the Gamma, assuming that the observed values came from a Poisson model from which the rate parameter (lambda) have prior distribuition Gamma.
+#' Calculate the (approximated) posterior parameter for the linear predictors, assuming that the observed values came from a Poisson model from which the rate parameter have prior distribution in the log-Normal family.
 #'
 #' @param conj_prior list: A vector containing the parameters of the Gamma (alpha,beta). Not used in the alternative method.
 #' @param y vector: A vector containing the observations.
 #' @param ft vector: A vector representing the means from the normal distribution.
 #' @param Qt matrix: A matrix representing the covariance matrix of the normal distribution.
-#' @param parms list: A list of extra known parameters of the distribuition. Not used in this kernel.
+#' @param parms list: A list of extra known parameters of the distribution. Not used in this kernel.
 #'
 #' @importFrom cubature cubintegrate
+#' @importFrom stats dlnorm
 #'
 #' @return The parameters of the posterior distribution.
-#' @export
+#' @keywords internal
+#' @family {auxiliary functions for a Poisson outcome}
+#'
+#' @details
+#'
+#' For evaluating the posterior parameters, we use a modified version of the method proposed in \insertCite{ArtigokParametrico;textual}{kDGLM}.
+#'
+#' For computational efficiency, we also use a Laplace approximations to obtain the first and second moments of the posterior \insertCite{@see @TierneyKadane1 and @TierneyKadane2 }{kDGLM}.
+#'
+#' For the details about the implementation see  \insertCite{ArtigoPacote;textual}{kDGLM}.
+#'
+#' For the detail about the modification of the method proposed in \insertCite{ArtigokParametrico;textual}{kDGLM}, see \insertCite{ArtigoAltMethod;textual}{kDGLM}.
+#'
+#' @references
+#'    \insertAllCited{}
 update_Poisson_alt <- function(conj_prior, ft, Qt, y, parms) {
   # f0 <- ft
   # Q0 <- Qt

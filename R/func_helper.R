@@ -1,6 +1,12 @@
 #' if.null
 #'
 #' This function is wrapper for ifelse(is.null(.),.,.)
+#'
+#' @param vec A vector or matrix.
+#' @param val The value to replace NULL with.
+#'
+#' @export
+#' @keywords internal
 if.null <- function(vec, val) {
   ifelse(is.null(vec), val, vec)
 }
@@ -8,6 +14,12 @@ if.null <- function(vec, val) {
 #' if.na
 #'
 #' This function is wrapper for ifelse(is.null(.),.,.)
+#'
+#' @param vec A vector or matrix.
+#' @param val The value to replace NA with.
+#'
+#' @export
+#' @keywords internal
 if.na <- function(vec, val) {
   ifelse(is.na(vec), val, vec)
 }
@@ -16,22 +28,32 @@ if.na <- function(vec, val) {
 #' if.nan
 #'
 #' This function is wrapper for ifelse(is.null(.),.,.)
+#'
+#' @param vec A vector or matrix.
+#' @param val The value to replace NaN with.
+#'
+#' @export
+#' @keywords internal
 if.nan <- function(vec, val) {
   ifelse(is.nan(vec), val, vec)
 }
 
-#' chol_fast
+#' var_decomp
+#'
+#' This function receives a covariance matrix S and creates a matrix Q, so that t(Q) %*% Q=S.
+#'
+#' @param S A covariance matrix
 #'
 #' @importFrom Rfast cholesky transpose
-#'
-chol_fast <- function(S) {
+#' @keywords internal
+var_decomp <- function(S) {
   Chol_decomp <- cholesky(S)
   if (prod(if.nan(diag(Chol_decomp), 0)) == 0) {
     svd_decomp <- svd(S)
     # return(svd_decomp$u%*%diag(svd_decomp$d)%*%t(svd_decomp$u))
-    d <- svd_decomp$d
+    d <- sqrt(svd_decomp$d)
     u_t <- transpose(svd_decomp$u)
-    return(crossprod(u_t, diag(d)) %*% u_t)
+    return(diag(d) %*% u_t)
   } else {
     return(Chol_decomp)
   }
@@ -39,8 +61,12 @@ chol_fast <- function(S) {
 
 #' ginv
 #'
-#' @importFrom Rfast cholesky
+#' This function receives a covariance matrix S and calculates the generalized inverse of S.
 #'
+#' @param S A covariance matrix
+#'
+#' @importFrom Rfast cholesky
+#' @keywords internal
 ginv <- function(S) {
   Chol_decomp <- cholesky(S)
   if (prod(if.nan(diag(Chol_decomp), 0)) == 0) {
@@ -51,16 +77,14 @@ ginv <- function(S) {
     D <- svd_decomp$d
     D <- ifelse(D > 0, 1 / D, 0)
     # D <- 1/D
-    return(crossprod(Q_t, diag(D)) %*% Q_t)
+    D_mat <- diag(length(D))
+    diag(D_mat) <- D
+    return(crossprod(Q_t, D_mat) %*% Q_t)
   } else {
     return(chol2inv(Chol_decomp))
   }
 }
 
-
-
-#' bdiag
-#'
 bdiag <- function(...) {
   mats <- list(...)
   ns <- sapply(mats, function(x) {
@@ -77,8 +101,6 @@ bdiag <- function(...) {
   mat_final
 }
 
-#' colProd
-#'
 colProd <- function(x) {
   apply(x, 2, prod)
 }
@@ -90,6 +112,7 @@ colProd <- function(x) {
 #' @param pre_max Numeric: A vector/matrix from which to calculate the axis limits and gradation.
 #'
 #' @return A list contaning the gradation for the axis, the number of ticks in the axis and the maximum value.
+#' @keywords internal
 calcula_max <- function(pre_max) {
   if (length(pre_max) == 0 | sum(pre_max**2) < 10**-20) {
     pre_max <- 1
@@ -126,6 +149,7 @@ calcula_max <- function(pre_max) {
 #' @importFrom Rfast colnth
 #'
 #' @return Vector: The chosen quatile for each column of X.
+#' @keywords internal
 colQuantile <- function(X, q) {
   n <- dim(X)[1]
   k <- dim(X)[2]
@@ -144,6 +168,7 @@ colQuantile <- function(X, q) {
 #' @importFrom Rfast rownth
 #'
 #' @return Vector: The chosen quatile for each row of X.
+#' @keywords internal
 rowQuantile <- function(X, q) {
   n <- dim(X)[1]
   k <- dim(X)[2]
@@ -157,17 +182,19 @@ rowQuantile <- function(X, q) {
 #' Calculates the root of a function given an initial value and a function to calculate it's derivatives.
 #'
 #' @param f function: A function that receives a vector and return a vector of the same size.
-#' @param df function: A function that receives a vector and return the derivatives of fx in relation to it's argmuments (must return a matrix, if fx returns a vector).
+#' @param df function: A function that receives a vector and return the derivatives of f in relation to it's arguments (must return a matrix, if f returns a vector).
 #' @param start vector: The initial value to start the algorithm.
 #' @param tol numeric: The tolerance for the solution error.
 #' @param n_max numeric: The maximum number of iterations allowed.
 #'
-#' @return A list contaning:
+#' @return A list containing:
 #' \itemize{
 #'    \item root vector: The solution for the system.
-#'    \item f.root vector: The function fx evaluated at the root.
+#'    \item f.root vector: The function f evaluated at the root.
 #'    \item iter numeric: The number of steps taken.
 #' }
+#'
+#' @keywords internal
 f_root <- function(f, df, start, tol = 1e-8, n_max = 1000) {
   x_root <- start
   fx <- f(x_root)

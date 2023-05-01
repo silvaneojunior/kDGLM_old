@@ -19,13 +19,13 @@ correlation_block(
 
 \item{name}{String: An optional argument providing the name for this block. Can be useful to identify the models with meaningful labels, also, the name used will be used in some auxiliary functions.}
 
-\item{D}{Array, Matrix, vector or  scalar: The values for the discount factors at each time. If D is a array, it's dimensions should be nxnxt, where n is the order of the polynomial block and t is the length of the outcomes. If D is a matrix, it's dimesions should be nxn and it's values will be used for each time. If D is a vector or scalar, a discount factor matrix will be created as a diagonal matrix with the values of D in the diagonal.}
+\item{D}{Array, Matrix, vector or  scalar: The values for the discount factors at each time. If D is a array, it's dimensions should be n x n x t, where n is the order of the polynomial block and t is the length of the outcomes. If D is a matrix, it's dimensions should be n x n and it's values will be used for each time. If D is a vector or scalar, a discount factor matrix will be created as a diagonal matrix with the values of D in the diagonal.}
 
-\item{W}{Array, Matrix, vector or  scalar: The values for the covariance matrix for the noise factor at each time. If W is a array, it's dimensions should be nxnxt, where n is the order of the polynomial block and t is the length of the outcomes. If W is a matrix, it's dimesions should be nxn and it's values will be used for each time. If W is a vector or scalar, a discount factor matrix will be created as a diagonal matrix with the values of W in the diagonal.}
+\item{W}{Array, Matrix, vector or  scalar: The values for the covariance matrix for the noise factor at each time. If W is a array, it's dimensions should be n x n x t, where n is the order of the polynomial block and t is the length of the outcomes. If W is a matrix, it's dimensions should be n x n and it's values will be used for each time. If W is a vector or scalar, a discount factor matrix will be created as a diagonal matrix with the values of W in the diagonal.}
 
-\item{m0}{Vector or scalar: The prior mean for the latent variables associated with this block. If m0 is a vector, it's dimesion should be equal to the order of the polynomial block. If m0 is a scalar, it's value will be used for all latent variables.}
+\item{m0}{Vector or scalar: The prior mean for the latent variables associated with this block. If m0 is a vector, it's dimension should be equal to the order of the polynomial block. If m0 is a scalar, it's value will be used for all latent variables.}
 
-\item{C0}{Matrix, vector or scalar: The prior covariance matrix for the latent variables associated with this block. If C0 is a matrix, it's dimesions should be nxn. If W is a vector or scalar, a covariance matrix will be created as a diagonal matrix with the values of C0 in the diagonal.}
+\item{C0}{Matrix, vector or scalar: The prior covariance matrix for the latent variables associated with this block. If C0 is a matrix, it's dimensions should be n x n. If W is a vector or scalar, a covariance matrix will be created as a diagonal matrix with the values of C0 in the diagonal.}
 }
 \value{
 An object of the class dlm_block containing the following values:
@@ -36,7 +36,7 @@ An object of the class dlm_block containing the following values:
    \item W Array: A 3D-array containing the covariance matrix of the noise for each time. It's dimension should be the same as D.
    \item m0 Vector: The prior mean for the latent vector.
    \item C0 Matrix: The prior covariance matrix for the latent vector.
-   \item names list: A list containg the variables indexes by their name.
+   \item names list: A list containing the variables indexes by their name.
    \item n Positive integer: The number of latent variables associated with this block (2).
    \item t Positive integer: The number of time steps associated with this block. If 1, the block is compatible with blocks of any time length, but if t is greater than 1, this block can only be used with blocks of the same time length.
    \item k Positive integer: The number of outcomes associated with this block. This block can only be used with blocks with the same outcome length.
@@ -49,4 +49,16 @@ DESCRIPTION
 }
 \examples{
 # EXAMPLE
+
+
 }
+\seealso{
+Other {auxiliary functions for structural blocks}: 
+\code{\link{AR_block}()},
+\code{\link{block_merge}()},
+\code{\link{block_mult}()},
+\code{\link{harmonic_block}()},
+\code{\link{polynomial_block}()}
+}
+\concept{{auxiliary functions for structural blocks}}
+\keyword{internal}

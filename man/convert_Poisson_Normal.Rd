@@ -11,12 +11,21 @@ convert_Poisson_Normal(ft, Qt, parms)
 
 \item{Qt}{matrix: A matrix representing the covariance matrix of the normal distribution.}
 
-\item{parms}{list: A list of extra known parameters of the distribuition. Not used in this kernel.}
+\item{parms}{list: A list of extra known parameters of the distribution. Not used in this kernel.}
 }
 \value{
-The parameters of the conjugated distribuition of the linear predictor.
+The parameters of the conjugated distribution of the linear predictor.
 }
 \description{
-Calculate the parameters of the Gamma that best approximates the given log-Normal distribuition.
+Calculate the parameters of the Gamma that best approximates the given log-Normal distribution.
 The approximation is the best in the sense that it minimizes the KL divergence from the log-Normal to the Gamma
 }
+\seealso{
+Other {auxiliary functions for a Poisson outcome}: 
+\code{\link{convert_Normal_Poisson}()},
+\code{\link{poisson_pred}()},
+\code{\link{update_Poisson_alt}()},
+\code{\link{update_Poisson}()}
+}
+\concept{{auxiliary functions for a Poisson outcome}}
+\keyword{internal}

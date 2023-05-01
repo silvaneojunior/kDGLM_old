@@ -15,3 +15,4 @@ A list contaning the gradation for the axis, the number of ticks in the axis and
 \description{
 Auxiliary function to calculate the axis limits and gradation for plots.
 }
+\keyword{internal}

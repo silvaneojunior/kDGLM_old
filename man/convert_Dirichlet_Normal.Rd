@@ -11,11 +11,18 @@ convert_Dirichlet_Normal(ft, Qt, parms)
 
 \item{Qt}{matrix: A matrix representing the covariance matrix of the normal distribution.}
 
-\item{parms}{list: A list of extra known parameters of the distribuition. Not used in this function.}
+\item{parms}{list: A list of extra known parameters of the distribution. Not used in this function.}
 }
 \value{
-The parameters of the conjugated distribuition of the linear predictor.
+The parameters of the conjugated distribution of the linear predictor.
 }
 \description{
-DESCRIPTION
+This is a dummy function, since, for an Dirichelt outcome, the conjugated prior is not used.
 }
+\seealso{
+Other {auxiliary functions for a Dirichlet outcome}: 
+\code{\link{Dirichlet_pred}()},
+\code{\link{update_Dirichlet}()}
+}
+\concept{{auxiliary functions for a Dirichlet outcome}}
+\keyword{internal}

@@ -7,10 +7,14 @@
 array_collapse_left(A, B)
 }
 \arguments{
-\item{A}{A 3-D array with shapes nxmxk.}
+\item{A}{A 3-D array with shapes n x m x k.}
 
-\item{B}{A matrix with shapes mx1}
+\item{B}{A matrix with shapes m x 1.}
 }
 \description{
-array_collapse_left
+Calculates the matrix product between an array and a vector.
 }
+\details{
+For an array A with shapes n x m x k and a vector B with shape m, this operations returns a matrix C, with shapes n x k, so that C[,i] = A[,,i] %*% B.
+}
+\keyword{internal}

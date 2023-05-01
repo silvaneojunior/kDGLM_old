@@ -15,11 +15,30 @@ update_Dirichlet(conj_prior, ft, Qt, y, parms)
 
 \item{y}{vector: A vector containing the observations.}
 
-\item{parms}{list: A list of extra known parameters of the distribuition. For this kernel, parms should containg the shape parameter (phi) for the observational gamma model.}
+\item{parms}{list: A list of extra known parameters of the distribution. For this kernel, parms should containg the shape parameter (phi) for the observational gamma model.}
 }
 \value{
 The parameters of the posterior distribution.
 }
 \description{
-Dirichlet
+Calculate the (approximated) posterior parameter for the linear predictors, assuming that the observed values came from a Dirichlet model from which the concentration parameters have prior distribution in the log-Normal family.
 }
+\details{
+For evaluating the posterior parameters, we use a modified version of the method proposed in \insertCite{ArtigokParametrico;textual}{kDGLM}.
+
+For computational efficiency, we also use a Laplace approximations to obtain the first and second moments of the posterior \insertCite{@see @TierneyKadane1 and @TierneyKadane2 }{kDGLM}.
+
+For the details about the implementation see  \insertCite{ArtigoPacote;textual}{kDGLM}.
+
+For the detail about the modification of the method proposed in \insertCite{ArtigokParametrico;textual}{kDGLM}, see \insertCite{ArtigoAltMethod;textual}{kDGLM}.
+}
+\references{
+\insertAllCited{}
+}
+\seealso{
+Other {auxiliary functions for a Dirichlet outcome}: 
+\code{\link{Dirichlet_pred}()},
+\code{\link{convert_Dirichlet_Normal}()}
+}
+\concept{{auxiliary functions for a Dirichlet outcome}}
+\keyword{internal}

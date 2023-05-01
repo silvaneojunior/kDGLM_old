@@ -1,6 +1,6 @@
-#### Array ops ####
+# ### Array ops ####
 #
-# Only execute once to prepare the cpp code.
+# # Only execute once to prepare the cpp code.
 #
 # library(einsum)
 # func_list=list(
@@ -24,17 +24,21 @@
 # }
 
 
-# #' @useDynLib kDGLM
+# #' @useDynLib kDGLM, .registration=TRUE
 # #' @importFrom Rcpp sourceCpp
 # NULL
 
 
 #' array_mult_left
 #'
-#' @param A A 3-D array with shapes nxmxk.
-#' @param B A matrix with shapes mxl
+#' Calculates the matrix product between an array and a matrix.
 #'
-#' @export
+#' For an array A with shapes n x m x k and a matrix B with shape m x l, this operations returns an array C, with shapes n x l x k, so that C[,,i] = A[,,i] %*% B.
+#'
+#' @param A A 3-D array with shapes n x m x k.
+#' @param B A matrix with shapes m x l.
+#'
+#' @keywords internal
 array_mult_left <- function(A, B) {
   apply(A, 3, function(x) {
     x %*% B
@@ -43,10 +47,14 @@ array_mult_left <- function(A, B) {
 
 #' array_mult_right
 #'
-#' @param A A 3-D array with shapes nxmxk.
-#' @param B A matrix with shapes lxn
+#' Calculates the matrix product between an array and a matrix.
 #'
-#' @export
+#' For an array A with shapes m x n x k and a matrix B with shape l x m, this operations returns an array C, with shapes l x n x k, so that C[,,i] = B %*% A[,,i].
+#'
+#' @param A A 3-D array with shapes n x m x k.
+#' @param B A matrix with shapes l x n.
+#'
+#' @keywords internal
 array_mult_right <- function(A, B) {
   apply(A, 3, function(x) {
     B %*% x
@@ -55,9 +63,13 @@ array_mult_right <- function(A, B) {
 
 #' array_transp
 #'
-#' @param A A 3-D array
+#' Calculates the element-wise transposition of an array.
 #'
-#' @export
+#' For an array A with shapes n x m x k, this operations returns an array C, with shapes m x n x k, so that C[,,i] = t(A[,,i]).
+#'
+#' @param A A 3-D array.
+#'
+#' @keywords internal
 array_transp <- function(A) {
   apply(A, 3, function(x) {
     t(x)
@@ -66,20 +78,28 @@ array_transp <- function(A) {
 
 #' array_collapse_left
 #'
-#' @param A A 3-D array with shapes nxmxk.
-#' @param B A matrix with shapes mx1
+#' Calculates the matrix product between an array and a vector.
 #'
-#' @export
+#' For an array A with shapes n x m x k and a vector B with shape m, this operations returns a matrix C, with shapes n x k, so that C[,i] = A[,,i] %*% B.
+#'
+#' @param A A 3-D array with shapes n x m x k.
+#' @param B A matrix with shapes m x 1.
+#'
+#' @keywords internal
 array_collapse_left <- function(A, B) {
   array_mult_left(A, B)[, 1, ]
 }
 
 #' array_collapse_right
 #'
-#' @param A A 3-D array with shapes nxmxk.
-#' @param B A matrix with shapes 1xn
+#' Calculates the matrix product between an array and a vector.
 #'
-#' @export
+#' For an array A with shapes m x n x k and a vector B with shape m, this operations returns a matrix C, with shapes n x k, so that C[,i] = B %*% A[,,i].
+#'
+#' @param A A 3-D array with shapes n x m x k.
+#' @param B A matrix with shapes 1 x n.
+#'
+#' @keywords internal
 array_collapse_right <- function(A, B) {
   array_mult_right(A, B)[1, , ]
 }

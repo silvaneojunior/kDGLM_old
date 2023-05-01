@@ -1,7 +1,3 @@
-aux_app/*
-Multinom/*
-reports/*
-data/*
-^LICENSE\.md$
 ^.*\.Rproj$
 ^\.Rproj\.user$
+^LICENSE\.md$

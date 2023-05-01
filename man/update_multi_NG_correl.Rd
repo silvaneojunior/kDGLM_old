@@ -15,7 +15,7 @@ update_multi_NG_correl(conj_prior, ft, Qt, y, parms)
 
 \item{y}{vector: A vector containing the observations.}
 
-\item{parms}{list: A list of extra known parameters of the distribuition. Not used in this kernel.}
+\item{parms}{list: A list of extra known parameters of the distribution. Not used in this kernel.}
 }
 \value{
 The parameters of the posterior distribution.
@@ -23,3 +23,28 @@ The parameters of the posterior distribution.
 \description{
 update_multi_NG_correl
 }
+\details{
+For evaluating the posterior parameters, we iterate over the method proposed in \insertCite{ArtigokParametrico;textual}{kDGLM}, updating one coordinate of the observation at a time.
+
+Since the original methodology requires a linear structure, a linearization is applied to the condinal mean and variance at each step. See \insertCite{ArtigoMultinormal;textual}{kDGLM}
+
+For the details about the implementation see  \insertCite{ArtigoPacote;textual}{kDGLM}.
+
+For the detail about the methodology, see \insertCite{ArtigokParametrico;textual}{kDGLM} and \insertCite{ArtigoMultinormal;textual}{kDGLM}.
+}
+\references{
+\insertAllCited{}
+}
+\seealso{
+Other {auxiliary functions for a Normal outcome}: 
+\code{\link{convert_NG_Normal}()},
+\code{\link{convert_dummy_post}()},
+\code{\link{convert_dummy_prior}()},
+\code{\link{convert_multi_NG_Normal}()},
+\code{\link{multi_normal_gamma_pred}()},
+\code{\link{normal_pred}()},
+\code{\link{update_NG_alt}()},
+\code{\link{update_Normal_dummy}()}
+}
+\concept{{auxiliary functions for a Normal outcome}}
+\keyword{internal}

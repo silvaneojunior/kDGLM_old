@@ -15,11 +15,32 @@ update_Multinom_alt(conj_prior, ft, Qt, y, parms = list())
 
 \item{y}{vector: A vector containing the observations.}
 
-\item{parms}{list: A list of extra known parameters of the distribuition. Not used in this kernel.}
+\item{parms}{list: A list of extra known parameters of the distribution. Not used in this kernel.}
 }
 \value{
 The parameters of the posterior distribution.
 }
 \description{
-Calculate posterior parameter for the Dirichlet, assuming that the observed values came from a Multinomial model from which the number of trials is known and the prior distribuition for the probabilities of each category have joint distribuition Dirichlet.
+Calculate the (approximated) posterior parameter for the linear predictors, assuming that the observed values came from a Multinomial model from which the logit probabilities have prior distribution in the log-Normal family.
 }
+\details{
+For evaluating the posterior parameters, we use a modified version of the method proposed in \insertCite{ArtigokParametrico;textual}{kDGLM}.
+
+For computational efficiency, we also use a Laplace approximations to obtain the first and second moments of the posterior \insertCite{@see @TierneyKadane1 and @TierneyKadane2 }{kDGLM}.
+
+For the details about the implementation see  \insertCite{ArtigoPacote;textual}{kDGLM}.
+
+For the detail about the modification of the method proposed in \insertCite{ArtigokParametrico;textual}{kDGLM}, see \insertCite{ArtigoAltMethod;textual}{kDGLM}.
+}
+\references{
+\insertAllCited{}
+}
+\seealso{
+Other {auxiliary functions for a Multinomial outcome}: 
+\code{\link{convert_Multinom_Normal}()},
+\code{\link{convert_Normal_Multinom}()},
+\code{\link{multnom_pred}()},
+\code{\link{update_Multinom}()}
+}
+\concept{{auxiliary functions for a Multinomial outcome}}
+\keyword{internal}

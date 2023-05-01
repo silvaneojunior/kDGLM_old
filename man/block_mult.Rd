@@ -2,12 +2,14 @@
 % Please edit documentation in R/structure_helper.R
 \name{block_mult}
 \alias{block_mult}
-\title{block_mult}
+\title{Auxiliary function to replicate blocks}
 \usage{
 block_mult(block, k)
 }
 \arguments{
 \item{block}{dlm_block: A block to be multiplied.}
+
+\item{k}{Integer: The number of blocks to generate.}
 }
 \value{
 The merged block as a dlm_block.
@@ -16,7 +18,21 @@ The merged block as a dlm_block.
 An auxiliary function to merge blocks.
 }
 \examples{
+# Long way
 level <- polynomial_block(alpha = 1, order = 1)
 
-final_block <- block_merge(level, 5)
+final_block <- block_mult(level, 5)
+
+# Short way
+final_block <- 5 * polynomial_block(alpha = 1, order = 1)
+
 }
+\seealso{
+Other {auxiliary functions for structural blocks}: 
+\code{\link{AR_block}()},
+\code{\link{block_merge}()},
+\code{\link{correlation_block}()},
+\code{\link{harmonic_block}()},
+\code{\link{polynomial_block}()}
+}
+\concept{{auxiliary functions for structural blocks}}

@@ -2,7 +2,7 @@
 % Please edit documentation in R/kernel_gamma.R
 \name{Gamma}
 \alias{Gamma}
-\title{Gamma}
+\title{Gamma outcome for kDGLM models}
 \usage{
 Gamma(
   phi = NA,
@@ -11,19 +11,20 @@ Gamma(
   beta = NA,
   sigma = NA,
   outcome,
-  offset = outcome^0
+  offset = outcome^0,
+  alt_method = FALSE
 )
 }
 \arguments{
-\item{phi}{character or numeric: Name of the linear preditor associated with the shape parameter of the gamma distribuition. If numeric, this parameter is treated as knowed and equal to the value passed. If a character, the parameter is treated as unknowed and equal to the exponential of the associated linear preditor. It cannot be specified with alpha.}
+\item{phi}{character or numeric: Name of the linear predictor associated with the shape parameter of the gamma distribution. If numeric, this parameter is treated as knowed and equal to the value passed. If a character, the parameter is treated as unknown and equal to the exponential of the associated linear predictor. It cannot be specified with alpha.}
 
-\item{mu}{character: Name of the linear preditor associated with the mean parameter of the gamma distribuition. The parameter is treated as unknowed and equal to the exponential of the associated linear preditor.}
+\item{mu}{character: Name of the linear predictor associated with the mean parameter of the gamma distribution. The parameter is treated as unknown and equal to the exponential of the associated linear predictor.}
 
-\item{alpha}{character: Name of the linear preditor associated with the shape parameter of the gamma distribuition. The parameter is treated as unknowed and equal to the exponential of the associated linear preditor. It cannot be specified with phi.}
+\item{alpha}{character: Name of the linear predictor associated with the shape parameter of the gamma distribution. The parameter is treated as unknown and equal to the exponential of the associated linear predictor. It cannot be specified with phi.}
 
-\item{beta}{character: Name of the linear preditor associated with the rate parameter of the gamma distribuition. The parameter is treated as unknowed and equal to the exponential of the associated linear preditor. It cannot be specified with sigma.}
+\item{beta}{character: Name of the linear predictor associated with the rate parameter of the gamma distribution. The parameter is treated as unknown and equal to the exponential of the associated linear predictor. It cannot be specified with sigma.}
 
-\item{sigma}{character: Name of the linear preditor associated with the scale parameter of the gamma distribuition. The parameter is treated as unknowed and equal to the exponential of the associated linear preditor. It cannot be specified with beta.}
+\item{sigma}{character: Name of the linear predictor associated with the scale parameter of the gamma distribution. The parameter is treated as unknown and equal to the exponential of the associated linear predictor. It cannot be specified with beta.}
 
 \item{outcome}{vector: Values of the observed data.}
 
@@ -33,7 +34,12 @@ Gamma(
 A object of the class dlm_distr
 }
 \description{
-Creates an outcome with gamma distribuition with the chosen parameters (can only specify 2).
+Creates an outcome with gamma distribution with the chosen parameters (can only specify 2).
+}
+\details{
+For evaluating the posterior parameters, we use the method proposed in \insertCite{ArtigokParametrico;textual}{kDGLM}.
+
+For the details about the implementation see  \insertCite{ArtigoPacote;textual}{kDGLM}.
 }
 \examples{
 
@@ -43,9 +49,9 @@ w <- (200 / 40) * 2 * pi
 phi <- 2.5
 data <- matrix(rgamma(T, phi, phi / (20 * (sin(w * 1:T / T) + 2))), T, 1)
 
-level <- polynomial_block(mu = 1, D = 1 / 0.95)
-season <- harmonic_block(mu = 1, period = 40, D = 1 / 0.98)
-scale <- polynomial_block(phi = 1, D = 1 / 1)
+level <- polynomial_block(mu = 1, D = 0.95)
+season <- harmonic_block(mu = 1, period = 40, D = 0.98)
+scale <- polynomial_block(phi = 1, D = 1)
 
 # Known shape
 outcome <- Gamma(phi = phi, mu = "mu", outcome = data)
@@ -55,11 +61,27 @@ summary(fitted_data)
 
 show_fit(fitted_data, smooth = TRUE)$plot
 
-# Unknown shape
-outcome <- Gamma(phi = "phi", mu = "mu", outcome = data)
+# DO NOT RUN
+# # Unknown shape
+# outcome <- Gamma(phi = "phi", mu = "mu", outcome = data)
+#
+# fitted_data <- fit_model(level, season, scale, outcomes = outcome)
+# summary(fitted_data)
+#
+# show_fit(fitted_data, smooth = TRUE)$plot
 
-fitted_data <- fit_model(level, season, scale, outcomes = outcome)
-summary(fitted_data)
-
-show_fit(fitted_data, smooth = TRUE)$plot
 }
+\references{
+\insertAllCited{}
+}
+\seealso{
+\code{\link{fit_model}}
+
+Other {auxiliary functions for a creating outcomes}: 
+\code{\link{Dirichlet}()},
+\code{\link{Laplace}()},
+\code{\link{Multinom}()},
+\code{\link{Normal}()},
+\code{\link{Poisson}()}
+}
+\concept{{auxiliary functions for a creating outcomes}}

@@ -7,7 +7,7 @@
 Fgamma_pred_alt(conj_param, outcome = NULL, parms = list(), pred_cred = 0.95)
 }
 \arguments{
-\item{conj_param}{List or data.frame: The parameters of the distribuition of the linear predictor.}
+\item{conj_param}{List or data.frame: The parameters of the distribution of the linear predictor.}
 
 \item{outcome}{Vector or matrix (optional): The observed values at the current time. Not used in this function.}
 
@@ -18,27 +18,24 @@ Fgamma_pred_alt(conj_param, outcome = NULL, parms = list(), pred_cred = 0.95)
 \value{
 A list containing the following values:
 \itemize{
-   \item pred vector/matrix: the mean of the predictive distribuition of a next observation. Same type and shape as the parameter in model.
-   \item var.pred vector/matrix: the variance of the predictive distribuition of a next observation. Same type and shape as the parameter in model.
-   \item icl.pred vector/matrix: the percentile of 100*((1-pred_cred)/2)% of the predictive distribuition of a next observation. Same type and shape as the parameter in model.
-   \item icu.pred vector/matrix: the percentile of 100*(1-(1-pred_cred)/2)% of the predictive distribuition of a next observation. Same type and shape as the parameter in model.
+   \item pred vector/matrix: the mean of the predictive distribution of a next observation. Same type and shape as the parameter in model.
+   \item var.pred vector/matrix: the variance of the predictive distribution of a next observation. Same type and shape as the parameter in model.
+   \item icl.pred vector/matrix: the percentile of 100*((1-pred_cred)/2)% of the predictive distribution of a next observation. Same type and shape as the parameter in model.
+   \item icu.pred vector/matrix: the percentile of 100*(1-(1-pred_cred)/2)% of the predictive distribution of a next observation. Same type and shape as the parameter in model.
 }
 }
 \description{
-Calculate the values for the predictive distribuition given the values of the parameter of the distribuition of the linear predictor.
-The data is assumed to have Gamma distribuition with unknown shape phi and unknown mean having log-Normal distribuition.
-In this scenario, the marginal distribuition of the data is obtained via Monte Carlo.
+Calculate the values for the predictive distribution given the values of the parameter of the distribution of the linear predictor.
+The data is assumed to have Gamma distribution with unknown shape and mean parameters having log-Normal distribution.
+In this scenario, the marginal distribution of the data is obtained via Monte Carlo.
 }
-\examples{
-
-params <- data.frame(
-  "f1" = c(1:3),
-  "f2" = c(3:1),
-  "Q11" = rep(1, 3),
-  "Q12" = rep(0, 3),
-  "Q21" = rep(0, 3),
-  "Q22" = rep(1, 3),
-)
-
-Fgamma_pred_alt(params)
+\seealso{
+Other {auxiliary functions for a Gamma outcome with unknowned shape}: 
+\code{\link{Fgamma_pred}()},
+\code{\link{convert_FGamma_Normal}()},
+\code{\link{convert_Normal_FGamma}()},
+\code{\link{update_FGamma_alt}()},
+\code{\link{update_FGamma}()}
 }
+\concept{{auxiliary functions for a Gamma outcome with unknowned shape}}
+\keyword{internal}

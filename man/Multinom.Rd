@@ -2,12 +2,12 @@
 % Please edit documentation in R/kernel_multnom.R
 \name{Multinom}
 \alias{Multinom}
-\title{Multinom}
+\title{Multinom outcome for kDGLM models}
 \usage{
-Multinom(p, outcome, offset = outcome^0)
+Multinom(p, outcome, offset = outcome^0, alt_method = FALSE)
 }
 \arguments{
-\item{p}{character: a vector with the name of the linear preditor associated with the probality of each category (except the base one, which is assumed to be the last).}
+\item{p}{character: a vector with the name of the linear predictor associated with the probality of each category (except the base one, which is assumed to be the last).}
 
 \item{outcome}{vector: Values of the observed data.}
 
@@ -17,7 +17,12 @@ Multinom(p, outcome, offset = outcome^0)
 A object of the class dlm_distr
 }
 \description{
-Creates an outcome with Multinomial distribuition with the chosen parameters.
+Creates an outcome with Multinomial distribution with the chosen parameters.
+}
+\details{
+For evaluating the posterior parameters, we use the method proposed in \insertCite{ArtigokParametrico;textual}{kDGLM}.
+
+For the details about the implementation see  \insertCite{ArtigoPacote;textual}{kDGLM}.
 }
 \examples{
 
@@ -29,8 +34,8 @@ y3 <- rpois(T, exp(5))
 
 y <- cbind(y1, y2, y3)
 
-level1 <- polynomial_block(p1 = 1)
-level2 <- polynomial_block(p2 = 1)
+level1 <- polynomial_block(p1 = 1, order = 2)
+level2 <- polynomial_block(p2 = 1, order = 2)
 season <- harmonic_block(p2 = 1, period = 12)
 outcome <- Multinom(p = c("p1", "p2"), outcome = y)
 
@@ -38,4 +43,19 @@ fitted_data <- fit_model(level1, level2, season, outcomes = outcome)
 summary(fitted_data)
 
 show_fit(fitted_data, smooth = TRUE)$plot
+
 }
+\references{
+\insertAllCited{}
+}
+\seealso{
+\code{\link{fit_model}}
+
+Other {auxiliary functions for a creating outcomes}: 
+\code{\link{Dirichlet}()},
+\code{\link{Gamma}()},
+\code{\link{Laplace}()},
+\code{\link{Normal}()},
+\code{\link{Poisson}()}
+}
+\concept{{auxiliary functions for a creating outcomes}}

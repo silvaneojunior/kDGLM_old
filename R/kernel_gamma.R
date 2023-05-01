@@ -1,19 +1,29 @@
 #### Default Method ####
 
-#' Gamma
+#' Gamma outcome for kDGLM models
 #'
-#' Creates an outcome with gamma distribuition with the chosen parameters (can only specify 2).
+#' Creates an outcome with gamma distribution with the chosen parameters (can only specify 2).
 #'
-#' @param phi character or numeric: Name of the linear preditor associated with the shape parameter of the gamma distribuition. If numeric, this parameter is treated as knowed and equal to the value passed. If a character, the parameter is treated as unknowed and equal to the exponential of the associated linear preditor. It cannot be specified with alpha.
-#' @param mu character: Name of the linear preditor associated with the mean parameter of the gamma distribuition. The parameter is treated as unknowed and equal to the exponential of the associated linear preditor.
-#' @param alpha character: Name of the linear preditor associated with the shape parameter of the gamma distribuition. The parameter is treated as unknowed and equal to the exponential of the associated linear preditor. It cannot be specified with phi.
-#' @param beta character: Name of the linear preditor associated with the rate parameter of the gamma distribuition. The parameter is treated as unknowed and equal to the exponential of the associated linear preditor. It cannot be specified with sigma.
-#' @param sigma character: Name of the linear preditor associated with the scale parameter of the gamma distribuition. The parameter is treated as unknowed and equal to the exponential of the associated linear preditor. It cannot be specified with beta.
+#' @param phi character or numeric: Name of the linear predictor associated with the shape parameter of the gamma distribution. If numeric, this parameter is treated as knowed and equal to the value passed. If a character, the parameter is treated as unknown and equal to the exponential of the associated linear predictor. It cannot be specified with alpha.
+#' @param mu character: Name of the linear predictor associated with the mean parameter of the gamma distribution. The parameter is treated as unknown and equal to the exponential of the associated linear predictor.
+#' @param alpha character: Name of the linear predictor associated with the shape parameter of the gamma distribution. The parameter is treated as unknown and equal to the exponential of the associated linear predictor. It cannot be specified with phi.
+#' @param beta character: Name of the linear predictor associated with the rate parameter of the gamma distribution. The parameter is treated as unknown and equal to the exponential of the associated linear predictor. It cannot be specified with sigma.
+#' @param sigma character: Name of the linear predictor associated with the scale parameter of the gamma distribution. The parameter is treated as unknown and equal to the exponential of the associated linear predictor. It cannot be specified with beta.
 #' @param outcome vector: Values of the observed data.
 #' @param offset vector: The offset at each observation. Must have the same shape as outcome.
 #'
 #' @return A object of the class dlm_distr
+#' @importFrom stats dgamma
 #' @export
+#'
+#' @details
+#'
+#' For evaluating the posterior parameters, we use the method proposed in \insertCite{ArtigokParametrico;textual}{kDGLM}.
+#'
+#' For the details about the implementation see  \insertCite{ArtigoPacote;textual}{kDGLM}.
+#'
+#' @seealso \code{\link{fit_model}}
+#' @family {auxiliary functions for a creating outcomes}
 #'
 #' @examples
 #'
@@ -23,9 +33,9 @@
 #' phi <- 2.5
 #' data <- matrix(rgamma(T, phi, phi / (20 * (sin(w * 1:T / T) + 2))), T, 1)
 #'
-#' level <- polynomial_block(mu = 1, D = 1 / 0.95)
-#' season <- harmonic_block(mu = 1, period = 40, D = 1 / 0.98)
-#' scale <- polynomial_block(phi = 1, D = 1 / 1)
+#' level <- polynomial_block(mu = 1, D = 0.95)
+#' season <- harmonic_block(mu = 1, period = 40, D = 0.98)
+#' scale <- polynomial_block(phi = 1, D = 1)
 #'
 #' # Known shape
 #' outcome <- Gamma(phi = phi, mu = "mu", outcome = data)
@@ -35,29 +45,18 @@
 #'
 #' show_fit(fitted_data, smooth = TRUE)$plot
 #'
-#' # Unknown shape
-#' outcome <- Gamma(phi = "phi", mu = "mu", outcome = data)
+#' # DO NOT RUN
+#' # # Unknown shape
+#' # outcome <- Gamma(phi = "phi", mu = "mu", outcome = data)
+#' #
+#' # fitted_data <- fit_model(level, season, scale, outcomes = outcome)
+#' # summary(fitted_data)
+#' #
+#' # show_fit(fitted_data, smooth = TRUE)$plot
 #'
-#' fitted_data <- fit_model(level, season, scale, outcomes = outcome)
-#' summary(fitted_data)
-#'
-#' show_fit(fitted_data, smooth = TRUE)$plot
-Gamma <- function(phi = NA, mu = NA, alpha = NA, beta = NA, sigma = NA, outcome, offset = outcome**0) {
-  distr <- list(
-    "conj_prior" = convert_FGamma_Normal,
-    "conj_post" = convert_Normal_FGamma,
-    "update" = update_FGamma,
-    "smoother" = generic_smoother,
-    "calc_pred" = Fgamma_pred,
-    "apply_offset" = function(ft, Qt, offset) {
-      list("ft" = ft + matrix(c(0, log(offset)), 2, dim(ft)[2]), "Qt" = Qt)
-    },
-    "link_function" = log,
-    "inv_link_function" = exp,
-    "param_names" = function(y) {
-      c("n", "k", "tau", "theta")
-    }
-  )
+#' @references
+#'    \insertAllCited{}
+Gamma <- function(phi = NA, mu = NA, alpha = NA, beta = NA, sigma = NA, outcome, offset = outcome**0, alt_method = FALSE) {
   t <- length(outcome)
   r <- 1
 
@@ -73,6 +72,9 @@ Gamma <- function(phi = NA, mu = NA, alpha = NA, beta = NA, sigma = NA, outcome,
       "conj_prior" = convert_Gamma_Normal,
       "conj_post" = convert_Normal_Gamma,
       "update" = update_Gamma,
+      "log.like.cond" = function(param, outcome) {
+        dgamma(outcome, phi, phi / param, log = TRUE)
+      },
       "smoother" = generic_smoother,
       "calc_pred" = gamma_pred,
       "apply_offset" = function(ft, Qt, offset) {
@@ -87,6 +89,9 @@ Gamma <- function(phi = NA, mu = NA, alpha = NA, beta = NA, sigma = NA, outcome,
         c("alpha", "beta")
       }
     )
+    if (alt_method) {
+      distr$update <- update_Gamma_alt
+    }
 
     parms <- list(phi = phi)
   } else {
@@ -99,13 +104,42 @@ Gamma <- function(phi = NA, mu = NA, alpha = NA, beta = NA, sigma = NA, outcome,
       stop("Error: Parameters over specified. You must specified exactly 2 non reduntant parameters.")
     }
     if (flags[4] & flags[5]) {
-      top("Error: Scale specified in more than one value.")
+      stop("Error: Scale specified in more than one value.")
     }
     convert_mat_default <- matrix(c(1, 0, 0, 1, 1, 0, 1, -1, -2, 2), 2, 5)[, flags]
     convert_mat_canom <- solve(convert_mat_default)
     convert_canom_flag <- !all(flags[c(1, 2)])
     parms <- list()
     var_names <- c(phi, mu, alpha, beta, sigma)[flags]
+
+    distr <- list(
+      "conj_prior" = convert_FGamma_Normal,
+      "conj_post" = convert_Normal_FGamma,
+      "update" = update_FGamma,
+      "log.like.cond" = function(param, outcome) {
+        dgamma(outcome, param[1], param[1] / param[2], log = TRUE)
+      },
+      "smoother" = generic_smoother,
+      "calc_pred" = Fgamma_pred,
+      "apply_offset" = function(ft, Qt, offset) {
+        list("ft" = ft + matrix(c(0, log(offset)), 2, dim(ft)[2]), "Qt" = Qt)
+      },
+      "link_function" = log,
+      "inv_link_function" = exp,
+      "param_names" = function(y) {
+        c("n", "k", "tau", "theta")
+      }
+    )
+
+    if (alt_method) {
+      distr$conj_prior <- format_ft
+      distr$conj_post <- format_param
+      distr$update <- update_FGamma_alt
+      distr$calc_pred <- Fgamma_pred_alt
+      distr$param_names <- function(y) {
+        c("f1", "f2", "Q11", "Q12", "21", "Q22")
+      }
+    }
   }
 
   distr$var_names <- var_names
@@ -115,13 +149,14 @@ Gamma <- function(phi = NA, mu = NA, alpha = NA, beta = NA, sigma = NA, outcome,
   distr$t <- t
   distr$offset <- matrix(offset, t, r)
   distr$outcome <- matrix(outcome, t, r)
+  distr$convert_canom_flag <- convert_canom_flag
   distr$convert_mat_canom <- convert_mat_canom
   distr$convert_mat_default <- convert_mat_default
   distr$parms <- parms
   distr$name <- "Gamma"
 
   class(distr) <- "dlm_distr"
-  distr$alt_method <- FALSE
+  distr$alt_method <- alt_method
   return(distr)
 }
 
@@ -129,14 +164,15 @@ Gamma <- function(phi = NA, mu = NA, alpha = NA, beta = NA, sigma = NA, outcome,
 
 #' system_full_gamma
 #'
-#' Evaluate the compatibilizing equation for the full gamma model (see Ref. Raíra).
+#' Evaluate the compatibilizing equation for the full gamma model \insertCite{@see ArtigokParametrico;textual}{kDGLM}.
 #'
 #' @param x vector: current tau values.
 #' @param parms list: auxiliary values for the system.
 #'
 #' @importFrom cubature cubintegrate
 #'
-#' @return a vector with the values of the system (see Ref. Raíra).
+#' @return A vector with the values of the system \insertCite{@see ArtigokParametrico;textual}{kDGLM}.
+#' @keywords internal
 system_full_gamma <- function(x, parms) {
   n <- exp(x) # exp(x[1])
   k <- n # exp(x[2])
@@ -202,23 +238,22 @@ system_full_gamma <- function(x, parms) {
 
 #' convert_FGamma_Normal
 #'
-#' DESCRIPTION
+#' Calculate the parameters of the conjugated prior that best approximates the given log-Normal distribution.
+#' The approximation is the best in the sense that it minimizes the KL divergence from the log-Normal to the conjugated prior.
+#'
 #'
 #' @param ft vector: A vector representing the means from the normal distribution.
 #' @param Qt matrix: A matrix representing the covariance matrix of the normal distribution.
-#' @param parms list: A list of extra known parameters of the distribuition. Not used in this function.
+#' @param parms list: A list of extra known parameters of the distribution. Not used in this function.
 #'
-#' @return The parameters of the conjugated distribuition of the linear predictor.
-#' @export
+#' @importFrom rootSolve multiroot
+#' @importFrom stats dlnorm
+#'
+#' @return The parameters of the conjugated distribution of the linear predictor.
+#' @keywords internal
+#' @family {auxiliary functions for a Gamma outcome with unknowned shape}
 convert_FGamma_Normal <- function(ft, Qt, parms) {
-  # print(ft)
-  # print(Qt)
-
-
-  # ft=matrix(c(-1.457271, 3.533958),2,1)
-  # Qt=matrix(c(0.17878138,0.03349385,0.03349385,0.15984907),2,2)
-
-  s <- exp(ft[2, ] + -1)
+  s <- exp(ft[2, ] + 1)
   f1 <- ft[1, ]
   f2 <- ft[2, ] - log(s)
   q1 <- Qt[1, 1]
@@ -241,15 +276,9 @@ convert_FGamma_Normal <- function(ft, Qt, parms) {
   )
 
   ss1 <- multiroot(f = system_full_gamma, start = c(0), parms = parms, maxiter = 2000, atol = 10**-20)
+
   x <- as.numeric(ss1$root)
   n <- exp(x) # exp(x[1])
-  # print(q1)
-  # if(q1<1.5){
-  #   h=-1+sqrt(1+2*q1)
-  #   n=2*(1/h)-1
-  # }else{
-  #   n=1
-  # }
 
   k <- n # exp(x[2])
 
@@ -264,16 +293,17 @@ convert_FGamma_Normal <- function(ft, Qt, parms) {
 
 #' convert_Normal_FGamma
 #'
-#' Calculate the parameters of the log-Normal that best approximates the given Inverse-Gamma distribuition.
-#' The approximation is the best in the sense that it minimizes the KL divergence from the Inverse-Gamma to the log-Normal
+#' Calculate the parameters of the log-Normal that best approximates the given conjugated distribution.
+#' The approximation is the best in the sense that it minimizes the KL divergence from the conjugated distribution to the log-Normal
 #'
-#' @param conj_prior list: A vector containing the parameters of the Inverse-Gamma (alpha,beta).
-#' @param parms list: A list of extra known parameters of the distribuition. Not used in this function.
+#' @param conj_prior list: A vector containing the parameters of the conjugated distribution (n, tau, theta).
+#' @param parms list: A list of extra known parameters of the distribution. Not used in this function.
 #'
 #' @importFrom cubature cubintegrate
 #'
-#' @return The parameters of the Normal distribuition of the linear predictor.
-#' @export
+#' @return The parameters of the Normal distribution of the linear predictor.
+#' @keywords internal
+#' @family {auxiliary functions for a Gamma outcome with unknowned shape}
 convert_Normal_FGamma <- function(conj_prior, parms) {
   n <- conj_prior$n
   tau <- conj_prior$tau
@@ -344,16 +374,17 @@ convert_Normal_FGamma <- function(conj_prior, parms) {
 
 #' update_FGamma
 #'
-#' Calculate posterior parameter for the Inverser-Gamma, assuming that the observed values came from a Gamma model from which the shape parameter (phi) is known and the mean (mu) have prior distribuition Inverse-Gamma.
+#' Calculate posterior parameter for the conjugated distribution, assuming that the observed values came from a Gamma model with the shape (phi) and mean (mu) parameters having a conjugated prior.
 #'
-#' @param conj_prior list: A vector containing the parameters of the Inverse-Gamma (alpha,beta).
+#' @param conj_prior list: A vector containing the parameters of the conjugated distribution (n, tau, theta).
 #' @param ft vector: A vector representing the means from the normal distribution. Not used in the default method.
 #' @param Qt matrix: A matrix representing the covariance matrix of the normal distribution. Not used in the default method.
 #' @param y vector: A vector containing the observations.
-#' @param parms list: A list of extra known parameters of the distribuition. For this kernel, parms should containg the shape parameter (phi) for the observational gamma model.
+#' @param parms list: A list of extra known parameters of the distribution. For this kernel, parms should containing the shape parameter (phi) for the observational gamma model.
 #'
 #' @return The parameters of the posterior distribution.
-#' @export
+#' @keywords internal
+#' @family {auxiliary functions for a Gamma outcome with unknowned shape}
 update_FGamma <- function(conj_prior, ft, Qt, y, parms) {
   n0 <- conj_prior$n
   k0 <- conj_prior$k
@@ -376,38 +407,27 @@ update_FGamma <- function(conj_prior, ft, Qt, y, parms) {
 
 #' Fgamma_pred
 #'
-#' Calculate the values for the predictive distribuition given the values of the parameter of the distribuition of the linear predictor.
-#' The data is assumed to have Gamma distribuition with unknown shape phi and unknown mean having log-Normal distribuition.
-#' In this scenario, the marginal distribuition of the data is obtained via Monte Carlo.
+#' Calculate the values for the predictive distribution given the values of the parameter of the distribution of the linear predictor.
+#' The data is assumed to have Gamma distribution with unknown shape phi and unknown mean having log-Normal distribution.
+#' In this scenario, the marginal distribution of the data is obtained via Monte Carlo.
 #'
-#' @param conj_param List or data.frame: The parameters of the distribuition of the linear predictor.
+#' @param conj_param List or data.frame: The parameters of the distribution of the linear predictor.
 #' @param outcome Vector or matrix (optional): The observed values at the current time. Not used in this function.
 #' @param parms List: A list of extra parameters for the model. For this function, it must contain the shape parameter phi of the observational model.
 #' @param pred_cred Numeric: the desired credibility for the credibility interval.
 #'
 #' @return A list containing the following values:
 #' \itemize{
-#'    \item pred vector/matrix: the mean of the predictive distribuition of a next observation. Same type and shape as the parameter in model.
-#'    \item var.pred vector/matrix: the variance of the predictive distribuition of a next observation. Same type and shape as the parameter in model.
-#'    \item icl.pred vector/matrix: the percentile of 100*((1-pred_cred)/2)% of the predictive distribuition of a next observation. Same type and shape as the parameter in model.
-#'    \item icu.pred vector/matrix: the percentile of 100*(1-(1-pred_cred)/2)% of the predictive distribuition of a next observation. Same type and shape as the parameter in model.
+#'    \item pred vector/matrix: the mean of the predictive distribution of a next observation. Same type and shape as the parameter in model.
+#'    \item var.pred vector/matrix: the variance of the predictive distribution of a next observation. Same type and shape as the parameter in model.
+#'    \item icl.pred vector/matrix: the percentile of 100*((1-pred_cred)/2)% of the predictive distribution of a next observation. Same type and shape as the parameter in model.
+#'    \item icu.pred vector/matrix: the percentile of 100*(1-(1-pred_cred)/2)% of the predictive distribution of a next observation. Same type and shape as the parameter in model.
 #'    \item log.like vector: the The log likelihood for the outcome given the conjugated parameters.
 #' }
 #'
-#' @export
-#'
-#' @examples
-#'
-#' params <- data.frame(
-#'   "f1" = c(1:3),
-#'   "f2" = c(3:1),
-#'   "Q11" = rep(1, 3),
-#'   "Q12" = rep(0, 3),
-#'   "Q21" = rep(0, 3),
-#'   "Q22" = rep(1, 3),
-#' )
-#'
-#' Fgamma_pred(params)
+#' @importFrom stats rgamma dgamma var quantile
+#' @keywords internal
+#' @family {auxiliary functions for a Gamma outcome with unknowned shape}
 Fgamma_pred <- function(conj_param, outcome = NULL, parms = list(), pred_cred = 0.95) {
   pred.flag <- !is.na(pred_cred)
   like.flag <- !is.null(outcome)
@@ -430,7 +450,7 @@ Fgamma_pred <- function(conj_param, outcome = NULL, parms = list(), pred_cred = 
     icu.pred <- NULL
   }
   if (like.flag) {
-    outcome <- matrix(outcome, r, t)
+    outcome <- matrix(outcome, t, r)
     log.like <- rep(NA, t)
   } else {
     log.like <- NULL
@@ -479,15 +499,16 @@ Fgamma_pred <- function(conj_param, outcome = NULL, parms = list(), pred_cred = 
 
 #' convert_Gamma_Normal
 #'
-#' Calculate the parameters of the Inverse-Gamma that best approximates the given log-Normal distribuition.
+#' Calculate the parameters of the Inverse-Gamma that best approximates the given log-Normal distribution.
 #' The approximation is the best in the sense that it minimizes the KL divergence from the log-Normal to the Inverse-Gamma
 #'
 #' @param ft vector: A vector representing the means from the normal distribution.
 #' @param Qt matrix: A matrix representing the covariance matrix of the normal distribution.
-#' @param parms list: A list of extra known parameters of the distribuition. Not used in this function.
+#' @param parms list: A list of extra known parameters of the distribution. Not used in this function.
 #'
-#' @return The parameters of the conjugated distribuition of the linear predictor.
-#' @export
+#' @return The parameters of the conjugated distribution of the linear predictor.
+#' @keywords internal
+#' @family {auxiliary functions for a Gamma outcome with known shape}
 convert_Gamma_Normal <- function(ft, Qt, parms) {
   alpha <- 1 / (-3 + 3 * sqrt(1 + 2 * Qt / 3))
   beta <- alpha * exp(ft - Qt / 2)
@@ -496,14 +517,15 @@ convert_Gamma_Normal <- function(ft, Qt, parms) {
 
 #' convert_Normal_Gamma
 #'
-#' Calculate the parameters of the log-Normal that best approximates the given Inverse-Gamma distribuition.
+#' Calculate the parameters of the log-Normal that best approximates the given Inverse-Gamma distribution.
 #' The approximation is the best in the sense that it minimizes the KL divergence from the Inverse-Gamma to the log-Normal
 #'
 #' @param conj_prior list: A vector containing the parameters of the Inverse-Gamma (alpha,beta).
-#' @param parms list: A list of extra known parameters of the distribuition. Not used in this function.
+#' @param parms list: A list of extra known parameters of the distribution. Not used in this function.
 #'
-#' @return The parameters of the Normal distribuition of the linear predictor.
-#' @export
+#' @return The parameters of the Normal distribution of the linear predictor.
+#' @keywords internal
+#' @family {auxiliary functions for a Gamma outcome with known shape}
 convert_Normal_Gamma <- function(conj_prior, parms) {
   ft <- -digamma(conj_prior$alpha) + log(conj_prior$beta)
   Qt <- trigamma(conj_prior$alpha)
@@ -512,7 +534,7 @@ convert_Normal_Gamma <- function(conj_prior, parms) {
 
 #' update_Gamma
 #'
-#' Calculate posterior parameter for the Inverse-Gamma, assuming that the observed values came from a Gamma model from which the shape parameter (phi) is known and the mean (mu) have prior distribuition Inverse-Gamma.
+#' Calculate posterior parameter for the Inverse-Gamma, assuming that the observed values came from a Gamma model from which the shape parameter (phi) is known and the mean (mu) have prior distribution Inverse-Gamma.
 #'
 #' @param conj_prior list: A vector containing the parameters of the Inverse-Gamma (alpha,beta).
 #' @param ft vector: A vector representing the means from the normal distribution. Not used in the default method.
@@ -521,7 +543,8 @@ convert_Normal_Gamma <- function(conj_prior, parms) {
 #' @param parms list: A list of extra known parameters of the distribution. For this kernel, parms should containg the shape parameter (phi) for the observational gamma model.
 #'
 #' @return The parameters of the posterior distribution.
-#' @export
+#' @keywords internal
+#' @family {auxiliary functions for a Gamma outcome with known shape}
 update_Gamma <- function(conj_prior, ft, Qt, y, parms) {
   alpha <- conj_prior$alpha + parms$phi
   beta <- conj_prior$beta + y * parms$phi
@@ -530,35 +553,29 @@ update_Gamma <- function(conj_prior, ft, Qt, y, parms) {
 
 #' gamma_pred
 #'
-#' Calculate the values for the predictive distribuition given the values of the parameter of the conjugated distribuition of the linear predictor.
-#' The data is assumed to have Gamma distribuition with known shape parameter phi and it's mean having distribuition Inverse-Gamma with shape parameter a e rate parameter b.
-#' In this scenario, the marginal distribuition of the data is Beta prime with parameters phi, alpha, beta / phi.
+#' Calculate the values for the predictive distribution given the values of the parameter of the conjugated distribution of the linear predictor.
+#' The data is assumed to have Gamma distribution with known shape parameter phi and it's mean having distribution Inverse-Gamma with shape parameter a e rate parameter b.
+#' In this scenario, the marginal distribution of the data is Beta prime with parameters phi, alpha, beta / phi.
 #'
-#' @param conj_param List or data.frame: The parameters of the conjugated distribuitions of the linear predictor.
+#' @param conj_param List or data.frame: The parameters of the conjugated distributions of the linear predictor.
 #' @param outcome Vector or matrix (optional): The observed values at the current time. Not used in this function.
 #' @param parms List: A list of extra parameters for the model. For this function, it must contain the shape parameter phi of the observational model.
 #' @param pred_cred Numeric: the desired credibility for the credibility interval.
 #'
 #' @return A list containing the following values:
 #' \itemize{
-#'    \item pred vector/matrix: the mean of the predictive distribuition of a next observation. Same type and shape as the parameter in model.
-#'    \item var.pred vector/matrix: the variance of the predictive distribuition of a next observation. Same type and shape as the parameter in model.
-#'    \item icl.pred vector/matrix: the percentile of 100*((1-pred_cred)/2)% of the predictive distribuition of a next observation. Same type and shape as the parameter in model.
-#'    \item icu.pred vector/matrix: the percentile of 100*(1-(1-pred_cred)/2)% of the predictive distribuition of a next observation. Same type and shape as the parameter in model.
+#'    \item pred vector/matrix: the mean of the predictive distribution of a next observation. Same type and shape as the parameter in model.
+#'    \item var.pred vector/matrix: the variance of the predictive distribution of a next observation. Same type and shape as the parameter in model.
+#'    \item icl.pred vector/matrix: the percentile of 100*((1-pred_cred)/2)% of the predictive distribution of a next observation. Same type and shape as the parameter in model.
+#'    \item icu.pred vector/matrix: the percentile of 100*(1-(1-pred_cred)/2)% of the predictive distribution of a next observation. Same type and shape as the parameter in model.
 #'    \item log.like vector: the The log likelihood for the outcome given the conjugated parameters.
 #' }
 #'
 #' @importFrom extraDistr qbetapr dbetapr
+#' @importFrom stats dgamma
 #' @export
-#'
-#' @examples
-#'
-#' conj_param <- data.frame(
-#'   "alpha" = c(1:3),
-#'   "beta" = c(3:1)
-#' )
-#'
-#' gamma_pred(conj_param, parms = list("phi" = 1))
+#' @keywords internal
+#' @family {auxiliary functions for a Gamma outcome with known shape}
 gamma_pred <- function(conj_param, outcome = NULL, parms = list(), pred_cred = 0.95) {
   pred.flag <- !is.na(pred_cred)
   like.flag <- !is.null(outcome)
@@ -597,80 +614,34 @@ gamma_pred <- function(conj_param, outcome = NULL, parms = list(), pred_cred = 0
 
 #### Alternative Method ####
 
-#' Gamma_alt
-#'
-#' Creates an outcome with gamma distribuition with the chosen parameters (can only specify 2).
-#'
-#' @param phi character or numeric: Name of the linear preditor associated with the shape parameter of the gamma distribuition. If numeric, this parameter is treated as knowed and equal to the value passed. If a character, the parameter is treated as unknowed and equal to the exponential of the associated linear preditor. It cannot be specified with alpha.
-#' @param mu character: Name of the linear preditor associated with the mean parameter of the gamma distribuition. The parameter is treated as unknowed and equal to the exponential of the associated linear preditor.
-#' @param alpha character: Name of the linear preditor associated with the shape parameter of the gamma distribuition. The parameter is treated as unknowed and equal to the exponential of the associated linear preditor. It cannot be specified with phi.
-#' @param beta character: Name of the linear preditor associated with the rate parameter of the gamma distribuition. The parameter is treated as unknowed and equal to the exponential of the associated linear preditor. It cannot be specified with sigma.
-#' @param sigma character: Name of the linear preditor associated with the scale parameter of the gamma distribuition. The parameter is treated as unknowed and equal to the exponential of the associated linear preditor. It cannot be specified with beta.
-#' @param outcome vector: Values of the observed data.
-#' @param offset vector: The offset at each observation. Must have the same shape as outcome.
-#'
-#' @return A object of the class dlm_distr
-#' @export
-#'
-#' @examples
-#'
-#' # Gamma case
-#' T <- 200
-#' w <- (200 / 40) * 2 * pi
-#' phi <- 2.5
-#' data <- matrix(rgamma(T, phi, phi / (20 * (sin(w * 1:T / T) + 2))), T, 1)
-#'
-#' level <- polynomial_block(mu = 1, D = 1 / 0.95)
-#' season <- harmonic_block(mu = 1, period = 40, D = 1 / 0.98)
-#' scale <- polynomial_block(phi = 1, D = 1 / 1)
-#'
-#' # Known shape
-#' outcome <- Gamma_alt(phi = phi, mu = "mu", outcome = data)
-#'
-#' fitted_data <- fit_model(level, season, outcomes = outcome)
-#' summary(fitted_data)
-#'
-#' show_fit(fitted_data, smooth = TRUE)$plot
-#'
-#' # Unknown shape
-#' outcome <- Gamma_alt(phi = "phi", mu = "mu", outcome = data)
-#'
-#' fitted_data <- fit_model(level, season, scale, outcomes = outcome)
-#' summary(fitted_data)
-#'
-#' show_fit(fitted_data, smooth = TRUE)$plot
-Gamma_alt <- function(phi = NA, mu = NA, alpha = NA, beta = NA, sigma = NA, outcome, offset = outcome**0) {
-  distr <- Gamma(phi, mu, alpha, beta, sigma, outcome, offset)
-
-  if (is.numeric(phi)) {
-    distr$update <- update_Gamma_alt
-  } else {
-    distr$conj_prior <- format_ft
-    distr$conj_post <- format_param
-    distr$update <- update_FGamma_alt
-    distr$calc_pred <- Fgamma_pred_alt
-    distr$param_names <- function(y) {
-      c("f1", "f2", "Q11", "Q12", "21", "Q22")
-    }
-  }
-  distr$alt_method <- TRUE
-  return(distr)
-}
-
 ##### Gamma with unknown shape and mean #####
 
 #' update_FGamma_alt
 #'
-#' Calculate posterior parameter for the Inverser-Gamma, assuming that the observed values came from a Gamma model from which the shape parameter (phi) is known and the mean (mu) have prior distribuition Inverse-Gamma.
+#' Calculate the (approximated) posterior parameter for the linear predictors, assuming that the observed values came from a Gamma model from which the shape and mean parameters have prior distribution in the log-Normal family.
 #'
 #' @param conj_prior list: A vector containing the parameters of the Inverse-Gamma (alpha,beta). Not used in the alternative method.
 #' @param ft vector: A vector representing the means from the normal distribution.
 #' @param Qt matrix: A matrix representing the covariance matrix of the normal distribution.
 #' @param y vector: A vector containing the observations.
-#' @param parms list: A list of extra known parameters of the distribuition. For this kernel, parms should containg the shape parameter (phi) for the observational gamma model.
+#' @param parms list: A list of extra known parameters of the distribution. For this kernel, parms should containg the shape parameter (phi) for the observational gamma model.
 #'
 #' @return The parameters of the posterior distribution.
-#' @export
+#' @keywords internal
+#' @family {auxiliary functions for a Gamma outcome with unknowned shape}
+#'
+#' @details
+#'
+#' For evaluating the posterior parameters, we use a modified version of the method proposed in \insertCite{ArtigokParametrico;textual}{kDGLM}.
+#'
+#' For computational efficiency, we also use a Laplace approximations to obtain the first and second moments of the posterior \insertCite{@see @TierneyKadane1 and @TierneyKadane2 }{kDGLM}.
+#'
+#' For the details about the implementation see  \insertCite{ArtigoPacote;textual}{kDGLM}.
+#'
+#' For the detail about the modification of the method proposed in \insertCite{ArtigokParametrico;textual}{kDGLM}, see \insertCite{ArtigoAltMethod;textual}{kDGLM}.
+#'
+#' @references
+#'    \insertAllCited{}
 update_FGamma_alt <- function(conj_prior, ft, Qt, y, parms) {
   # y=1
   # ft=matrix(0,2,1)
@@ -731,37 +702,27 @@ update_FGamma_alt <- function(conj_prior, ft, Qt, y, parms) {
 
 #' Fgamma_pred_alt
 #'
-#' Calculate the values for the predictive distribuition given the values of the parameter of the distribuition of the linear predictor.
-#' The data is assumed to have Gamma distribuition with unknown shape phi and unknown mean having log-Normal distribuition.
-#' In this scenario, the marginal distribuition of the data is obtained via Monte Carlo.
+#' Calculate the values for the predictive distribution given the values of the parameter of the distribution of the linear predictor.
+#' The data is assumed to have Gamma distribution with unknown shape and mean parameters having log-Normal distribution.
+#' In this scenario, the marginal distribution of the data is obtained via Monte Carlo.
 #'
-#' @param conj_param List or data.frame: The parameters of the distribuition of the linear predictor.
+#' @param conj_param List or data.frame: The parameters of the distribution of the linear predictor.
 #' @param outcome Vector or matrix (optional): The observed values at the current time. Not used in this function.
 #' @param parms List: A list of extra parameters for the model. For this function, it must contain the shape parameter phi of the observational model.
 #' @param pred_cred Numeric: the desired credibility for the credibility interval.
 #'
 #' @return A list containing the following values:
 #' \itemize{
-#'    \item pred vector/matrix: the mean of the predictive distribuition of a next observation. Same type and shape as the parameter in model.
-#'    \item var.pred vector/matrix: the variance of the predictive distribuition of a next observation. Same type and shape as the parameter in model.
-#'    \item icl.pred vector/matrix: the percentile of 100*((1-pred_cred)/2)% of the predictive distribuition of a next observation. Same type and shape as the parameter in model.
-#'    \item icu.pred vector/matrix: the percentile of 100*(1-(1-pred_cred)/2)% of the predictive distribuition of a next observation. Same type and shape as the parameter in model.
+#'    \item pred vector/matrix: the mean of the predictive distribution of a next observation. Same type and shape as the parameter in model.
+#'    \item var.pred vector/matrix: the variance of the predictive distribution of a next observation. Same type and shape as the parameter in model.
+#'    \item icl.pred vector/matrix: the percentile of 100*((1-pred_cred)/2)% of the predictive distribution of a next observation. Same type and shape as the parameter in model.
+#'    \item icu.pred vector/matrix: the percentile of 100*(1-(1-pred_cred)/2)% of the predictive distribution of a next observation. Same type and shape as the parameter in model.
 #' }
 #'
-#' @export
 #'
-#' @examples
-#'
-#' params <- data.frame(
-#'   "f1" = c(1:3),
-#'   "f2" = c(3:1),
-#'   "Q11" = rep(1, 3),
-#'   "Q12" = rep(0, 3),
-#'   "Q21" = rep(0, 3),
-#'   "Q22" = rep(1, 3),
-#' )
-#'
-#' Fgamma_pred_alt(params)
+#' @importFrom stats rnorm rgamma dgamma var quantile
+#' @keywords internal
+#' @family {auxiliary functions for a Gamma outcome with unknowned shape}
 Fgamma_pred_alt <- function(conj_param, outcome = NULL, parms = list(), pred_cred = 0.95) {
   pred.flag <- !is.na(pred_cred)
   like.flag <- !is.null(outcome)
@@ -795,7 +756,7 @@ Fgamma_pred_alt <- function(conj_param, outcome = NULL, parms = list(), pred_cre
   N <- 5000
   sample <- matrix(rnorm(k * N), N, k)
   for (i in 1:t) {
-    ft_i <- sample %*% chol_fast(Qt[, , i]) + matrix(ft[, i], N, k, byrow = TRUE)
+    ft_i <- sample %*% var_decomp(Qt[, , i]) + matrix(ft[, i], N, k, byrow = TRUE)
     sample_y <- rgamma(N, exp(ft_i[, 1]), exp(ft_i[, 1] - ft_i[, 2]))
     if (pred.flag) {
       pred[, i] <- mean(sample_y)
@@ -825,7 +786,7 @@ Fgamma_pred_alt <- function(conj_param, outcome = NULL, parms = list(), pred_cre
 
 #' update_Gamma_alt
 #'
-#' Calculate posterior parameter for the Inverse-Gamma, assuming that the observed values came from a Gamma model from which the shape parameter (phi) is known and the mean (mu) have prior distribuition Inverse-Gamma.
+#' Calculate the (approximated) posterior parameter for the linear predictors, assuming that the observed values came from a Gamma model from which the shape parameter is known and mean parameter have prior distribution in the log-Normal family.
 #'
 #' @param conj_prior list: A vector containing the parameters of the Inverse-Gamma (alpha,beta). Not used in the alternative method.
 #' @param ft vector: A vector representing the means from the normal distribution.
@@ -834,9 +795,22 @@ Fgamma_pred_alt <- function(conj_param, outcome = NULL, parms = list(), pred_cre
 #' @param parms list: A list of extra known parameters of the distribution. For this kernel, parms should containg the shape parameter (phi) for the observational gamma model.
 #'
 #' @importFrom cubature cubintegrate
+#' @importFrom stats dgamma dlnorm
+#'
+#' @details
+#'
+#' For evaluating the posterior parameters, we use a modified version of the method proposed in \insertCite{ArtigokParametrico;textual}{kDGLM}.
+#'
+#' For the details about the implementation see  \insertCite{ArtigoPacote;textual}{kDGLM}.
+#'
+#' For the detail about the modification of the method proposed in \insertCite{ArtigokParametrico;textual}{kDGLM}, see \insertCite{ArtigoAltMethod;textual}{kDGLM}.
 #'
 #' @return The parameters of the posterior distribution.
-#' @export
+#' @keywords internal
+#' @family {auxiliary functions for a Gamma outcome with known shape}
+#'
+#' @references
+#'    \insertAllCited{}
 update_Gamma_alt <- function(conj_prior, ft, Qt, y, parms) {
   # f0 <- ft
   # Q0 <- Qt

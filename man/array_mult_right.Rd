@@ -7,10 +7,14 @@
 array_mult_right(A, B)
 }
 \arguments{
-\item{A}{A 3-D array with shapes nxmxk.}
+\item{A}{A 3-D array with shapes n x m x k.}
 
-\item{B}{A matrix with shapes lxn}
+\item{B}{A matrix with shapes l x n.}
 }
 \description{
-array_mult_right
+Calculates the matrix product between an array and a matrix.
 }
+\details{
+For an array A with shapes m x n x k and a matrix B with shape l x m, this operations returns an array C, with shapes l x n x k, so that C[,,i] = B %*% A[,,i].
+}
+\keyword{internal}

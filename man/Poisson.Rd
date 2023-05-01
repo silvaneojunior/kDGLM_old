@@ -2,12 +2,12 @@
 % Please edit documentation in R/kernel_poisson.R
 \name{Poisson}
 \alias{Poisson}
-\title{Poisson}
+\title{Poisson outcome for kDGLM models}
 \usage{
-Poisson(lambda, outcome, offset = outcome^0)
+Poisson(lambda, outcome, offset = outcome^0, alt_method = FALSE)
 }
 \arguments{
-\item{lambda}{character: Name of the linear preditor associated with the rate (mean) parameter of the Poisson distribuition. The parameter is treated as unknowed and equal to the exponential of the associated linear preditor.}
+\item{lambda}{character: Name of the linear predictor associated with the rate (mean) parameter of the Poisson distribution. The parameter is treated as unknown and equal to the exponential of the associated linear predictor.}
 
 \item{outcome}{vector: Values of the observed data.}
 
@@ -17,7 +17,12 @@ Poisson(lambda, outcome, offset = outcome^0)
 A object of the class dlm_distr
 }
 \description{
-Creates an outcome with Poisson distribuition with the chosen parameter.
+Creates an outcome with Poisson distribution with the chosen parameter.
+}
+\details{
+For evaluating the posterior parameters, we use the method proposed in \insertCite{ArtigokParametrico;textual}{kDGLM}.
+
+For the details about the implementation see  \insertCite{ArtigoPacote;textual}{kDGLM}.
 }
 \examples{
 
@@ -26,8 +31,8 @@ T <- 200
 w <- (200 / 40) * 2 * pi
 data <- rpois(T, 20 * (sin(w * 1:T / T) + 2))
 
-level <- polynomial_block(rate = 1, D = 1 / 0.95)
-season <- harmonic_block(rate = 1, period = 40, D = 1 / 0.98)
+level <- polynomial_block(rate = 1, D = 0.95)
+season <- harmonic_block(rate = 1, period = 40, D = 0.98)
 
 outcome <- Poisson(lambda = "rate", outcome = data)
 
@@ -35,4 +40,19 @@ fitted_data <- fit_model(level, season, outcomes = outcome)
 summary(fitted_data)
 
 show_fit(fitted_data, smooth = TRUE)$plot
+
 }
+\references{
+\insertAllCited{}
+}
+\seealso{
+\code{\link{fit_model}}
+
+Other {auxiliary functions for a creating outcomes}: 
+\code{\link{Dirichlet}()},
+\code{\link{Gamma}()},
+\code{\link{Laplace}()},
+\code{\link{Multinom}()},
+\code{\link{Normal}()}
+}
+\concept{{auxiliary functions for a creating outcomes}}

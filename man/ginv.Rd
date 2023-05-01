@@ -6,6 +6,10 @@
 \usage{
 ginv(S)
 }
-\description{
-ginv
+\arguments{
+\item{S}{A covariance matrix}
 }
+\description{
+This function receives a covariance matrix S and calculates the generalized inverse of S.
+}
+\keyword{internal}

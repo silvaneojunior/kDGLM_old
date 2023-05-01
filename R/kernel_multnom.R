@@ -1,15 +1,23 @@
 #### Default Method ####
 
-#' Multinom
+#' Multinom outcome for kDGLM models
 #'
-#' Creates an outcome with Multinomial distribuition with the chosen parameters.
+#' Creates an outcome with Multinomial distribution with the chosen parameters.
 #'
-#' @param p character: a vector with the name of the linear preditor associated with the probality of each category (except the base one, which is assumed to be the last).
+#' @param p character: a vector with the name of the linear predictor associated with the probality of each category (except the base one, which is assumed to be the last).
 #' @param outcome vector: Values of the observed data.
 #' @param offset vector: The offset at each observation. Must have the same shape as outcome.
 #'
 #' @return A object of the class dlm_distr
+#'
+#' @importFrom stats dmultinom
 #' @export
+#'
+#' @details
+#'
+#' For evaluating the posterior parameters, we use the method proposed in \insertCite{ArtigokParametrico;textual}{kDGLM}.
+#'
+#' For the details about the implementation see  \insertCite{ArtigoPacote;textual}{kDGLM}.
 #'
 #' @examples
 #'
@@ -21,8 +29,8 @@
 #'
 #' y <- cbind(y1, y2, y3)
 #'
-#' level1 <- polynomial_block(p1 = 1)
-#' level2 <- polynomial_block(p2 = 1)
+#' level1 <- polynomial_block(p1 = 1, order = 2)
+#' level2 <- polynomial_block(p2 = 1, order = 2)
 #' season <- harmonic_block(p2 = 1, period = 12)
 #' outcome <- Multinom(p = c("p1", "p2"), outcome = y)
 #'
@@ -30,7 +38,13 @@
 #' summary(fitted_data)
 #'
 #' show_fit(fitted_data, smooth = TRUE)$plot
-Multinom <- function(p, outcome, offset = outcome**0) {
+#'
+#' @seealso \code{\link{fit_model}}
+#' @family {auxiliary functions for a creating outcomes}
+#'
+#' @references
+#'    \insertAllCited{}
+Multinom <- function(p, outcome, offset = outcome**0, alt_method = FALSE) {
   t <- dim(outcome)[1]
   r <- dim(outcome)[2]
   k <- dim(outcome)[2] - 1
@@ -43,7 +57,6 @@ Multinom <- function(p, outcome, offset = outcome**0) {
   # names(var_names)=paste0('p',c(1:r))
   distr <- list(
     var_names = p,
-    family = family,
     r = r,
     k = k,
     l = r,
@@ -58,6 +71,9 @@ Multinom <- function(p, outcome, offset = outcome**0) {
     conj_prior = convert_Multinom_Normal,
     conj_post = convert_Normal_Multinom,
     update = update_Multinom,
+    log.like.cond = function(param, outcome) {
+      dmultinom(outcome, size = sum(outcome), param, log = TRUE)
+    },
     smoother = generic_smoother,
     calc_pred = multnom_pred,
     apply_offset = function(ft, Qt, offset) {
@@ -81,22 +97,29 @@ Multinom <- function(p, outcome, offset = outcome**0) {
     }
   )
   class(distr) <- "dlm_distr"
-  distr$alt_method <- FALSE
+  distr$alt_method <- alt_method
+
+  if (alt_method) {
+    distr$update <- update_Multinom_alt
+  }
+
   return(distr)
 }
 
 #' convert_Multinom_Normal
 #'
-#' Calculate the parameters of the Dirichlet that best approximates the given log-Normal distribuition.
+#' Calculate the parameters of the Dirichlet that best approximates the given log-Normal distribution.
 #' The approximation is the best in the sense that it minimizes the KL divergence from the log-Normal to the Dirichlet.
 #'
 #' @param ft vector: A vector representing the means from the normal distribution.
 #' @param Qt matrix: A matrix representing the covariance matrix of the normal distribution.
-#' @param parms list: A list of extra known parameters of the distribuition. Not used in this kernel.
+#' @param parms list: A list of extra known parameters of the distribution. Not used in this kernel.
 #'
 #' @importFrom Rfast transpose
-#' @return The parameters of the conjugated distribuition of the linear predictor.
-#' @export
+#'
+#' @return The parameters of the conjugated distribution of the linear predictor.
+#' @keywords internal
+#' @family {auxiliary functions for a Multinomial outcome}
 convert_Multinom_Normal <- function(ft, Qt, parms = list()) {
   calc_helper <- 1 + sum(exp(ft))
   k <- length(ft)
@@ -153,14 +176,15 @@ convert_Multinom_Normal <- function(ft, Qt, parms = list()) {
 
 #' convert_Normal_Multinom
 #'
-#' Calculate the parameters of the log-Normal that best approximates the given Dirichlet distribuition.
+#' Calculate the parameters of the log-Normal that best approximates the given Dirichlet distribution.
 #' The approximation is the best in the sense that it minimizes the KL divergence from the Dirichlet to the log-Normal
 #'
 #' @param conj_prior list: A vector containing the concentration parameters of the Dirichlet.
-#' @param parms list: A list of extra known parameters of the distribuition. Not used in this kernel.
+#' @param parms list: A list of extra known parameters of the distribution. Not used in this kernel.
 #'
-#' @return The parameters of the Normal distribuition of the linear predictor.
-#' @export
+#' @return The parameters of the Normal distribution of the linear predictor.
+#' @keywords internal
+#' @family {auxiliary functions for a Multinomial outcome}
 convert_Normal_Multinom <- function(conj_prior, parms = list()) {
   alpha <- conj_prior
   r <- length(alpha)
@@ -173,16 +197,16 @@ convert_Normal_Multinom <- function(conj_prior, parms = list()) {
 
 #' update_Multinom
 #'
-#' Calculate posterior parameter for the Dirichlet, assuming that the observed values came from a Multinomial model from which the number of trials is known and the prior distribuition for the probabilities of each category have joint distribuition Dirichlet.
+#' Calculate posterior parameter for the Dirichlet, assuming that the observed values came from a Multinomial model from which the number of trials is known and the prior distribution for the probabilities of each category have joint distribution Dirichlet.
 #'
 #' @param conj_prior list: A vector containing the concentration parameters of the Dirichlet.
 #' @param ft vector: A vector representing the means from the normal distribution. Not used in the default method.
 #' @param Qt matrix: A matrix representing the covariance matrix of the normal distribution. Not used in the default method.
 #' @param y vector: A vector containing the observations.
-#' @param parms list: A list of extra known parameters of the distribuition. Not used in this kernel.
+#' @param parms list: A list of extra known parameters of the distribution. Not used in this kernel.
 #'
 #' @return The parameters of the posterior distribution.
-#' @export
+#' @family {auxiliary functions for a Multinomial outcome}
 update_Multinom <- function(conj_prior, ft, Qt, y, parms = list()) {
   r <- length(y)
   alpha <- conj_prior + y
@@ -191,32 +215,27 @@ update_Multinom <- function(conj_prior, ft, Qt, y, parms = list()) {
 
 #' multnom_pred
 #'
-#' Calculate the values for the predictive distribuition given the values of the parameter of the conjugated distribuition of the linear predictor.
-#' The data is assumed to have Multinomial distribuition with known number of trial N and the probability vector having distribuition Dirichlet with parameters alpha_i.
-#' In this scenario, the marginal distribuition of the data is Dirichlet-Multinomial with parameters N and alpha_i.
+#' Calculate the values for the predictive distribution given the values of the parameter of the conjugated distribution of the linear predictor.
+#' The data is assumed to have Multinomial distribution with known number of trial N and the probability vector having distribution Dirichlet with parameters alpha_i.
+#' In this scenario, the marginal distribution of the data is Dirichlet-Multinomial with parameters N and alpha_i.
 #'
-#' @param conj_param List or data.frame: The parameters of the conjugated distribuitions of the linear predictor.
+#' @param conj_param List or data.frame: The parameters of the conjugated distributions of the linear predictor.
 #' @param outcome Vector or matrix: The observed values at the current time. The value passed is used to compute N.
 #' @param parms List (optional): A list of extra parameters for the model. Not used in this function.
 #' @param pred_cred Numeric: the desired credibility for the credibility interval.
 #'
 #' @return A list containing the following values:
 #' \itemize{
-#'    \item pred vector/matrix: the mean of the predictive distribuition of a next observation. Same type and shape as the parameter in model.
-#'    \item var.pred vector/matrix: the variance of the predictive distribuition of a next observation. Same type and shape as the parameter in model.
-#'    \item icl.pred vector/matrix: the percentile of 100*((1-pred_cred)/2)% of the predictive distribuition of a next observation. Same type and shape as the parameter in model.
-#'    \item icu.pred vector/matrix: the percentile of 100*(1-(1-pred_cred)/2)% of the predictive distribuition of a next observation. Same type and shape as the parameter in model.
+#'    \item pred vector/matrix: the mean of the predictive distribution of a next observation. Same type and shape as the parameter in model.
+#'    \item var.pred vector/matrix: the variance of the predictive distribution of a next observation. Same type and shape as the parameter in model.
+#'    \item icl.pred vector/matrix: the percentile of 100*((1-pred_cred)/2)% of the predictive distribution of a next observation. Same type and shape as the parameter in model.
+#'    \item icu.pred vector/matrix: the percentile of 100*(1-(1-pred_cred)/2)% of the predictive distribution of a next observation. Same type and shape as the parameter in model.
 #'    \item log.like vector: the The log likelihood for the outcome given the conjugated parameters.
 #' }
 #'
 #' @importFrom Rfast data.frame.to_matrix
-#' @export
-#'
-#' @examples
-#'
-#' conj_param <- matrix(c(1:15), 5, 3, byrow = TRUE)
-#'
-#' multnom_pred(conj_param, matrix(5, 5, 3))
+#' @keywords internal
+#' @family {auxiliary functions for a Multinomial outcome}
 multnom_pred <- function(conj_param, outcome, parms = list(), pred_cred = 0.95) {
   pred.flag <- !is.na(pred_cred)
   like.flag <- !is.null(outcome)
@@ -307,57 +326,32 @@ multnom_pred <- function(conj_param, outcome, parms = list(), pred_cred = 0.95) 
 
 #### Alternative Method ####
 
-#' Multinom_alt
-#'
-#' Creates an outcome with Multinomial distribuition with the chosen parameters.
-#'
-#' @param p character: a vector with the name of the linear preditor associated with the probality of each category (except the base one, which is assumed to be the last).
-#' @param outcome vector: Values of the observed data.
-#' @param offset vector: The offset at each observation. Must have the same shape as outcome.
-#'
-#' @return A object of the class dlm_distr
-#' @export
-#'
-#' @examples
-#'
-#' # Multinomial case
-#' T <- 200
-#' y1 <- rpois(T, exp(5 + (-T:T / T) * 5))
-#' y2 <- rpois(T, exp(6 + (-T:T / T) * 5 + sin((-T:T) * (2 * pi / 12))))
-#' y3 <- rpois(T, exp(5))
-#'
-#' y <- cbind(y1, y2, y3)
-#'
-#' level1 <- polynomial_block(p1 = 1)
-#' level2 <- polynomial_block(p2 = 1)
-#' season <- harmonic_block(p2 = 1, period = 12)
-#' outcome <- Multinom_alt(p = c("p1", "p2"), outcome = y)
-#'
-#' fitted_data <- fit_model(level1, level2, season, outcomes = outcome)
-#' summary(fitted_data)
-#'
-#' show_fit(fitted_data, smooth = TRUE)$plot
-Multinom_alt <- function(p, outcome, offset = outcome**0) {
-  distr <- Multinom(p, outcome, offset)
-
-  distr$alt_method <- TRUE
-  distr$update <- update_Multinom_alt
-  return(distr)
-}
-
-
 #' update_Multinom_alt
 #'
-#' Calculate posterior parameter for the Dirichlet, assuming that the observed values came from a Multinomial model from which the number of trials is known and the prior distribuition for the probabilities of each category have joint distribuition Dirichlet.
+#' Calculate the (approximated) posterior parameter for the linear predictors, assuming that the observed values came from a Multinomial model from which the logit probabilities have prior distribution in the log-Normal family.
 #'
 #' @param conj_prior list: A vector containing the concentration parameters of the Dirichlet. Not used in the alternative method.
 #' @param ft vector: A vector representing the means from the normal distribution.
 #' @param Qt matrix: A matrix representing the covariance matrix of the normal distribution.
 #' @param y vector: A vector containing the observations.
-#' @param parms list: A list of extra known parameters of the distribuition. Not used in this kernel.
+#' @param parms list: A list of extra known parameters of the distribution. Not used in this kernel.
 #'
 #' @return The parameters of the posterior distribution.
-#' @export
+#' @keywords internal
+#' @family {auxiliary functions for a Multinomial outcome}
+#'
+#' @details
+#'
+#' For evaluating the posterior parameters, we use a modified version of the method proposed in \insertCite{ArtigokParametrico;textual}{kDGLM}.
+#'
+#' For computational efficiency, we also use a Laplace approximations to obtain the first and second moments of the posterior \insertCite{@see @TierneyKadane1 and @TierneyKadane2 }{kDGLM}.
+#'
+#' For the details about the implementation see  \insertCite{ArtigoPacote;textual}{kDGLM}.
+#'
+#' For the detail about the modification of the method proposed in \insertCite{ArtigokParametrico;textual}{kDGLM}, see \insertCite{ArtigoAltMethod;textual}{kDGLM}.
+#'
+#' @references
+#'    \insertAllCited{}
 update_Multinom_alt <- function(conj_prior, ft, Qt, y, parms = list()) {
   f0 <- ft
   S0 <- ginv(Qt)
@@ -399,7 +393,7 @@ update_Multinom_alt <- function(conj_prior, ft, Qt, y, parms = list()) {
   mean <- digamma(y + 0.01) - digamma(alpha0)
   var <- diag(trigamma(y + 0.01)) - trigamma(alpha0)
 
-  mini_A
+  mini_A <- diag(length(ft))
   A <- cbind(mini_A, -1)
   A_t <- rbind(mini_A, -1)
 

@@ -2,29 +2,38 @@
 % Please edit documentation in R/kernel_dirichlet.R
 \name{Dirichlet}
 \alias{Dirichlet}
-\title{Dirichlet}
+\title{Dirichlet outcome for kDGLM models}
 \usage{
 Dirichlet(alpha, outcome, offset = outcome^0)
 }
 \arguments{
-\item{alpha}{Vector: A vector of names fir the linear preditor associated with the concentration parameter of the gamma distribuition. The parameter is treated as unknowed and equal to the exponential of the associated linear preditor.}
+\item{alpha}{Vector: A vector of names for the linear predictor associated with the concentration parameter of the Dirichlet distribution. The parameter is treated as unknown and equal to the exponential of the associated linear predictor.}
 
-\item{outcome}{vector: Values of the observed data.}
+\item{outcome}{Vector: Values of the observed data.}
 
-\item{offset}{vector: The offset at each observation. Must have the same shape as outcome.}
+\item{offset}{Vector: The offset at each observation. Must have the same shape as outcome.}
 }
 \value{
 A object of the class dlm_distr
 }
 \description{
-Creates an outcome with Dirichlet distribuition with the chosen parameters.
+Creates an outcome with Dirichlet distribution with the chosen parameters.
+}
+\details{
+For evaluating the posterior parameters, we use a modified version of the method proposed in \insertCite{ArtigokParametrico;textual}{kDGLM}.
+
+For computational efficiency, we also use a Laplace approximations to obtain the first and second moments of the posterior \insertCite{@see @TierneyKadane1 and @TierneyKadane2 }{kDGLM}.
+
+For the details about the implementation see  \insertCite{ArtigoPacote;textual}{kDGLM}.
+
+For the detail about the modification of the method proposed in \insertCite{ArtigokParametrico;textual}{kDGLM}, see \insertCite{ArtigoAltMethod;textual}{kDGLM}.
 }
 \examples{
 
 T <- 200
 a <- 10
 b <- 5
-data <- rdirichlet(T, c(a, b))
+data <- extraDistr::rdirichlet(T, c(a, b))
 
 alpha_block <- polynomial_block(alpha = 1) * 2
 
@@ -34,3 +43,17 @@ summary(fitted_data)
 plot(fitted_data)
 
 }
+\references{
+\insertAllCited{}
+}
+\seealso{
+\code{\link{fit_model}}
+
+Other {auxiliary functions for a creating outcomes}: 
+\code{\link{Gamma}()},
+\code{\link{Laplace}()},
+\code{\link{Multinom}()},
+\code{\link{Normal}()},
+\code{\link{Poisson}()}
+}
+\concept{{auxiliary functions for a creating outcomes}}

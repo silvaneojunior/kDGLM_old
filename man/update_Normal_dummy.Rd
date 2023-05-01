@@ -15,11 +15,24 @@ update_Normal_dummy(conj_prior, ft, Qt, y, parms)
 
 \item{y}{vector: A vector containing the observations.}
 
-\item{parms}{list: A list of extra known parameters of the distribuition. For this kernel, parms should containg the covariance matrix parameter (Sigma) for the observational Normal model.}
+\item{parms}{list: A list of extra known parameters of the distribution. For this kernel, parms should containg the covariance matrix parameter (Sigma) for the observational Normal model.}
 }
 \value{
 The parameters of the posterior distribution.
 }
 \description{
-Calculate posterior parameter for the Normal, assuming that the observed values came from a Normal model from which the covariance is known and the prior distribuition for the mean vector have Normal distribuition
+Calculate posterior parameter for the Normal, assuming that the observed values came from a Normal model from which the covariance is known and the prior distribution for the mean vector have Normal distribution
 }
+\seealso{
+Other {auxiliary functions for a Normal outcome}: 
+\code{\link{convert_NG_Normal}()},
+\code{\link{convert_dummy_post}()},
+\code{\link{convert_dummy_prior}()},
+\code{\link{convert_multi_NG_Normal}()},
+\code{\link{multi_normal_gamma_pred}()},
+\code{\link{normal_pred}()},
+\code{\link{update_NG_alt}()},
+\code{\link{update_multi_NG_correl}()}
+}
+\concept{{auxiliary functions for a Normal outcome}}
+\keyword{internal}

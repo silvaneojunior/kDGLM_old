@@ -1,10 +1,10 @@
 Package: kDGLM
 Type: Package
 Title: kDGLM: an R package for Bayesian analysis of Dynamic Generialized Linear Models
-Version: 1.0.0
+Version: 1.0.1
 Authors@R: person("Silvaneo", "Santos", email = "silvaneo@dme.ufrj.br", role = c("aut", "cre","cph"))
 Description: TO BE MADE!
-License: MIT + file LICENSE
+License: GPL (>= 3)
 Encoding: UTF-8
 LazyData: true
 Imports: 
@@ -13,9 +13,13 @@ Imports:
     dplyr (>= 1.0.9),
     extraDistr (>= 1.9.1),
     cubature (>= 2.0.4.5),
-    Rfast (>= 2.0.6)
+    Rfast (>= 2.0.6),
+    rootSolve,
+    Rdpack
+RdMacros: Rdpack
 RoxygenNote: 7.2.3
 Collate: 
+    'references.R'
     'func_helper.R'
     'array_ops.R'
     'kernels.R'
@@ -24,7 +28,10 @@ Collate:
     'kernel_gamma.R'
     'kernel_normal.R'
     'kernel_dirichlet.R'
+    'kernel_laplace.R'
     'structure_helper.R'
     'main.R'
     'plot_helper.R'
     'methods.R'
+Suggests: 
+    plotly

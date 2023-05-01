@@ -12,7 +12,7 @@ multi_normal_gamma_pred(
 )
 }
 \arguments{
-\item{conj_param}{List or data.frame: The parameters of the conjugated distribuition (Normal-Gamma) of the linear predictor.}
+\item{conj_param}{List or data.frame: The parameters of the conjugated distribution (Normal-Gamma) of the linear predictor.}
 
 \item{outcome}{Vector or matrix (optional): The observed values at the current time.}
 
@@ -23,28 +23,26 @@ multi_normal_gamma_pred(
 \value{
 A list containing the following values:
 \itemize{
-   \item pred vector/matrix: the mean of the predictive distribuition of a next observation. Same type and shape as the parameter in model.
-   \item var.pred vector/matrix: the variance of the predictive distribuition of a next observation. Same type and shape as the parameter in model.
-   \item icl.pred vector/matrix: the percentile of 100*((1-pred_cred)/2)% of the predictive distribuition of a next observation. Same type and shape as the parameter in model.
-   \item icu.pred vector/matrix: the percentile of 100*(1-(1-pred_cred)/2)% of the predictive distribuition of a next observation. Same type and shape as the parameter in model.
+   \item pred vector/matrix: the mean of the predictive distribution of a next observation. Same type and shape as the parameter in model.
+   \item var.pred vector/matrix: the variance of the predictive distribution of a next observation. Same type and shape as the parameter in model.
+   \item icl.pred vector/matrix: the percentile of 100*((1-pred_cred)/2)% of the predictive distribution of a next observation. Same type and shape as the parameter in model.
+   \item icu.pred vector/matrix: the percentile of 100*(1-(1-pred_cred)/2)% of the predictive distribution of a next observation. Same type and shape as the parameter in model.
    \item log.like vector: the The log likelihood for the outcome given the conjugated parameters.
 }
 }
 \description{
 multi_normal_gamma_pred
 }
-\examples{
-
-conj_param <- data.frame(
-  "mu0_1" = rep(0, 3),
-  "c0_1" = rep(1, 3),
-  "alpha_1" = rep(3, 3),
-  "beta_1" = rep(3, 3),
-  "mu0_2" = rep(2, 3),
-  "c0_2" = rep(1, 3),
-  "alpha_2" = rep(5, 3),
-  "beta_2" = rep(1, 3)
-)
-
-normal_gamma_pred(conj_param)
+\seealso{
+Other {auxiliary functions for a Normal outcome}: 
+\code{\link{convert_NG_Normal}()},
+\code{\link{convert_dummy_post}()},
+\code{\link{convert_dummy_prior}()},
+\code{\link{convert_multi_NG_Normal}()},
+\code{\link{normal_pred}()},
+\code{\link{update_NG_alt}()},
+\code{\link{update_Normal_dummy}()},
+\code{\link{update_multi_NG_correl}()}
 }
+\concept{{auxiliary functions for a Normal outcome}}
+\keyword{internal}
