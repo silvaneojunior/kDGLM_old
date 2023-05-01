@@ -2,7 +2,7 @@
 % Please edit documentation in R/plot_helper.R
 \name{plot_lat_var}
 \alias{plot_lat_var}
-\title{plot_lat_var}
+\title{Visualizing latent states in a fitted kDGLM model}
 \usage{
 plot_lat_var(
   model,
@@ -16,25 +16,25 @@ plot_lat_var(
 \arguments{
 \item{model}{<undefined class> or list: A fitted DGLM model.}
 
-\item{var}{Character: The name of the variables to plot (same value passed while creating the structure). Any variable whose name partially match this variable will be ploted.}
+\item{var}{Character: The name of the variables to plot (same value passed while creating the structure). Any variable whose name partially match this variable will be plotted.}
 
-\item{smooth}{Bool: A flag indicating if the smoothed distribuition should be used. If false, the filtered distribution shall be used.}
+\item{smooth}{Bool: A flag indicating if the smoothed distribution should be used. If false, the filtered distribution shall be used.}
 
-\item{cut_off}{Integer: The number of initial steps that should be skipped in the plot. Usually, the model is still learning in the initial steps, so the estimated values are not realiable.}
+\item{cut_off}{Integer: The number of initial steps that should be skipped in the plot. Usually, the model is still learning in the initial steps, so the estimated values are not reliable.}
 
 \item{pred_cred}{Numeric: The credibility value for the credibility interval.}
 
 \item{plotly}{Bool: A flag indicating if plotly should be used to create plots.}
 }
 \value{
-A list containg:
+A list containing:
 \itemize{
    \item plot ggplot or plotly object: A plot showing the predictive mean and credibility interval with the observed data.
-   \item data tibble: A data frame containg the data used in the plot.
+   \item data tibble: A data frame containing the data used in the plot.
 }
 }
 \description{
-plot_lat_var
+Visualizing latent states in a fitted kDGLM model
 }
 \examples{
 
@@ -42,11 +42,22 @@ T <- 200
 w <- (200 / 40) * 2 * pi
 data <- rpois(T, 20 * (sin(w * 1:T / T) + 2))
 
-level <- polynomial_block(rate = 1, D = 1 / 0.95, name = "level_effect")
-season <- harmonic_block(rate = 1, period = 40, D = 1 / 0.98, name = "season_effect")
+level <- polynomial_block(rate = 1, D = 0.95)
+season <- harmonic_block(rate = 1, period = 40, D = 0.98)
 
 outcome <- Poisson(lambda = "rate", outcome = data)
 
 fitted_data <- fit_model(level, season, outcomes = outcome)
-plot_lat_var(fitted_data, "effect", smooth = TRUE)$plot
+summary(fitted_data)
+
+plot_lat_var(fitted_data, smooth = TRUE)$plot
+
 }
+\seealso{
+Other {auxiliary visualization functions for the fitted_dlm class}: 
+\code{\link{plot_lin_pred}()},
+\code{\link{report_distr}()},
+\code{\link{report_dlm}()},
+\code{\link{show_fit}()}
+}
+\concept{{auxiliary visualization functions for the fitted_dlm class}}

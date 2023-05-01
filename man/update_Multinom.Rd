@@ -15,11 +15,19 @@ update_Multinom(conj_prior, ft, Qt, y, parms = list())
 
 \item{y}{vector: A vector containing the observations.}
 
-\item{parms}{list: A list of extra known parameters of the distribuition. Not used in this kernel.}
+\item{parms}{list: A list of extra known parameters of the distribution. Not used in this kernel.}
 }
 \value{
 The parameters of the posterior distribution.
 }
 \description{
-Calculate posterior parameter for the Dirichlet, assuming that the observed values came from a Multinomial model from which the number of trials is known and the prior distribuition for the probabilities of each category have joint distribuition Dirichlet.
+Calculate posterior parameter for the Dirichlet, assuming that the observed values came from a Multinomial model from which the number of trials is known and the prior distribution for the probabilities of each category have joint distribution Dirichlet.
 }
+\seealso{
+Other {auxiliary functions for a Multinomial outcome}: 
+\code{\link{convert_Multinom_Normal}()},
+\code{\link{convert_Normal_Multinom}()},
+\code{\link{multnom_pred}()},
+\code{\link{update_Multinom_alt}()}
+}
+\concept{{auxiliary functions for a Multinomial outcome}}

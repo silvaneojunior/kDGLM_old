@@ -1,20 +1,34 @@
-#' Dirichlet
+#' Dirichlet outcome for kDGLM models
 #'
-#' Creates an outcome with Dirichlet distribuition with the chosen parameters.
+#' Creates an outcome with Dirichlet distribution with the chosen parameters.
 #'
-#' @param alpha Vector: A vector of names fir the linear preditor associated with the concentration parameter of the gamma distribuition. The parameter is treated as unknowed and equal to the exponential of the associated linear preditor.
-#' @param outcome vector: Values of the observed data.
-#' @param offset vector: The offset at each observation. Must have the same shape as outcome.
+#' @param alpha Vector: A vector of names for the linear predictor associated with the concentration parameter of the Dirichlet distribution. The parameter is treated as unknown and equal to the exponential of the associated linear predictor.
+#' @param outcome Vector: Values of the observed data.
+#' @param offset Vector: The offset at each observation. Must have the same shape as outcome.
 #'
 #' @return A object of the class dlm_distr
+#' @importFrom extraDistr ddirichlet
 #' @export
+#'
+#' @details
+#'
+#' For evaluating the posterior parameters, we use a modified version of the method proposed in \insertCite{ArtigokParametrico;textual}{kDGLM}.
+#'
+#' For computational efficiency, we also use a Laplace approximations to obtain the first and second moments of the posterior \insertCite{@see @TierneyKadane1 and @TierneyKadane2 }{kDGLM}.
+#'
+#' For the details about the implementation see  \insertCite{ArtigoPacote;textual}{kDGLM}.
+#'
+#' For the detail about the modification of the method proposed in \insertCite{ArtigokParametrico;textual}{kDGLM}, see \insertCite{ArtigoAltMethod;textual}{kDGLM}.
+#'
+#' @seealso \code{\link{fit_model}}
+#' @family {auxiliary functions for a creating outcomes}
 #'
 #' @examples
 #'
 #' T <- 200
 #' a <- 10
 #' b <- 5
-#' data <- rdirichlet(T, c(a, b))
+#' data <- extraDistr::rdirichlet(T, c(a, b))
 #'
 #' alpha_block <- polynomial_block(alpha = 1) * 2
 #'
@@ -23,6 +37,8 @@
 #' summary(fitted_data)
 #' plot(fitted_data)
 #'
+#' @references
+#'    \insertAllCited{}
 Dirichlet <- function(alpha, outcome, offset = outcome**0) {
   t <- dim(outcome)[1]
   r <- dim(outcome)[2]
@@ -37,15 +53,20 @@ Dirichlet <- function(alpha, outcome, offset = outcome**0) {
     var_names = alpha,
     r = r,
     k = k,
+    l = k,
     t = t,
     offset = matrix(offset, t, r),
     outcome = matrix(outcome, t, r),
     convert_mat_canom = convert_mat_canom,
     convert_mat_default = convert_mat_default,
+    convert_canom_flag = FALSE,
     parms = parms,
     name = "Dirichlet",
     conj_prior = convert_Dirichlet_Normal,
     update = update_Dirichlet,
+    log.like.cond = function(param, outcome) {
+      ddirichlet(outcome, param, log = TRUE)
+    },
     calc_pred = Dirichlet_pred,
     smoother = generic_smoother,
     apply_offset = function(ft, Qt, offset) {
@@ -74,33 +95,45 @@ Dirichlet <- function(alpha, outcome, offset = outcome**0) {
 
 #' convert_Dirichlet_Normal
 #'
-#' DESCRIPTION
+#' This is a dummy function, since, for an Dirichelt outcome, the conjugated prior is not used.
 #'
 #' @param ft vector: A vector representing the means from the normal distribution.
 #' @param Qt matrix: A matrix representing the covariance matrix of the normal distribution.
-#' @param parms list: A list of extra known parameters of the distribuition. Not used in this function.
+#' @param parms list: A list of extra known parameters of the distribution. Not used in this function.
 #'
-#' @return The parameters of the conjugated distribuition of the linear predictor.
-#' @export
+#' @return The parameters of the conjugated distribution of the linear predictor.
+#' @keywords internal
+#' @family {auxiliary functions for a Dirichlet outcome}
 convert_Dirichlet_Normal <- function(ft, Qt, parms) {
   return(do.call(c, list(ft, Qt)))
 }
 
 #' update_Dirichlet
 #'
-#' Dirichlet
+#' Calculate the (approximated) posterior parameter for the linear predictors, assuming that the observed values came from a Dirichlet model from which the concentration parameters have prior distribution in the log-Normal family.
 #'
 #' @param conj_prior list: A vector containing the parameters of the Inverse-Gamma (alpha,beta). Not used in the alternative method.
 #' @param ft vector: A vector representing the means from the prior distribution.
 #' @param Qt matrix: A matrix representing the covariance matrix of the prior distribution.
 #' @param y vector: A vector containing the observations.
-#' @param parms list: A list of extra known parameters of the distribuition. For this kernel, parms should containg the shape parameter (phi) for the observational gamma model.
+#' @param parms list: A list of extra known parameters of the distribution. For this kernel, parms should containg the shape parameter (phi) for the observational gamma model.
 #'
-#' @importFrom Rfast spdinv
-#' @importFrom MASS ginv
 #'
 #' @return The parameters of the posterior distribution.
-#' @export
+#' @keywords internal
+#' @family {auxiliary functions for a Dirichlet outcome}
+#' @details
+#'
+#' For evaluating the posterior parameters, we use a modified version of the method proposed in \insertCite{ArtigokParametrico;textual}{kDGLM}.
+#'
+#' For computational efficiency, we also use a Laplace approximations to obtain the first and second moments of the posterior \insertCite{@see @TierneyKadane1 and @TierneyKadane2 }{kDGLM}.
+#'
+#' For the details about the implementation see  \insertCite{ArtigoPacote;textual}{kDGLM}.
+#'
+#' For the detail about the modification of the method proposed in \insertCite{ArtigokParametrico;textual}{kDGLM}, see \insertCite{ArtigoAltMethod;textual}{kDGLM}.
+#'
+#' @references
+#'    \insertAllCited{}
 update_Dirichlet <- function(conj_prior, ft, Qt, y, parms) {
   f0 <- ft
   S0 <- ginv(Qt)
@@ -108,7 +141,7 @@ update_Dirichlet <- function(conj_prior, ft, Qt, y, parms) {
   # log.like=function(x){
   #   alpha=exp(x)
   #
-  #   lgamma(sum(alpha))+sum((alpha-1)*log(y)-lgamma(alpha))-0.5*t(x-f0)%*%S0%*%(x-f0)
+  #   lgamma(sum(alpha))+sum((alpha-1)*log(y)-lgamma(alpha))-0.5*crossprod(x-f0,S0)%*%(x-f0)
   # }
 
   d1.log.like <- function(x) {
@@ -132,7 +165,7 @@ update_Dirichlet <- function(conj_prior, ft, Qt, y, parms) {
 
   mode <- f_root(d1.log.like, d2.log.like, start = f0)$root
   H <- d2.log.like(mode)
-  S <- spdinv(-H)
+  S <- ginv(-H)
 
   return(list("ft" = matrix(mode, length(mode), 1), "Qt" = S))
   # return(list("ft" = ft, "Qt" = Qt))
@@ -140,39 +173,27 @@ update_Dirichlet <- function(conj_prior, ft, Qt, y, parms) {
 
 #' Dirichlet_pred
 #'
-#' Calculate the values for the predictive distribuition given the values of the parameter of the distribuition of the linear predictor.
-#' The data is assumed to have Dirichlet distribuition with unknown concentration parameters having log-Normal distribuition.
-#' In this scenario, the marginal distribuition of the data is obtained via Monte Carlo.
+#' Calculate the values for the predictive distribution given the values of the parameter of the distribution of the linear predictor.
+#' The data is assumed to have Dirichlet distribution with unknown concentration parameters having log-Normal distribution.
+#' In this scenario, the marginal distribution of the data is obtained via Monte Carlo.
 #'
-#' @param conj_param List or data.frame: The parameters of the conjugated distribuitions of the linear predictor.
+#' @param conj_param List or data.frame: The parameters of the conjugated distributions of the linear predictor.
 #' @param outcome Vector or matrix (optional): The observed values at the current time. Not used in this function.
 #' @param parms List: A list of extra parameters for the model. For this function, it must contain the shape parameter phi of the observational model.
 #' @param pred_cred Numeric: the desired credibility for the credibility interval.
 #'
 #' @return A list containing the following values:
 #' \itemize{
-#'    \item pred vector/matrix: the mean of the predictive distribuition of a next observation. Same type and shape as the parameter in model.
-#'    \item var.pred vector/matrix: the variance of the predictive distribuition of a next observation. Same type and shape as the parameter in model.
-#'    \item icl.pred vector/matrix: the percentile of 100*((1-pred_cred)/2)% of the predictive distribuition of a next observation. Same type and shape as the parameter in model.
-#'    \item icu.pred vector/matrix: the percentile of 100*(1-(1-pred_cred)/2)% of the predictive distribuition of a next observation. Same type and shape as the parameter in model.
+#'    \item pred vector/matrix: the mean of the predictive distribution of a next observation. Same type and shape as the parameter in model.
+#'    \item var.pred vector/matrix: the variance of the predictive distribution of a next observation. Same type and shape as the parameter in model.
+#'    \item icl.pred vector/matrix: the percentile of 100*((1-pred_cred)/2)% of the predictive distribution of a next observation. Same type and shape as the parameter in model.
+#'    \item icu.pred vector/matrix: the percentile of 100*(1-(1-pred_cred)/2)% of the predictive distribution of a next observation. Same type and shape as the parameter in model.
 #' }
 #'
 #' @importFrom extraDistr rdirichlet ddirichlet
-#' @importFrom Rfast cholesky
-#' @export
-#'
-#' @examples
-#'
-#' params <- data.frame(
-#'   "f1" = c(1:3),
-#'   "f2" = c(3:1),
-#'   "Q11" = rep(1, 3),
-#'   "Q12" = rep(0, 3),
-#'   "Q21" = rep(0, 3),
-#'   "Q22" = rep(1, 3),
-#' )
-#'
-#' Dirichlet_pred(params)
+#' @importFrom stats rnorm var
+#' @keywords internal
+#' @family {auxiliary functions for a Dirichlet outcome}
 Dirichlet_pred <- function(conj_param, outcome = NULL, parms = list(), pred_cred = 0.95) {
   pred.flag <- !is.na(pred_cred)
   like.flag <- !is.null(outcome)
@@ -208,10 +229,10 @@ Dirichlet_pred <- function(conj_param, outcome = NULL, parms = list(), pred_cred
   outcome <- matrix(outcome, r, t)
   sample <- matrix(rnorm(r * N), N, r)
   for (i in 1:t) {
-    ft_i <- sample %*% cholesky(Qt[, , i]) + matrix(ft[, i], N, r, byrow = TRUE)
+    ft_i <- sample %*% var_decomp(Qt[, , i]) + matrix(ft[, i], N, r, byrow = TRUE)
     sample_y <- rdirichlet(N, alpha = exp(ft_i))
     if (pred.flag) {
-      pred[, i] <- colmeans(sample_y)
+      pred[, i] <- colMeans(sample_y)
       var.pred[, , i] <- var(sample_y)
       icl.pred[, i] <- colQuantile(sample_y, (1 - pred_cred) / 2)
       icu.pred[, i] <- colQuantile(sample_y, 1 - (1 - pred_cred) / 2)

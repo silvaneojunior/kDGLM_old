@@ -7,7 +7,7 @@
 update_FGamma(conj_prior, ft, Qt, y, parms)
 }
 \arguments{
-\item{conj_prior}{list: A vector containing the parameters of the Inverse-Gamma (alpha,beta).}
+\item{conj_prior}{list: A vector containing the parameters of the conjugated distribution (n, tau, theta).}
 
 \item{ft}{vector: A vector representing the means from the normal distribution. Not used in the default method.}
 
@@ -15,11 +15,21 @@ update_FGamma(conj_prior, ft, Qt, y, parms)
 
 \item{y}{vector: A vector containing the observations.}
 
-\item{parms}{list: A list of extra known parameters of the distribuition. For this kernel, parms should containg the shape parameter (phi) for the observational gamma model.}
+\item{parms}{list: A list of extra known parameters of the distribution. For this kernel, parms should containing the shape parameter (phi) for the observational gamma model.}
 }
 \value{
 The parameters of the posterior distribution.
 }
 \description{
-Calculate posterior parameter for the Inverser-Gamma, assuming that the observed values came from a Gamma model from which the shape parameter (phi) is known and the mean (mu) have prior distribuition Inverse-Gamma.
+Calculate posterior parameter for the conjugated distribution, assuming that the observed values came from a Gamma model with the shape (phi) and mean (mu) parameters having a conjugated prior.
 }
+\seealso{
+Other {auxiliary functions for a Gamma outcome with unknowned shape}: 
+\code{\link{Fgamma_pred_alt}()},
+\code{\link{Fgamma_pred}()},
+\code{\link{convert_FGamma_Normal}()},
+\code{\link{convert_Normal_FGamma}()},
+\code{\link{update_FGamma_alt}()}
+}
+\concept{{auxiliary functions for a Gamma outcome with unknowned shape}}
+\keyword{internal}

@@ -4,7 +4,7 @@
 \alias{generic_smoother}
 \title{generic_smoother}
 \usage{
-generic_smoother(mt, Ct, at, Rt, G)
+generic_smoother(mt, Ct, at, Rt, G, G_labs)
 }
 \arguments{
 \item{mt}{Matrix: A matrix containing the filtered mean of the latent variables at each time. Each row should represent one variable.}
@@ -16,21 +16,27 @@ generic_smoother(mt, Ct, at, Rt, G)
 \item{Rt}{Array: A 3D-array representing the one-step-ahead covariance matrix of the latent variables at each time based upon the filtered covariance matrix. The third dimension should represent the time index.}
 
 \item{G}{Array: A 3D-array representing the transition matrix of the model at each time.}
+
+\item{G_labs}{Matrix: A character matrix containing the type associated with each value in G.}
 }
 \value{
-List: The smoothed mean (mts) and covariance (Cts) of the latent variables at each time. Their dimension follows, respectivelly, the dimensions of mt and Ct.
+List: The smoothed mean (mts) and covariance (Cts) of the latent variables at each time. Their dimension follows, respectively, the dimensions of mt and Ct.
 }
 \description{
 Generic smoother for all models.
 }
-\examples{
-T <- 20
+\details{
+For the models covered in this package, we always assume that the latent states have Multivariate Normal distribution. With that assumption, we can use Kalman Smoother algorithm to calculate the posterior of the states at each time, given everything that has been observed (assuming that we already know the filtered distribution of the states).
 
-mt <- matrix(c(cumsum(rnorm(T) + 1), rep(1, T)), 2, T, byrow = TRUE)
-Ct <- array(diag(c(1, 1)), c(2, 2, T))
-G <- array(c(1, 0, 1, 1), c(2, 2, T))
-at <- G[, , 1] \%*\% mt
-Rt <- array(G[, , 1] \%*\% t(G[, , 1]) + diag(c(0.1, 0.1)), c(2, 2, T))
+For the details about the implementation see \insertCite{ArtigoPacote;textual}{kDGLM}.
 
-smoothed_values <- generic_smoother(mt, Ct, at, Rt, G)
+For the details about the algorithm implemented see \insertCite{Petris-DLM;textual}{kDGLM}, chapter 2, and \insertCite{WestHarr-DLM;textual}{kDGLM}, chapter 4.
 }
+\seealso{
+\code{\link{fit_model}}
+
+\code{\link{analytic_filter}}
+
+\code{\link{Kalman_filter_origins}}
+}
+\keyword{internal}

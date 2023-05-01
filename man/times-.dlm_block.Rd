@@ -4,8 +4,14 @@
 \alias{*.dlm_block}
 \title{*.fitted_dlm}
 \usage{
-\method{*}{dlm_block}(block, k)
+\method{*}{dlm_block}(e1, e2)
+}
+\arguments{
+\item{e1}{A dlm_block (if e2 is an Integer) or an Integer (if e2 is a dlm_block).}
+
+\item{e2}{An Integer (if e1 is an dlm_block) or a dlm_block (if e1 is an Integer).}
 }
 \description{
 Define product operator for class dlm_block
 }
+\keyword{internal}

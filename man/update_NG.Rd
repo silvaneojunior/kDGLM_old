@@ -15,11 +15,12 @@ update_NG(conj_prior, ft, Qt, y, parms = list())
 
 \item{y}{vector: A vector containing the observations.}
 
-\item{parms}{list: A list of extra known parameters of the distribuition. Not used in this kernel.}
+\item{parms}{list: A list of extra known parameters of the distribution. Not used in this kernel.}
 }
 \value{
 The parameters of the posterior distribution.
 }
 \description{
-Calculate posterior parameter for the Normal-Gamma, assuming that the observed values came from a Normal model from which the prior distribuition for the mean and the precision have joint distribuition Normal-Gamma
+Calculate posterior parameter for the Normal-Gamma, assuming that the observed values came from a Normal model from which the prior distribution for the mean and the precision have joint distribution Normal-Gamma
 }
+\keyword{internal}

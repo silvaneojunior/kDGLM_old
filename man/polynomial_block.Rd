@@ -2,7 +2,7 @@
 % Please edit documentation in R/structure_helper.R
 \name{polynomial_block}
 \alias{polynomial_block}
-\title{Creates the structure for a polynomial block with desired order.}
+\title{Structural blocks for polynomial trends and regressions}
 \usage{
 polynomial_block(
   ...,
@@ -17,17 +17,17 @@ polynomial_block(
 \arguments{
 \item{...}{Named values for the planing matrix.}
 
-\item{order}{Positive integer: The order of the polimial structure.}
+\item{order}{Positive integer: The order of the polynomial structure.}
 
 \item{name}{String: An optional argument providing the name for this block. Can be useful to identify the models with meaningful labels, also, the name used will be used in some auxiliary functions.}
 
-\item{D}{Array, Matrix, vector or  scalar: The values for the discount factors at each time. If D is a array, it's dimensions should be nxnxt, where n is the order of the polynomial block and t is the length of the outcomes. If D is a matrix, it's dimesions should be nxn and it's values will be used for each time. If D is a vector or scalar, a discount factor matrix will be created as a diagonal matrix with the values of D in the diagonal.}
+\item{D}{Array, Matrix, vector or  scalar: The values for the discount factors at each time. If D is a array, it's dimensions should be n x n x t, where n is the order of the polynomial block and t is the length of the outcomes. If D is a matrix, it's dimensions should be n x n and it's values will be used for each time. If D is a vector or scalar, a discount factor matrix will be created as a diagonal matrix with the values of D in the diagonal.}
 
-\item{W}{Array, Matrix, vector or  scalar: The values for the covariance matrix for the noise factor at each time. If W is a array, it's dimensions should be nxnxt, where n is the order of the polynomial block and t is the length of the outcomes. If W is a matrix, it's dimesions should be nxn and it's values will be used for each time. If W is a vector or scalar, a discount factor matrix will be created as a diagonal matrix with the values of W in the diagonal.}
+\item{W}{Array, Matrix, vector or  scalar: The values for the covariance matrix for the noise factor at each time. If W is a array, it's dimensions should be n x n x t, where n is the order of the polynomial block and t is the length of the outcomes. If W is a matrix, it's dimensions should be n x n and it's values will be used for each time. If W is a vector or scalar, a discount factor matrix will be created as a diagonal matrix with the values of W in the diagonal.}
 
-\item{m0}{Vector or scalar: The prior mean for the latent variables associated with this block. If m0 is a vector, it's dimesion should be equal to the order of the polynomial block. If m0 is a scalar, it's value will be used for all latent variables.}
+\item{m0}{Vector or scalar: The prior mean for the latent variables associated with this block. If m0 is a vector, it's dimension should be equal to the order of the polynomial block. If m0 is a scalar, it's value will be used for all latent variables.}
 
-\item{C0}{Matrix, vector or scalar: The prior covariance matrix for the latent variables associated with this block. If C0 is a matrix, it's dimesions should be nxn. If W is a vector or scalar, a covariance matrix will be created as a diagonal matrix with the values of C0 in the diagonal.}
+\item{C0}{Matrix, vector or scalar: The prior covariance matrix for the latent variables associated with this block. If C0 is a matrix, it's dimensions should be n x n. If W is a vector or scalar, a covariance matrix will be created as a diagonal matrix with the values of C0 in the diagonal.}
 }
 \value{
 An object of the class dlm_block containing the following values:
@@ -38,7 +38,7 @@ An object of the class dlm_block containing the following values:
    \item W Array: A 3D-array containing the covariance matrix of the noise for each time. It's dimension should be the same as D.
    \item m0 Vector: The prior mean for the latent vector.
    \item C0 Matrix: The prior covariance matrix for the latent vector.
-   \item names list: A list containg the variables indexes by their name.
+   \item names list: A list containing the variables indexes by their name.
    \item order Positive integer: Same as argument.
    \item n Positive integer: The number of latent variables associated with this block (same value as order).
    \item t Positive integer: The number of time steps associated with this block. If 1, the block is compatible with blocks of any time length, but if t is greater than 1, this block can only be used with blocks of the same time length.
@@ -50,12 +50,32 @@ An object of the class dlm_block containing the following values:
 \description{
 Creates the structure for a polynomial block with desired order.
 }
+\details{
+For the details about the implementation see \insertCite{ArtigoPacote;textual}{kDGLM}.
+
+For the details about polynomial trend in the context of DLM's, see \insertCite{WestHarr-DLM;textual}{kDGLM}, chapter 7.
+
+For the details about dynamic regression models in the context of DLM's, see \insertCite{WestHarr-DLM;textual}{kDGLM}, chapters 6 and 9.
+}
 \examples{
 # Creating a first order structure for a model with 2 outcomes.
-# One block is created for each outcome, with each block being associated with only one of the outcomes.
+# One block is created for each outcome
+# with each block being associated with only one of the outcomes.
 level_1 <- polynomial_block(alpha1 = 1, order = 1)
 level_2 <- polynomial_block(alpha2 = 1, order = 1)
 
-# Creating a block with shared effect between the oucomes
+# Creating a block with shared effect between the outcomes
 level_3 <- polynomial_block(alpha1 = 1, alpha2 = 1, order = 2)
+
 }
+\seealso{
+\code{\link{fit_model}}
+
+Other {auxiliary functions for structural blocks}: 
+\code{\link{AR_block}()},
+\code{\link{block_merge}()},
+\code{\link{block_mult}()},
+\code{\link{correlation_block}()},
+\code{\link{harmonic_block}()}
+}
+\concept{{auxiliary functions for structural blocks}}

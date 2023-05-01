@@ -4,8 +4,14 @@
 \alias{summary.dlm_distr}
 \title{summary.dlm_distr}
 \usage{
-\method{summary}{dlm_distr}(dlm_distr)
+\method{summary}{dlm_distr}(object, ...)
+}
+\arguments{
+\item{object}{A fitted_dlm object.}
+
+\item{...}{Not used.}
 }
 \description{
 summary method for class dlm_distr.
 }
+\keyword{internal}

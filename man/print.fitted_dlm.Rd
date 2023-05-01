@@ -4,13 +4,14 @@
 \alias{print.fitted_dlm}
 \title{print.fitted_dlm}
 \usage{
-\method{print}{fitted_dlm}(
-  fitted_dlm,
-  t = fitted_dlm$t,
-  smooth = fitted_dlm$smooth,
-  metric_cutoff = round(fitted_dlm$t/10)
-)
+\method{print}{fitted_dlm}(x, ...)
+}
+\arguments{
+\item{x}{A fitted_dlm object.}
+
+\item{...}{Arguments passed to summary.fitted_dlm}
 }
 \description{
-print method for class fitted_dlm
+print.fitted_dlm
 }
+\keyword{internal}

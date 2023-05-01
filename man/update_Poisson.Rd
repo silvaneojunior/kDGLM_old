@@ -15,11 +15,20 @@ update_Poisson(conj_prior, ft, Qt, y, parms)
 
 \item{y}{vector: A vector containing the observations.}
 
-\item{parms}{list: A list of extra known parameters of the distribuition. Not used in this kernel.}
+\item{parms}{list: A list of extra known parameters of the distribution. Not used in this kernel.}
 }
 \value{
 The parameters of the posterior distribution.
 }
 \description{
-Calculate posterior parameter for the Gamma, assuming that the observed values came from a Poisson model from which the rate parameter (lambda) have prior distribuition Gamma.
+Calculate posterior parameter for the Gamma, assuming that the observed values came from a Poisson model from which the rate parameter (lambda) have prior distribution Gamma.
 }
+\seealso{
+Other {auxiliary functions for a Poisson outcome}: 
+\code{\link{convert_Normal_Poisson}()},
+\code{\link{convert_Poisson_Normal}()},
+\code{\link{poisson_pred}()},
+\code{\link{update_Poisson_alt}()}
+}
+\concept{{auxiliary functions for a Poisson outcome}}
+\keyword{internal}

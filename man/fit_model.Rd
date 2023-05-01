@@ -2,7 +2,7 @@
 % Please edit documentation in R/main.R
 \name{fit_model}
 \alias{fit_model}
-\title{fit_model}
+\title{Fitting kDGLM models}
 \usage{
 fit_model(
   ...,
@@ -18,17 +18,28 @@ fit_model(
 
 \item{outcomes}{List: The observed data. It should contain objects of the class dlm_distr.}
 
-\item{pred_cred}{Numeric: A number between 0 and 1 (not included) indicanting the credibility interval for predictions. If not within the valid range of values, predicitions are not made.}
+\item{pred_cred}{Numeric: A number between 0 and 1 (not included) indicating the credibility interval for predictions. If not within the valid range of values, predictions are not made.}
 
-\item{smooth_flag}{Bool: A flag indicating if the smoothed distribuition for the latent variables should be calculated.}
+\item{smooth_flag}{Bool: A flag indicating if the smoothed distribution for the latent variables should be calculated.}
 
-\item{offset}{Matrix: A matrix containing the offset value for the data. Dimesions should be the same as outcome.}
+\item{p_monit}{numeric (optional): The prior probability of changes in the latent space variables that are not part of it's dynamic.}
+
+\item{c_monit}{numeric (optional, if p_monit is not specified): The relative cost of false alarm in the monitoring compared to the cost of not detecting abnormalities.}
 }
 \value{
 The fitted model (an object of the <undefined class> or list). Contains the values of the estimated parameter and some extra info regarding the quality of the fit.
 }
 \description{
 Fit a model given it's structure and the observed data. This function can be used for any supported family (see vignette).
+}
+\details{
+This is the main function of the kDGLM package, as it is used to fit all models.
+
+For the details about the implementation see  \insertCite{ArtigoPacote;textual}{kDGLM}.
+
+For the details about the methodology see  \insertCite{ArtigokParametrico;textual}{kDGLM}.
+
+For the details about the Dynamic Linear Models see  \insertCite{WestHarr-DLM;textual}{kDGLM} and \insertCite{Petris-DLM;textual}{kDGLM}.
 }
 \examples{
 library(kDGLM)
@@ -38,8 +49,8 @@ T <- 200
 w <- (200 / 40) * 2 * pi
 data <- rpois(T, 20 * (sin(w * 1:T / T) + 2))
 
-level <- polynomial_block(rate = 1, D = 1 / 0.95)
-season <- harmonic_block(rate = 1, period = 40, D = 1 / 0.98)
+level <- polynomial_block(rate = 1, D = 0.95)
+season <- harmonic_block(rate = 1, period = 40, D = 0.98)
 
 outcome <- Poisson(lambda = "rate", outcome = data)
 
@@ -76,14 +87,14 @@ data <- rnorm(T, cumsum(mu))
 
 level <- polynomial_block(
   mu = 1,
-  D = 1 / 0.95
+  D = 0.95
 )
 variance <- polynomial_block(
   sigma2 = 1
 )
 
 # Known variance
-outcome <- Normal(mu = "mu", sigma2 = 1, outcome = data)
+outcome <- Normal(mu = "mu", Sigma = 1, outcome = data)
 
 fitted_data <- fit_model(level, outcomes = outcome)
 summary(fitted_data)
@@ -91,7 +102,7 @@ summary(fitted_data)
 show_fit(fitted_data, smooth = TRUE)$plot
 
 # Unknown variance
-outcome <- Normal(mu = "mu", sigma2 = "sigma2", outcome = data)
+outcome <- Normal(mu = "mu", Sigma = "sigma2", outcome = data)
 
 fitted_data <- fit_model(level, variance, outcomes = outcome)
 summary(fitted_data)
@@ -106,9 +117,9 @@ w <- (200 / 40) * 2 * pi
 phi <- 2.5
 data <- matrix(rgamma(T, phi, phi / (20 * (sin(w * 1:T / T) + 2))), T, 1)
 
-level <- polynomial_block(mu = 1, D = 1 / 0.95)
-season <- harmonic_block(mu = 1, period = 40, D = 1 / 0.98)
-scale <- polynomial_block(phi = 1, D = 1 / 1)
+level <- polynomial_block(mu = 1, D = 0.95)
+season <- harmonic_block(mu = 1, period = 40, D = 0.98)
+scale <- polynomial_block(phi = 1, D = 1)
 
 # Known shape
 outcome <- Gamma(phi = phi, mu = "mu", outcome = data)
@@ -118,11 +129,24 @@ summary(fitted_data)
 
 show_fit(fitted_data, smooth = TRUE)$plot
 
-# Unknown shape
-outcome <- Gamma(phi = "phi", mu = "mu", outcome = data)
+# DO NOT RUN
+# # Unknown shape
+# outcome <- Gamma(phi = "phi", mu = "mu", outcome = data)
+#
+# fitted_data <- fit_model(level, season, scale, outcomes = outcome)
+# summary(fitted_data)
+#
+# show_fit(fitted_data, smooth = TRUE)$plot
 
-fitted_data <- fit_model(level, season, scale, outcomes = outcome)
-summary(fitted_data)
-
-show_fit(fitted_data, smooth = TRUE)$plot
 }
+\seealso{
+auxiliary function for creating outcomes \code{\link{Poisson}}, \code{\link{Multinom}}, \code{\link{Normal}}, \code{\link{Gamma}}, \code{\link{Dirichlet}}
+
+auxiliary function for creating structural blocks \code{\link{polynomial_block}}, \code{\link{harmonic_block}}, \code{\link{AR_block}}
+
+Other {auxiliary functions for fitted_dlm objects}: 
+\code{\link{dlm_sampling}()},
+\code{\link{eval_past}()},
+\code{\link{forecast}()}
+}
+\concept{{auxiliary functions for fitted_dlm objects}}

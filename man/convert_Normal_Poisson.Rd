@@ -9,12 +9,21 @@ convert_Normal_Poisson(conj_prior, parms)
 \arguments{
 \item{conj_prior}{list: A vector containing the parameters of the Gamma (alpha,beta).}
 
-\item{parms}{list: A list of extra known parameters of the distribuition. Not used in this kernel.}
+\item{parms}{list: A list of extra known parameters of the distribution. Not used in this kernel.}
 }
 \value{
-The parameters of the Normal distribuition of the linear predictor.
+The parameters of the Normal distribution of the linear predictor.
 }
 \description{
-Calculate the parameters of the log-Normal that best approximates the given Gamma distribuition.
+Calculate the parameters of the log-Normal that best approximates the given Gamma distribution.
 The approximation is the best in the sense that it minimizes the KL divergence from the Gamma to the log-Normal
 }
+\seealso{
+Other {auxiliary functions for a Poisson outcome}: 
+\code{\link{convert_Poisson_Normal}()},
+\code{\link{poisson_pred}()},
+\code{\link{update_Poisson_alt}()},
+\code{\link{update_Poisson}()}
+}
+\concept{{auxiliary functions for a Poisson outcome}}
+\keyword{internal}

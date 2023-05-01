@@ -15,11 +15,34 @@ update_NG_alt(conj_prior, ft, Qt, y, parms = list())
 
 \item{y}{vector: A vector containing the observations.}
 
-\item{parms}{list: A list of extra known parameters of the distribuition. Not used in this kernel.}
+\item{parms}{list: A list of extra known parameters of the distribution. Not used in this kernel.}
 }
 \value{
 The parameters of the posterior distribution.
 }
 \description{
-Calculate posterior parameter for the Normal-Gamma, assuming that the observed values came from a Normal model from which the prior distribuition for the mean and the precision have joint distribuition Normal-Gamma
+Calculate the (approximated) posterior parameter for the linear predictors, assuming that the observed values came from a Normal model from which the mean and the log precision have prior distribution in the Normal family.
 }
+\details{
+For evaluating the posterior parameters, we use a modified version of the method proposed in \insertCite{ArtigokParametrico;textual}{kDGLM}.
+
+For the details about the implementation see  \insertCite{ArtigoPacote;textual}{kDGLM}.
+
+For the detail about the modification of the method proposed in \insertCite{ArtigokParametrico;textual}{kDGLM}, see \insertCite{ArtigoAltMethod;textual}{kDGLM}.
+}
+\references{
+\insertAllCited{}
+}
+\seealso{
+Other {auxiliary functions for a Normal outcome}: 
+\code{\link{convert_NG_Normal}()},
+\code{\link{convert_dummy_post}()},
+\code{\link{convert_dummy_prior}()},
+\code{\link{convert_multi_NG_Normal}()},
+\code{\link{multi_normal_gamma_pred}()},
+\code{\link{normal_pred}()},
+\code{\link{update_Normal_dummy}()},
+\code{\link{update_multi_NG_correl}()}
+}
+\concept{{auxiliary functions for a Normal outcome}}
+\keyword{internal}

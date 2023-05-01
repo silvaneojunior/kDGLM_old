@@ -7,7 +7,7 @@
 normal_pred(conj_param, outcome = NULL, parms = list(), pred_cred = 0.95)
 }
 \arguments{
-\item{conj_param}{List or data.frame: The parameters of the conjugated distribuitions of the linear predictor.}
+\item{conj_param}{List or data.frame: The parameters of the conjugated distributions of the linear predictor.}
 
 \item{outcome}{Vector or matrix (optional): The observed values at the current time. Not used in this function.}
 
@@ -18,24 +18,28 @@ normal_pred(conj_param, outcome = NULL, parms = list(), pred_cred = 0.95)
 \value{
 A list containing the following values:
 \itemize{
-   \item pred vector/matrix: the mean of the predictive distribuition of a next observation. Same type and shape as the parameter in model.
-   \item var.pred vector/matrix: the variance of the predictive distribuition of a next observation. Same type and shape as the parameter in model.
-   \item icl.pred vector/matrix: the percentile of 100*((1-pred_cred)/2)% of the predictive distribuition of a next observation. Same type and shape as the parameter in model.
-   \item icu.pred vector/matrix: the percentile of 100*(1-(1-pred_cred)/2)% of the predictive distribuition of a next observation. Same type and shape as the parameter in model.
+   \item pred vector/matrix: the mean of the predictive distribution of a next observation. Same type and shape as the parameter in model.
+   \item var.pred vector/matrix: the variance of the predictive distribution of a next observation. Same type and shape as the parameter in model.
+   \item icl.pred vector/matrix: the percentile of 100*((1-pred_cred)/2)% of the predictive distribution of a next observation. Same type and shape as the parameter in model.
+   \item icu.pred vector/matrix: the percentile of 100*(1-(1-pred_cred)/2)% of the predictive distribution of a next observation. Same type and shape as the parameter in model.
    \item log.like vector: the The log likelihood for the outcome given the conjugated parameters.
 }
 }
 \description{
-Calculate the values for the predictive distribuition given the values of the parameter of the conjugated distribuition of the linear predictor.
-The data is assumed to have Normal distribuition with known variance and it's mean having distribuition Normal.
-In this scenario, the marginal distribuition of the data is also Normal.
+Calculate the values for the predictive distribution given the values of the parameter of the conjugated distribution of the linear predictor.
+The data is assumed to have Normal distribution with known variance and it's mean having distribution Normal.
+In this scenario, the marginal distribution of the data is also Normal.
 }
-\examples{
-
-ft <- c(0.5, -1 / 2, 0, -2.0)
-Qt <- diag(4)
-
-conj_param <- c(ft, Qt)
-
-normal_pred(conj_param, parms = list("Sigma" = diag(4)))
+\seealso{
+Other {auxiliary functions for a Normal outcome}: 
+\code{\link{convert_NG_Normal}()},
+\code{\link{convert_dummy_post}()},
+\code{\link{convert_dummy_prior}()},
+\code{\link{convert_multi_NG_Normal}()},
+\code{\link{multi_normal_gamma_pred}()},
+\code{\link{update_NG_alt}()},
+\code{\link{update_Normal_dummy}()},
+\code{\link{update_multi_NG_correl}()}
 }
+\concept{{auxiliary functions for a Normal outcome}}
+\keyword{internal}

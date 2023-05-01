@@ -6,6 +6,12 @@
 \usage{
 \method{+}{dlm_block}(e1, e2)
 }
+\arguments{
+\item{e1}{A dlm_block.}
+
+\item{e2}{A dlm_block.}
+}
 \description{
 Define add operator for class dlm_block
 }
+\keyword{internal}

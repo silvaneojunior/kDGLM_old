@@ -1,12 +1,13 @@
-#' fit_model
+#' Fitting kDGLM models
 #'
 #' Fit a model given it's structure and the observed data. This function can be used for any supported family (see vignette).
 #'
 #' @param ... dlm_block object: The structural blocks of the model.
 #' @param outcomes List: The observed data. It should contain objects of the class dlm_distr.
-#' @param offset Matrix: A matrix containing the offset value for the data. Dimesions should be the same as outcome.
-#' @param pred_cred Numeric: A number between 0 and 1 (not included) indicanting the credibility interval for predictions. If not within the valid range of values, predicitions are not made.
-#' @param smooth_flag Bool: A flag indicating if the smoothed distribuition for the latent variables should be calculated.
+#' @param pred_cred Numeric: A number between 0 and 1 (not included) indicating the credibility interval for predictions. If not within the valid range of values, predictions are not made.
+#' @param smooth_flag Bool: A flag indicating if the smoothed distribution for the latent variables should be calculated.
+#' @param p_monit numeric (optional): The prior probability of changes in the latent space variables that are not part of it's dynamic.
+#' @param c_monit numeric (optional, if p_monit is not specified): The relative cost of false alarm in the monitoring compared to the cost of not detecting abnormalities.
 #'
 #' @return The fitted model (an object of the <undefined class> or list). Contains the values of the estimated parameter and some extra info regarding the quality of the fit.
 #' @export
@@ -19,8 +20,8 @@
 #' w <- (200 / 40) * 2 * pi
 #' data <- rpois(T, 20 * (sin(w * 1:T / T) + 2))
 #'
-#' level <- polynomial_block(rate = 1, D = 1 / 0.95)
-#' season <- harmonic_block(rate = 1, period = 40, D = 1 / 0.98)
+#' level <- polynomial_block(rate = 1, D = 0.95)
+#' season <- harmonic_block(rate = 1, period = 40, D = 0.98)
 #'
 #' outcome <- Poisson(lambda = "rate", outcome = data)
 #'
@@ -57,14 +58,14 @@
 #'
 #' level <- polynomial_block(
 #'   mu = 1,
-#'   D = 1 / 0.95
+#'   D = 0.95
 #' )
 #' variance <- polynomial_block(
 #'   sigma2 = 1
 #' )
 #'
 #' # Known variance
-#' outcome <- Normal(mu = "mu", sigma2 = 1, outcome = data)
+#' outcome <- Normal(mu = "mu", Sigma = 1, outcome = data)
 #'
 #' fitted_data <- fit_model(level, outcomes = outcome)
 #' summary(fitted_data)
@@ -72,7 +73,7 @@
 #' show_fit(fitted_data, smooth = TRUE)$plot
 #'
 #' # Unknown variance
-#' outcome <- Normal(mu = "mu", sigma2 = "sigma2", outcome = data)
+#' outcome <- Normal(mu = "mu", Sigma = "sigma2", outcome = data)
 #'
 #' fitted_data <- fit_model(level, variance, outcomes = outcome)
 #' summary(fitted_data)
@@ -87,9 +88,9 @@
 #' phi <- 2.5
 #' data <- matrix(rgamma(T, phi, phi / (20 * (sin(w * 1:T / T) + 2))), T, 1)
 #'
-#' level <- polynomial_block(mu = 1, D = 1 / 0.95)
-#' season <- harmonic_block(mu = 1, period = 40, D = 1 / 0.98)
-#' scale <- polynomial_block(phi = 1, D = 1 / 1)
+#' level <- polynomial_block(mu = 1, D = 0.95)
+#' season <- harmonic_block(mu = 1, period = 40, D = 0.98)
+#' scale <- polynomial_block(phi = 1, D = 1)
 #'
 #' # Known shape
 #' outcome <- Gamma(phi = phi, mu = "mu", outcome = data)
@@ -99,13 +100,28 @@
 #'
 #' show_fit(fitted_data, smooth = TRUE)$plot
 #'
-#' # Unknown shape
-#' outcome <- Gamma(phi = "phi", mu = "mu", outcome = data)
+#' # DO NOT RUN
+#' # # Unknown shape
+#' # outcome <- Gamma(phi = "phi", mu = "mu", outcome = data)
+#' #
+#' # fitted_data <- fit_model(level, season, scale, outcomes = outcome)
+#' # summary(fitted_data)
+#' #
+#' # show_fit(fitted_data, smooth = TRUE)$plot
 #'
-#' fitted_data <- fit_model(level, season, scale, outcomes = outcome)
-#' summary(fitted_data)
+#' @details
 #'
-#' show_fit(fitted_data, smooth = TRUE)$plot
+#' This is the main function of the kDGLM package, as it is used to fit all models.
+#'
+#' For the details about the implementation see  \insertCite{ArtigoPacote;textual}{kDGLM}.
+#'
+#' For the details about the methodology see  \insertCite{ArtigokParametrico;textual}{kDGLM}.
+#'
+#' For the details about the Dynamic Linear Models see  \insertCite{WestHarr-DLM;textual}{kDGLM} and \insertCite{Petris-DLM;textual}{kDGLM}.
+#'
+#' @seealso auxiliary function for creating outcomes \code{\link{Poisson}}, \code{\link{Multinom}}, \code{\link{Normal}}, \code{\link{Gamma}}, \code{\link{Dirichlet}}
+#' @seealso auxiliary function for creating structural blocks \code{\link{polynomial_block}}, \code{\link{harmonic_block}}, \code{\link{AR_block}}
+#' @family {auxiliary functions for fitted_dlm objects}
 fit_model <- function(..., outcomes, pred_cred = 0.95, smooth_flag = TRUE, p_monit = NA, c_monit = 1) {
   pred_cred <- if (is.numeric(pred_cred)) {
     if (pred_cred > 0 & pred_cred < 1) {
@@ -116,7 +132,7 @@ fit_model <- function(..., outcomes, pred_cred = 0.95, smooth_flag = TRUE, p_mon
   } else {
     NA
   }
-  if (class(outcomes) == "dlm_distr") {
+  if (inherits(outcomes, "dlm_distr")) {
     outcomes <- list(outcomes)
   }
 
@@ -145,21 +161,35 @@ fit_model <- function(..., outcomes, pred_cred = 0.95, smooth_flag = TRUE, p_mon
     structure$FF <- array(structure$FF, c(structure$n, structure$k, structure$t), dimnames = dimnames(structure$FF))
   }
   if (t != structure$t) {
-    stop(paste0("Error: outcome does not have the same time length as structure: got ", n_outcomes, " from outcome, expected ", structure$t))
+    stop(paste0("Error: outcome does not have the same time length as structure: got ", t, " from outcome, expected ", structure$t))
   }
+
+  var_names_out <- c()
+  for (outcome in outcomes) {
+    var_names_out <- c(var_names_out, outcome$var_names)
+  }
+  unique(var_names_out)
+  if (any(!(var_names_out %in% structure$var_names))) {
+    stop("Error: One or more linear predictor in outcomes are not present in the model structure.")
+  }
+  if (any(!(structure$var_names %in% var_names_out))) {
+    warning("One or more linear predictor in the model structure are not used in the outcomes.")
+  }
+
   model <- analytic_filter(
     outcomes = outcomes,
     m0 = structure$m0,
     C0 = structure$C0,
     FF = structure$FF,
     G = structure$G,
+    G_labs = structure$G_labs,
     D = structure$D,
     W = structure$W,
     p_monit = p_monit,
     c_monit = c_monit
   )
   if (smooth_flag) {
-    smoothed <- generic_smoother(model$mt, model$Ct, model$at, model$Rt, model$G)
+    smoothed <- generic_smoother(model$mt, model$Ct, model$at, model$Rt, model$G, model$G_labs)
     model$mts <- smoothed$mts
     model$Cts <- smoothed$Cts
   }
@@ -195,6 +225,7 @@ fit_model <- function(..., outcomes, pred_cred = 0.95, smooth_flag = TRUE, p_mon
 #'
 #' @param model <undefined class> or list: The fitted model to be use for predictions.
 #' @param t Numeric: Time window for prediction.
+#' @param outcome List (optional): A named list containing the observed values in the prediction window. Note that the names in the list must be the same as the names passed during the fitting process.
 #' @param offset Matrix or scalar: offset for predictions. Should have dimensions k x t, where k is the number of outcomes of the model. If offset is not specified, the last value observed by the model will be used.
 #' @param FF Array: A 3D-array containing the regression matrix for each time. It's dimension should be n x k x t, where n is the number of latent variables, k is the number of outcomes in the model. If not specified, the last value given to the model will be used.
 #' @param G Array: A 3D-array containing the evolution matrix for each time. It's dimension should be n x n x t, where n is the number of latent variables. If not specified, the last value given to the model will be used.
@@ -202,7 +233,6 @@ fit_model <- function(..., outcomes, pred_cred = 0.95, smooth_flag = TRUE, p_mon
 #' @param W Array: A 3D-array containing the covariance matrix of the noise for each time. It's dimension should be n x n x t, where n is the number of latent variables and T is the time series length. If not specified, 0 will be used.
 #' @param plot Bool: A flag indicating if a plot should be produced.
 #' @param pred_cred Numeric: The credibility level for the I.C. intervals.
-#'
 #'
 #' @return A list containing:
 #' \itemize{
@@ -212,12 +242,12 @@ fit_model <- function(..., outcomes, pred_cred = 0.95, smooth_flag = TRUE, p_mon
 #'    \item icu.pred Matrix: A matrix with the upper bound of the I.C. based on the credibility given in the arguments. Dimensions are k x t, where k is the number of outcomes.
 #'    \item at Matrix: A matrix with the values for the linear predictor at each time. Dimensions are k x t, where k is the number of outcomes.
 #'    \item Rt Array: A 3D-array with the covariance of the linear predictor matrix at each time. Dimensions are k x k x t, where k is the number of outcomes.
-#'    \item plot (if so choosed): A plotly object.
+#'    \item plot (if so chosen): A plotly or ggplot object.
 #' }
 #' @import ggplot2
-#' @importFrom plotly ggplotly
 #' @import dplyr
 #' @import tidyr
+#' @importFrom Rfast transpose
 #' @export
 #'
 #' @examples
@@ -225,14 +255,16 @@ fit_model <- function(..., outcomes, pred_cred = 0.95, smooth_flag = TRUE, p_mon
 #' w <- (200 / 40) * 2 * pi
 #' data <- rpois(T, 20 * (sin(w * 1:T / T) + 2))
 #'
-#' level <- polynomial_block(rate = 1, D = 1 / 0.95)
-#' season <- harmonic_block(rate = 1, period = 40, D = 1 / 0.98)
+#' level <- polynomial_block(rate = 1, D = 0.95)
+#' season <- harmonic_block(rate = 1, period = 40, D = 0.98)
 #'
 #' outcome <- Poisson(lambda = "rate", outcome = data)
 #'
 #' fitted_data <- fit_model(level, season, outcomes = outcome)
 #'
 #' forecast(fitted_data, 20)$plot
+#'
+#' @family {auxiliary functions for fitted_dlm objects}
 forecast <- function(model, t = 1, outcome = NULL, offset = NULL, FF = NULL, G = NULL, D = NULL, W = NULL, plot = ifelse(requireNamespace("plotly", quietly = TRUE), "plotly", TRUE), pred_cred = 0.95) {
   n <- dim(model$mt)[1]
   t_last <- dim(model$mt)[2]
@@ -267,6 +299,7 @@ forecast <- function(model, t = 1, outcome = NULL, offset = NULL, FF = NULL, G =
   #   warning("Warning: Prediction window is big, results will probabily be unreliable.")
   # }
 
+  G_labs <- model$G_labs
   if (is.null(G)) {
     G <- array(model$G[, , t_last], c(n, n, t))
   }
@@ -329,6 +362,7 @@ forecast <- function(model, t = 1, outcome = NULL, offset = NULL, FF = NULL, G =
   Q1 <- array(NA, c(k, k, t))
 
   D <- ifelse(D == 0, 1, D)
+  D_inv <- 1 / D
 
   last_m <- m0
   last_C <- C0
@@ -356,7 +390,7 @@ forecast <- function(model, t = 1, outcome = NULL, offset = NULL, FF = NULL, G =
 
 
   for (t_i in c(1:t)) {
-    next_step <- one_step_evolve(last_m, last_C, G[, , t_i] %>% matrix(n, n), D[, , t_i]**0, W[, , t_i] + C0 * (D[, , t_i] - 1))
+    next_step <- one_step_evolve(last_m, last_C, G[, , t_i] %>% matrix(n, n), G_labs, D_inv[, , t_i]**0, W[, , t_i] + C0 * (D_inv[, , t_i] - 1))
     last_m <- next_step$at
     last_C <- next_step$Rt
 
@@ -368,14 +402,19 @@ forecast <- function(model, t = 1, outcome = NULL, offset = NULL, FF = NULL, G =
     Q1[, , t_i] <- lin_pred$Qt
     for (outcome_name in names(model$outcomes)) {
       model_i <- model$outcomes[[outcome_name]]
-      pred_index <- match(model_i$var_names, fitted_data$var_names)
+      pred_index <- match(model_i$var_names, model$var_names)
       lin_pred_offset <- model_i$apply_offset(
         lin_pred$ft[pred_index, , drop = FALSE],
         lin_pred$Qt[pred_index, pred_index, drop = FALSE],
         outcome_forecast[[outcome_name]]$offset[t_i, ]
       )
-      ft_canom <- model_i$convert_mat_canom %*% lin_pred_offset$ft
-      Qt_canom <- model_i$convert_mat_canom %*% lin_pred_offset$Qt %*% t(model_i$convert_mat_canom)
+      if (model_i$convert_canom_flag) {
+        ft_canom <- model_i$convert_mat_canom %*% lin_pred_offset$ft
+        Qt_canom <- model_i$convert_mat_canom %*% lin_pred_offset$Qt %*% transpose(model_i$convert_mat_canom)
+      } else {
+        ft_canom <- lin_pred_offset$ft
+        Qt_canom <- lin_pred_offset$Qt
+      }
 
       conj_prior <- model_i$conj_prior(ft_canom, Qt_canom, parms = model_i$parms)
       outcome_forecast[[outcome_name]]$conj_param[t_i, ] <- conj_prior
@@ -433,8 +472,9 @@ forecast <- function(model, t = 1, outcome = NULL, offset = NULL, FF = NULL, G =
   data_raw <- lapply(1:4, function(i) {
     data <- cbind(as.character(1:t + t_last) %>% as.data.frame(), data_list[[i]]) %>%
       as.data.frame() %>%
-      pivot_longer(1:r + 1) %>%
-      mutate(name = as.factor(name))
+      pivot_longer(1:r + 1)
+
+    data$name <- as.factor(data$name)
     names(data) <- c("Time", "Serie", data_name[i])
     levels(data$Serie) <- out_names
     data
@@ -446,7 +486,9 @@ forecast <- function(model, t = 1, outcome = NULL, offset = NULL, FF = NULL, G =
       data <- data %>% left_join(data_list[[i]], by = c("Time", "Serie"))
     }
     data
-  }, data_raw) %>% mutate(Time = as.numeric(Time), Serie = as.factor(Serie))
+  }, data_raw)
+  data$Time <- as.numeric(data$Time)
+  data$Serie <- as.factor(data$Serie)
 
   data_past <- eval_past(model, smooth = TRUE, pred_cred = pred_cred)
   plot_data <- rbind(
@@ -460,11 +502,14 @@ forecast <- function(model, t = 1, outcome = NULL, offset = NULL, FF = NULL, G =
     obs_na_rm <- data_past$Observation[!is.na(data_past$Observation)]
     max_value <- calcula_max(obs_na_rm - min(obs_na_rm))[[3]] + min(obs_na_rm)
     min_value <- -calcula_max(-(obs_na_rm - max(obs_na_rm)))[[3]] + max(obs_na_rm)
+    plot_data$shape_point <- paste0("Obs_", plot_data$type)
+    plot_data$group_ribbon <- paste0(plot_data$Serie, plot_data$type)
 
-    plt.obj <- ggplot(plot_data, aes(x = Time)) +
-      geom_line(aes(y = Prediction, linetype = type, color = Serie)) +
-      geom_ribbon(aes(ymin = C.I.lower, ymax = C.I.upper, fill = Serie, group = paste0(Serie, type)), alpha = 0.25, color = NA) +
-      geom_point(aes(y = Observation, shape = paste0("Obs_", type), color = Serie)) +
+
+    plt.obj <- ggplot(plot_data, aes_string(x = "Time")) +
+      geom_line(aes_string(y = "Prediction", linetype = "type", color = "Serie")) +
+      geom_ribbon(aes_string(ymin = "C.I.lower", ymax = "C.I.upper", fill = "Serie", group = "group_ribbon"), alpha = 0.25, color = NA) +
+      geom_point(aes_string(y = "Observation", shape = "shape_point", color = "Serie")) +
       scale_fill_hue("", na.value = NA) +
       scale_color_hue("", na.value = NA) +
       scale_linetype_manual("", values = c("dashed", "solid")) +
@@ -515,13 +560,14 @@ forecast <- function(model, t = 1, outcome = NULL, offset = NULL, FF = NULL, G =
 #' @param h positive integer: The relative offset for forecast. Values for time t will be calculated based on the filtered values of time t-h Will be ignored if smooth is TRUE.
 #' @param pred_cred Numeric: The credibility level for the I.C. intervals.
 #'
-#' @return A list containg:
+#' @return A list containing:
 #' \itemize{
 #'    \item pred Matrix: A matrix with the predictive mean at each time. Dimensions are k x t, where k is the number of outcomes.
 #'    \item var.pred Array: A 3D-array with the predictive covariance matrix at each time. Dimensions are k x k x t, where k is the number of outcomes.
 #'    \item icl.pred Matrix: A matrix with the lower bound of the I.C. based on the credibility given in the arguments. Dimensions are k x t, where k is the number of outcomes.
 #'    \item icu.pred Matrix: A matrix with the upper bound of the I.C. based on the credibility given in the arguments. Dimensions are k x t, where k is the number of outcomes.
 #' }
+#' @importFrom Rfast transpose
 #' @export
 #'
 #' @examples
@@ -543,6 +589,8 @@ forecast <- function(model, t = 1, outcome = NULL, offset = NULL, FF = NULL, G =
 #' fitted_data <- fit_model(level, season_2, outcomes = outcome)
 #'
 #' past <- eval_past(fitted_data, smooth = TRUE)
+#'
+#' @family {auxiliary functions for fitted_dlm objects}
 eval_past <- function(model, smooth = FALSE, h = 0, pred_cred = 0.95) {
   if (smooth & h > 0) {
     h <- 0
@@ -570,11 +618,13 @@ eval_past <- function(model, smooth = FALSE, h = 0, pred_cred = 0.95) {
     ref_mt <- model$mts
     ref_Ct <- model$Cts
     D <- model$D**0
+    D_inv <- 1 / D
     W <- model$W * 0
   } else {
     ref_mt <- model$mt
     ref_Ct <- model$Ct
     D <- model$D
+    D_inv <- 1 / D
     W <- model$W
     if (h > 0) {
       # for (i in c(1:h)) {
@@ -583,6 +633,7 @@ eval_past <- function(model, smooth = FALSE, h = 0, pred_cred = 0.95) {
       G <- model$G
     }
   }
+  G_labs <- model$G_labs
 
   for (i in c((1 + h):t_last)) {
     mt <- if (i <= h) {
@@ -595,14 +646,14 @@ eval_past <- function(model, smooth = FALSE, h = 0, pred_cred = 0.95) {
     } else {
       ref_Ct[, , i - h]
     }
-    # model$filter(model$outcome[i, ], mt, Ct, FF[, , i] %>% matrix(n, r), G, D[, , i], W[, , i], model$offset[i, ], parms = model$parms)
+    # model$filter(model$outcome[i, ], mt, Ct, FF[, , i] %>% matrix(n, r), G, D_inv[, , i], W[, , i], model$offset[i, ], parms = model$parms)
     next_step <- list("at" = mt, "Rt" = Ct)
     if (h >= 1) {
       for (t in c(1:h)) {
-        next_step <- one_step_evolve(next_step$at, next_step$Rt, G[, , i - t + 1], D[, , i - t + 1]**(t == 1), W[, , i - t + 1])
+        next_step <- one_step_evolve(next_step$at, next_step$Rt, G[, , i - t + 1], G_labs, D_inv[, , i - t + 1]**(t == 1), W[, , i - t + 1])
       }
     }
-    # next_step <- one_step_evolve(mt, Ct, FF[, , i] %>% matrix(n, r), G, D[, , i], W[, , i])
+    # next_step <- one_step_evolve(mt, Ct, FF[, , i] %>% matrix(n, r), G, G_labs, D_inv[, , i], W[, , i])
     lin_pred <- calc_lin_pred(next_step$at %>% matrix(n, 1), next_step$Rt, FF[, , i] %>% matrix(n, r))
 
     r_acum <- 0
@@ -614,11 +665,16 @@ eval_past <- function(model, smooth = FALSE, h = 0, pred_cred = 0.95) {
 
       cur_step <- outcome$apply_offset(lin_pred$ft[pred_index, , drop = FALSE], lin_pred$Qt[pred_index, pred_index, drop = FALSE], outcome$offset[i, ])
 
-      ft_canom <- outcome$convert_mat_canom %*% cur_step$ft
-      Qt_canom <- outcome$convert_mat_canom %*% cur_step$Qt %*% t(outcome$convert_mat_canom)
+      if (outcome$convert_canom_flag) {
+        ft_canom <- outcome$convert_mat_canom %*% cur_step$ft
+        Qt_canom <- outcome$convert_mat_canom %*% cur_step$Qt %*% transpose(outcome$convert_mat_canom)
+      } else {
+        ft_canom <- cur_step$ft
+        Qt_canom <- cur_step$Qt
+      }
 
 
-      conj_distr <- outcome$conj_prior(ft_canom, Qt_canom)
+      conj_distr <- outcome$conj_prior(ft_canom, Qt_canom, parms = outcome$parms)
       prediction <- outcome$calc_pred(conj_distr, outcome$outcome[i, , drop = FALSE], pred_cred, parms = outcome$parms)
 
       pred[(r_acum + 1):(r_acum + r_cur), i] <- prediction$pred
@@ -651,8 +707,9 @@ eval_past <- function(model, smooth = FALSE, h = 0, pred_cred = 0.95) {
   data_raw <- lapply(1:4, function(i) {
     data <- cbind(as.character(1:t_last) %>% as.data.frame(), data_list[[i]]) %>%
       as.data.frame() %>%
-      pivot_longer(1:k + 1) %>%
-      mutate(name = as.factor(name))
+      pivot_longer(1:k + 1)
+
+    data$name <- as.factor(data$name)
     names(data) <- c("Time", "Serie", data_name[i])
     levels(data$Serie) <- out_names
     data
@@ -664,14 +721,19 @@ eval_past <- function(model, smooth = FALSE, h = 0, pred_cred = 0.95) {
       data <- data %>% left_join(data_list[[i]], by = c("Time", "Serie"))
     }
     data
-  }, data_raw) %>% mutate(Time = as.numeric(Time), Serie = as.factor(Serie))
+  }, data_raw)
+  data$Time <- as.numeric(data$Time)
+  data$Serie <- as.factor(data$Serie)
   return(data)
 }
 
 #' dlm_sampling
 #'
+#' This is function draws samples from the latent states using the FFBS algorithm. See \insertCite{WestHarr-DLM;textual}{kDGLM}, chapter 15, for details.
+#'
 #' @param model fitted_dlm: A fitted model from which to sample.
 #' @param sample_size integer: The number of samples to draw.
+#' @param filtered_distr bool: A flag indicating if the samples should be dawned from the filtered (if TRUE) or smoothed distribution. The default is FALSE.
 #'
 #' @return A list containing the following values:
 #' \itemize{
@@ -679,6 +741,9 @@ eval_past <- function(model, smooth = FALSE, h = 0, pred_cred = 0.95) {
 #'    \item ft Array: An array containing the samples of linear predictors. Dimensions are m x T x sample_size, where m is the number of linear predictors in the model and T is the number of observed values.
 #'    \item param Array: An array containing the samples of the parameters of the observational model. Dimensions are k x T x sample_size, where k is the number of parameters in the observational model and T is the number of observed values.
 #' }
+#'
+#' @importFrom Rfast transpose
+#' @importFrom stats rnorm
 #' @export
 #'
 #' @examples
@@ -689,13 +754,13 @@ eval_past <- function(model, smooth = FALSE, h = 0, pred_cred = 0.95) {
 #'
 #' level <- polynomial_block(
 #'   mu = 1,
-#'   D = 1 / 0.95
+#'   D = 0.95
 #' )
 #' variance <- polynomial_block(
 #'   sigma2 = 1
 #' )
 #' # Unknown variance
-#' outcome <- Normal(mu = "mu", sigma2 = "sigma2", outcome = data)
+#' outcome <- Normal(mu = "mu", Sigma = "sigma2", outcome = data)
 #'
 #' fitted_data <- fit_model(level, variance, outcomes = outcome)
 #' summary(fitted_data)
@@ -703,10 +768,14 @@ eval_past <- function(model, smooth = FALSE, h = 0, pred_cred = 0.95) {
 #' show_fit(fitted_data, smooth = TRUE)$plot
 #'
 #' sample <- dlm_sampling(fitted_data, 2000)
-dlm_sampling <- function(model, sample_size) {
+#'
+#' @family {auxiliary functions for fitted_dlm objects}
+dlm_sampling <- function(model, sample_size, filtered_distr = FALSE) {
   G <- model$G
+  G_labs <- model$G_labs
   at <- model$at
   mt <- model$mt
+  mts <- model$mts
   FF <- model$FF
   T_len <- dim(mt)[2]
   n <- dim(mt)[1]
@@ -717,35 +786,28 @@ dlm_sampling <- function(model, sample_size) {
       inv_link = model$outcomes[[outcome_name]]$inv_link_function,
       apply_offset = model$outcomes[[outcome_name]]$apply_offset,
       offset = model$outcomes[[outcome_name]]$offset,
-      l = dim(model$outcomes[[outcome_name]]$conj_prior_param)[2]
+      l = model$outcomes[[outcome_name]]$l,
+      convert_mat_canom = model$outcomes[[outcome_name]]$convert_mat_canom,
+      convert_canom_flag = model$outcomes[[outcome_name]]$convert_canom_flag
     )
-  }
-  alt_chol_local <- if (n == 1) {
-    sqrt
-  } else {
-    alt_chol
   }
 
   mt_sample <- rnorm(n * T_len * sample_size) %>% array(c(n, T_len, sample_size))
   ft_sample <- array(NA, c(k, T_len, sample_size))
 
-  Ct_chol <- tryCatch(
-    {
-      chol(model$Ct[, , T_len])
-    },
-    error = function(e) {
-      alt_chol_local(model$Ct[, , T_len])
-    }
-  )
-  mt_sample_i <- t(Ct_chol) %*% mt_sample[, T_len, ] + mt[, T_len]
-  if (any(is.na(FF[, , T_len]))) {
-    FF_step <- FF[, , T_len]
-    ft_sample_i <- matrix(NA, k, sample_size)
-    for (j in 1:sample_size) {
-      ft_sample_i[, j] <- calc_lin_pred(mt_sample_i[, j], Ct_chol * 0, FF_step)$ft
-    }
+  Ct_chol <- var_decomp(model$Ct[, , T_len])
+  # mt_sample_i <- transpose(Ct_chol) %*% mt_sample[, T_len, ] + mt[, T_len]
+  mt_sample_i <- crossprod(Ct_chol, mt_sample[, T_len, ]) + mt[, T_len]
+  FF_step <- FF[, , T_len]
+  if (any(is.na(FF_step))) {
+    ft_sample_i <- sapply(1:sample_size,
+      function(j) {
+        calc_lin_pred(mt_sample_i[, j], Ct_chol * 0, FF_step)$ft
+      },
+      simplify = "matrix"
+    )
   } else {
-    ft_sample_i <- t(FF[, , T_len]) %*% mt_sample_i
+    ft_sample_i <- crossprod(FF_step, mt_sample_i)
   }
 
   var_names <- colnames(FF)
@@ -761,8 +823,14 @@ dlm_sampling <- function(model, sample_size) {
       offset_step <- 1
     }
 
+    if (outcomes[[outcome_name]]$convert_canom_flag) {
+      ft_sample_i_canom <- outcomes[[outcome_name]]$convert_mat_canom %*% ft_sample_i
+    } else {
+      ft_sample_i_canom <- ft_sample_i
+    }
+
     ft_sample_i_out <- outcomes[[outcome_name]]$apply_offset(
-      ft_sample_i[outcomes[[outcome_name]]$pred_index, , drop = FALSE],
+      ft_sample_i_canom[outcomes[[outcome_name]]$pred_index, , drop = FALSE],
       diag(k) * 0,
       offset_step
     )$ft
@@ -775,44 +843,41 @@ dlm_sampling <- function(model, sample_size) {
   ft_sample[, T_len, ] <- ft_sample_i
 
   for (t in (T_len - 1):1) {
-    na.flag <- any(is.null(offset_step) | any(offset_step == 0) | any(is.na(offset_step)))
-
     Rt <- model$Rt[, , t + 1]
     Ct <- model$Ct[, , t]
 
-    mt_now <- mt[, t]
-    G_ref <- G[, , t + 1]
-    G_now <- G_ref
-    G_diff <- rep(0, n)
-    if (any(is.na(G_ref))) {
-      for (index_col in (1:n)[colSums(is.na(G_ref)) > 0]) {
-        index_row <- (1:n)[is.na(G_now[, index_col])]
-        G_now[index_row, index_col] <- mt_now[index_col + 1]
-        G_now[index_row, index_col + 1] <- mt_now[index_col]
-        G_diff[index_col] <- -mt_now[index_col] * mt_now[index_col + 1]
-      }
-    }
-    simple_Rt_inv <- Ct %*% t(G_now) %*% ginv(Rt)
-
-    mts <- mt[, t] + simple_Rt_inv %*% (mt_sample_i - at[, t + 1])
-    Cts <- Ct - simple_Rt_inv %*% Rt %*% t(simple_Rt_inv)
-    Ct_chol <- tryCatch(
-      {
-        chol(Cts)
-      },
-      error = function(e) {
-        alt_chol_local(Cts)
-      }
-    )
-    mt_sample_i <- t(Ct_chol) %*% mt_sample[, t, ] + mts
-    if (any(is.na(FF[, , t]))) {
-      FF_step <- FF[, , t]
-      ft_sample_i <- matrix(NA, k, sample_size)
-      for (j in 1:sample_size) {
-        ft_sample_i[, j] <- calc_lin_pred(mt_sample_i[, j], Ct_chol * 0, FF_step)$ft
-      }
+    if (filtered_distr) {
+      mts <- mt[, t]
+      Cts <- Ct
+      Ct_chol <- var_decomp(Cts)
+      mt_sample_i <- crossprod(Ct_chol, mt_sample[, t, ]) + mts
     } else {
-      ft_sample_i <- t(FF[, , t]) %*% mt_sample_i
+      mt_now <- mt[, t]
+
+      G_ref <- calc_current_G(mts[, t], G[, , t], G_labs)$G
+      simple_Rt_inv <- Ct %*% transpose(G_ref) %*% ginv(Rt)
+      simple_Rt_inv_t <- transpose(simple_Rt_inv)
+      # simple_Rt_inv_t <- solve(Rt, G_ref %*% Ct)
+      # simple_Rt_inv <- transpose(simple_Rt_inv_t)
+
+
+      mts <- mt[, t] + simple_Rt_inv %*% (mt_sample_i - at[, t + 1])
+      # Cts <- Ct - simple_Rt_inv %*% Rt %*% simple_Rt_inv_t
+      Cts <- Ct - crossprod(simple_Rt_inv_t, Rt) %*% simple_Rt_inv_t
+      Ct_chol <- var_decomp(Cts)
+      mt_sample_i <- crossprod(Ct_chol, mt_sample[, t, ]) + mts
+    }
+
+    FF_step <- FF[, , t]
+    if (any(is.na(FF_step))) {
+      ft_sample_i <- sapply(1:sample_size,
+        function(j) {
+          calc_lin_pred(mt_sample_i[, j], Ct_chol * 0, FF_step)$ft
+        },
+        simplify = "matrix"
+      )
+    } else {
+      ft_sample_i <- crossprod(FF_step, mt_sample_i)
     }
 
     for (outcome_name in names(outcomes)) {
@@ -820,8 +885,14 @@ dlm_sampling <- function(model, sample_size) {
       if (any(is.na(offset_step))) {
         offset_step <- 1
       }
+      if (outcomes[[outcome_name]]$convert_canom_flag) {
+        ft_sample_i_canom <- outcomes[[outcome_name]]$convert_mat_canom %*% ft_sample_i
+      } else {
+        ft_sample_i_canom <- ft_sample_i
+      }
+
       ft_sample_i_out <- outcomes[[outcome_name]]$apply_offset(
-        ft_sample_i[outcomes[[outcome_name]]$pred_index, , drop = FALSE],
+        ft_sample_i_canom[outcomes[[outcome_name]]$pred_index, , drop = FALSE],
         diag(k) * 0,
         offset_step
       )$ft

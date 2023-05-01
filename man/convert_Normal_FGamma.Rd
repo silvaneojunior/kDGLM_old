@@ -7,14 +7,24 @@
 convert_Normal_FGamma(conj_prior, parms)
 }
 \arguments{
-\item{conj_prior}{list: A vector containing the parameters of the Inverse-Gamma (alpha,beta).}
+\item{conj_prior}{list: A vector containing the parameters of the conjugated distribution (n, tau, theta).}
 
-\item{parms}{list: A list of extra known parameters of the distribuition. Not used in this function.}
+\item{parms}{list: A list of extra known parameters of the distribution. Not used in this function.}
 }
 \value{
-The parameters of the Normal distribuition of the linear predictor.
+The parameters of the Normal distribution of the linear predictor.
 }
 \description{
-Calculate the parameters of the log-Normal that best approximates the given Inverse-Gamma distribuition.
-The approximation is the best in the sense that it minimizes the KL divergence from the Inverse-Gamma to the log-Normal
+Calculate the parameters of the log-Normal that best approximates the given conjugated distribution.
+The approximation is the best in the sense that it minimizes the KL divergence from the conjugated distribution to the log-Normal
 }
+\seealso{
+Other {auxiliary functions for a Gamma outcome with unknowned shape}: 
+\code{\link{Fgamma_pred_alt}()},
+\code{\link{Fgamma_pred}()},
+\code{\link{convert_FGamma_Normal}()},
+\code{\link{update_FGamma_alt}()},
+\code{\link{update_FGamma}()}
+}
+\concept{{auxiliary functions for a Gamma outcome with unknowned shape}}
+\keyword{internal}

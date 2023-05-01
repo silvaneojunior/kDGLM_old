@@ -21,5 +21,24 @@ update_Gamma_alt(conj_prior, ft, Qt, y, parms)
 The parameters of the posterior distribution.
 }
 \description{
-Calculate posterior parameter for the Inverse-Gamma, assuming that the observed values came from a Gamma model from which the shape parameter (phi) is known and the mean (mu) have prior distribuition Inverse-Gamma.
+Calculate the (approximated) posterior parameter for the linear predictors, assuming that the observed values came from a Gamma model from which the shape parameter is known and mean parameter have prior distribution in the log-Normal family.
 }
+\details{
+For evaluating the posterior parameters, we use a modified version of the method proposed in \insertCite{ArtigokParametrico;textual}{kDGLM}.
+
+For the details about the implementation see  \insertCite{ArtigoPacote;textual}{kDGLM}.
+
+For the detail about the modification of the method proposed in \insertCite{ArtigokParametrico;textual}{kDGLM}, see \insertCite{ArtigoAltMethod;textual}{kDGLM}.
+}
+\references{
+\insertAllCited{}
+}
+\seealso{
+Other {auxiliary functions for a Gamma outcome with known shape}: 
+\code{\link{convert_Gamma_Normal}()},
+\code{\link{convert_Normal_Gamma}()},
+\code{\link{gamma_pred}()},
+\code{\link{update_Gamma}()}
+}
+\concept{{auxiliary functions for a Gamma outcome with known shape}}
+\keyword{internal}

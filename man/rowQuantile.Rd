@@ -17,3 +17,4 @@ Vector: The chosen quatile for each row of X.
 \description{
 A function that calculates the row-wise quantiles of a matrix.
 }
+\keyword{internal}

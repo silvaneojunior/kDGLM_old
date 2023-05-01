@@ -22,6 +22,8 @@ forecast(
 
 \item{t}{Numeric: Time window for prediction.}
 
+\item{outcome}{List (optional): A named list containing the observed values in the prediction window. Note that the names in the list must be the same as the names passed during the fitting process.}
+
 \item{offset}{Matrix or scalar: offset for predictions. Should have dimensions k x t, where k is the number of outcomes of the model. If offset is not specified, the last value observed by the model will be used.}
 
 \item{FF}{Array: A 3D-array containing the regression matrix for each time. It's dimension should be n x k x t, where n is the number of latent variables, k is the number of outcomes in the model. If not specified, the last value given to the model will be used.}
@@ -45,7 +47,7 @@ A list containing:
    \item icu.pred Matrix: A matrix with the upper bound of the I.C. based on the credibility given in the arguments. Dimensions are k x t, where k is the number of outcomes.
    \item at Matrix: A matrix with the values for the linear predictor at each time. Dimensions are k x t, where k is the number of outcomes.
    \item Rt Array: A 3D-array with the covariance of the linear predictor matrix at each time. Dimensions are k x k x t, where k is the number of outcomes.
-   \item plot (if so choosed): A plotly object.
+   \item plot (if so chosen): A plotly or ggplot object.
 }
 }
 \description{
@@ -56,12 +58,20 @@ T <- 200
 w <- (200 / 40) * 2 * pi
 data <- rpois(T, 20 * (sin(w * 1:T / T) + 2))
 
-level <- polynomial_block(rate = 1, D = 1 / 0.95)
-season <- harmonic_block(rate = 1, period = 40, D = 1 / 0.98)
+level <- polynomial_block(rate = 1, D = 0.95)
+season <- harmonic_block(rate = 1, period = 40, D = 0.98)
 
 outcome <- Poisson(lambda = "rate", outcome = data)
 
 fitted_data <- fit_model(level, season, outcomes = outcome)
 
 forecast(fitted_data, 20)$plot
+
 }
+\seealso{
+Other {auxiliary functions for fitted_dlm objects}: 
+\code{\link{dlm_sampling}()},
+\code{\link{eval_past}()},
+\code{\link{fit_model}()}
+}
+\concept{{auxiliary functions for fitted_dlm objects}}

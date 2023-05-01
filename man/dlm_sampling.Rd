@@ -4,12 +4,14 @@
 \alias{dlm_sampling}
 \title{dlm_sampling}
 \usage{
-dlm_sampling(model, sample_size)
+dlm_sampling(model, sample_size, filtered_distr = FALSE)
 }
 \arguments{
 \item{model}{fitted_dlm: A fitted model from which to sample.}
 
 \item{sample_size}{integer: The number of samples to draw.}
+
+\item{filtered_distr}{bool: A flag indicating if the samples should be dawned from the filtered (if TRUE) or smoothed distribution. The default is FALSE.}
 }
 \value{
 A list containing the following values:
@@ -20,7 +22,7 @@ A list containing the following values:
 }
 }
 \description{
-dlm_sampling
+This is function draws samples from the latent states using the FFBS algorithm. See \insertCite{WestHarr-DLM;textual}{kDGLM}, chapter 15, for details.
 }
 \examples{
 
@@ -30,13 +32,13 @@ data <- rnorm(T, cumsum(mu))
 
 level <- polynomial_block(
   mu = 1,
-  D = 1 / 0.95
+  D = 0.95
 )
 variance <- polynomial_block(
   sigma2 = 1
 )
 # Unknown variance
-outcome <- Normal(mu = "mu", sigma2 = "sigma2", outcome = data)
+outcome <- Normal(mu = "mu", Sigma = "sigma2", outcome = data)
 
 fitted_data <- fit_model(level, variance, outcomes = outcome)
 summary(fitted_data)
@@ -44,4 +46,12 @@ summary(fitted_data)
 show_fit(fitted_data, smooth = TRUE)$plot
 
 sample <- dlm_sampling(fitted_data, 2000)
+
 }
+\seealso{
+Other {auxiliary functions for fitted_dlm objects}: 
+\code{\link{eval_past}()},
+\code{\link{fit_model}()},
+\code{\link{forecast}()}
+}
+\concept{{auxiliary functions for fitted_dlm objects}}
