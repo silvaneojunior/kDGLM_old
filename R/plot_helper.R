@@ -222,7 +222,7 @@ plot_lat_var <- function(model, var = "", smooth = model$smooth, cut_off = 10, p
     pivot_longer(1:size) %>%
     rename("lim_s" = "value")
 
-  IC_label <- paste0("\nI.C. (", pred_cred * 100 %>% round(), "%)")
+  label <- paste0("\n(", pred_cred * 100 %>% round(), "%)")
 
   plot_data <- m1 %>%
     inner_join(lim_i, by = c("time", "name")) %>%
@@ -230,13 +230,12 @@ plot_lat_var <- function(model, var = "", smooth = model$smooth, cut_off = 10, p
 
   n_var <- length(unique(plot_data$name))
   color_list <- rainbow(n_var, s = 0.5)
-  names(color_list) <- paste(unique(plot_data$name), "\npoint estimate")
+  names(color_list) <- paste(unique(plot_data$name), label)
 
   fill_list <- rainbow(n_var, s = 0.5)
-  names(fill_list) <- paste(unique(plot_data$name), IC_label)
-  plot_data$fill_name <- paste(plot_data$name, "\npoint estimate")
-  plot_data$color_name <- paste(plot_data$name, "\npoint estimate")
-  plot_data$IC_name <- paste(plot_data$name, IC_label)
+  names(fill_list) <- paste(unique(plot_data$name), label)
+  plot_data$fill_name <- paste(plot_data$name, label)
+  plot_data$color_name <- paste(plot_data$name, label)
 
   plt <- ggplot(plot_data, aes_string(x = "time", fill = "fill_name", color = "color_name")) +
     geom_hline(yintercept = 0, linetype = "dashed") +
@@ -247,7 +246,7 @@ plot_lat_var <- function(model, var = "", smooth = model$smooth, cut_off = 10, p
     scale_y_continuous("Parameter value") +
     theme_bw() +
     theme(axis.text.x = element_text(angle = 90)) +
-    geom_ribbon(aes_string(ymin = "lim_i", ymax = "lim_s", fill = "IC_name", color = "IC_name"), alpha = 0.25) +
+    geom_ribbon(aes_string(ymin = "lim_i", ymax = "lim_s"), alpha = 0.25) +
     geom_line(aes_string(y = "media")) +
     coord_cartesian(ylim = c(min_value, max_value))
   if (plotly) {
@@ -255,6 +254,15 @@ plot_lat_var <- function(model, var = "", smooth = model$smooth, cut_off = 10, p
       warning("The plotly package is required for plotly plots.")
     } else {
       plt <- plotly::ggplotly(plt)
+
+      for (i in (1:size) - 1) {
+        plt$x$data[[i + 1+1]]$legendgroup <-
+          plt$x$data[[i + 1 + size+1]]$legendgroup <-
+          plt$x$data[[i + 1+1]]$name <-
+          plt$x$data[[i + 1 + size+1]]$name <- plt$x$data[[i + 1 + size+1]]$name
+
+        plt$x$data[[i + 1+1]]$showlegend <- FALSE
+      }
     }
   }
   return(list("plot" = plt, "data" = plot_data))
@@ -322,13 +330,12 @@ plot_lin_pred <- function(model, pred = "", smooth = model$smooth, cut_off = 10,
   } else {
     model$Ct
   }
-
   f1 <- (sapply(1:t, function(t) {
-    t(model$FF[, , t]) %*% m1[, t]
-  }) %>% matrix(size, t))[indice, ]
+    t(model$FF[, indice, t]) %*% m1[, t]
+  }) %>% matrix(size, t))[, ]
   R1 <- (sapply(1:t, function(t) {
-    sqrt(diag(t(model$FF[, , t]) %*% C1[, , t] %*% model$FF[, , t]))
-  }) %>% matrix(size, t))[indice, ]
+    sqrt(diag(t(model$FF[, indice, t]) %*% C1[, , t] %*% model$FF[, indice, t]))
+  }) %>% matrix(size, t))
   f1 <- f1 %>%
     matrix(size, t) %>%
     t()
@@ -371,7 +378,7 @@ plot_lin_pred <- function(model, pred = "", smooth = model$smooth, cut_off = 10,
     pivot_longer(1:size) %>%
     rename("lim_s" = "value")
 
-  IC_label <- paste0("\nI.C. (", pred_cred * 100 %>% round(), "%)")
+  label <- paste0("\n(cred. ", pred_cred * 100 %>% round(), "%)")
 
   plot_data <- f1 %>%
     inner_join(lim_i, by = c("time", "name")) %>%
@@ -379,13 +386,13 @@ plot_lin_pred <- function(model, pred = "", smooth = model$smooth, cut_off = 10,
 
   n_var <- length(unique(plot_data$name))
   color_list <- rainbow(n_var, s = 0.5)
-  names(color_list) <- paste(unique(plot_data$name), "\npoint estimate")
+  names(color_list) <- paste(unique(plot_data$name), label)
 
   fill_list <- rainbow(n_var, s = 0.5)
-  names(fill_list) <- paste(unique(plot_data$name), IC_label)
-  plot_data$fill_name <- paste(plot_data$name, "\npoint estimate")
-  plot_data$color_name <- paste(plot_data$name, "\npoint estimate")
-  plot_data$IC_name <- paste(plot_data$name, IC_label)
+  names(fill_list) <- paste(unique(plot_data$name), label)
+  plot_data$fill_name <- paste(plot_data$name, label)
+  plot_data$color_name <- paste(plot_data$name, label)
+  plot_data$IC_name <- paste(plot_data$name, label)
 
   plt <- ggplot(plot_data, aes_string(x = "time", fill = "fill_name", color = "color_name")) +
     geom_hline(yintercept = 0, linetype = "dashed") +
@@ -396,7 +403,7 @@ plot_lin_pred <- function(model, pred = "", smooth = model$smooth, cut_off = 10,
     scale_y_continuous("predictor value") +
     theme_bw() +
     theme(axis.text.x = element_text(angle = 90)) +
-    geom_ribbon(aes_string(ymin = "lim_i", ymax = "lim_s", fill = "IC_name", color = "IC_name"), alpha = 0.25) +
+    geom_ribbon(aes_string(ymin = "lim_i", ymax = "lim_s"), alpha = 0.25,color=NA) +
     geom_line(aes_string(y = "media")) +
     coord_cartesian(ylim = c(min_value, max_value))
   if (plotly) {
@@ -404,6 +411,15 @@ plot_lin_pred <- function(model, pred = "", smooth = model$smooth, cut_off = 10,
       warning("The plotly package is required for plotly plots.")
     } else {
       plt <- plotly::ggplotly(plt)
+
+      for (i in (1:size) - 1) {
+        plt$x$data[[i + 1+1]]$legendgroup <-
+          plt$x$data[[i + 1 + size+1]]$legendgroup <-
+          plt$x$data[[i + 1+1]]$name <-
+          plt$x$data[[i + 1 + size+1]]$name <- plt$x$data[[i + 1 + size+1]]$name
+
+          plt$x$data[[i + 1+1]]$showlegend <- FALSE
+      }
     }
   }
   return(list("plot" = plt, "data" = plot_data))

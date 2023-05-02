@@ -1818,7 +1818,7 @@ update_multi_NG_correl <- function(conj_prior, ft, Qt, y, parms) {
 
   if(r>1){
     var_vals=diag(Qt_up[var_index,var_index])
-    index_go=order(-var_vals)
+    index_go=order(var_vals)
     # index_go=1:r
     index_back=order(index_go)
 
@@ -1866,22 +1866,24 @@ update_multi_NG_correl <- function(conj_prior, ft, Qt, y, parms) {
   }
 
   if (r > 1) {
-    for (i in 2:r) {{
+    for (i in 2:r) {
 
-      var_vals=diag(Qt_up[var_index,var_index])
-      index_go=c(gone,((1:r)[!(1:r %in% gone)])[order(-var_vals[!(1:r %in% gone)])])
-      # index_go=1:r
-      # print(index_go)
-      index_back=order(index_go)
-      gone=c(gone,index_go[i])
+        var_vals=diag(Qt_up[var_index,var_index])
+        index_go=c(gone,((1:r)[!(1:r %in% gone)])[order(var_vals[!(1:r %in% gone)])])
+        # index_go=1:r
+        # print(index_go)
+        index_back=order(index_go)
+        gone=c(gone,index_go[i])
 
-      mat_change=diag(r)
-      mat_change[lower.flags]=mat_change[upper.flags]=cor_index
-      mat_change=mat_change[index_go,index_go]
-      index_change=c(mu_index[index_go],var_index[index_go],mat_change[lower.flags])
-      ft_up=ft_up[index_change]
-      Qt_up=Qt_up[index_change,index_change]
-      y <- y[index_change]
+        mat_change=diag(r)
+        mat_change[lower.flags]=mat_change[upper.flags]=cor_index
+        mat_change=mat_change[index_go,index_go]
+        index_change=c(mu_index[index_go],var_index[index_go],mat_change[lower.flags])
+        ft_up=ft_up[index_change]
+        Qt_up=Qt_up[index_change,index_change]
+        y <- y[index_change]
+
+    {
 
       x <- c(ft_up)
       rho <- matrix(0, r, r)
@@ -1953,19 +1955,17 @@ update_multi_NG_correl <- function(conj_prior, ft, Qt, y, parms) {
         Qt_now <- crossprod(A, Qt_up) %*% A
       }
     }
-
     # {f=function(x){
-    #   mu=x[1:r]
-    #     rho=matrix(0,r,r)
-    #     rho=lower_tri.assign(rho,x[cor_index],diag=FALSE)
-    #     # rho=upper_tri.assign(rho,x[cor_index],diag=FALSE)
-    #     var=diag(exp(-x[var_index]/2))
-    #     p=1/(1+exp(-rho))
-    #     rho=2*p-1
-    #     # diag(rho)=1
-    #     # Sigma=var%*%rho%*%var
-    #     diag(rho)=diag(var)
-    #     Sigma=rho%*%t(rho)
+    #
+    #   mu <- x
+    #   rho <- matrix(0, r, r)
+    #   rho <- lower_tri.assign(rho, x[cor_index], diag = FALSE)
+    #   rho <- upper_tri.assign(rho, x[cor_index], diag = FALSE)
+    #   var <- diag(exp(-x[var_index] / 2))
+    #   p <- 1 / (1 + exp(-rho))
+    #   rho <- 2 * p - 1
+    #   diag(rho) <- 1
+    #   Sigma <- var %*% rho %*% var
     #
     #   S=ginv(Sigma[1:(i-1),1:(i-1)])
     #   mu_bar=mu[i]+Sigma[i,1:(i-1)]%*%S%*%(y[1:(i-1)]-mu[1:(i-1)])

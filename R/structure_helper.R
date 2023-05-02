@@ -291,9 +291,21 @@ harmonic_block <- function(..., period, name = "Var_Sazo", D = 1, W = 0, m0 = 0,
 #' @seealso \code{\link{fit_model}}
 #' @family {auxiliary functions for structural blocks}
 AR_block <- function(..., order, noise_var, pulse = 0, name = "Var_AR", AR_support = "constrained", D = 1, W = 0, m0 = 0, C0 = 1, m0_states = 0, C0_states = 1, m0_pulse = 0, C0_pulse = 1, D_pulse = 1, W_pulse = 0) {
-  block <-
-    polynomial_block(..., order = order, name = paste0(name, "_State"), m0 = m0_states, C0 = C0_states, D = 1, W = noise_var) +
-    polynomial_block(..., order = order, name = paste0(name, "_Coeff"), m0 = m0, C0 = C0, D = D, W = W)
+  block_state <-
+    polynomial_block(..., order = order, name = paste0(name, "_State"), m0 = m0_states, C0 = C0_states, D = 1, W = noise_var)
+
+
+  dummy_var <- list()
+  dummy_var[[names(list(...))[1]]] <- rep(0, block_state$t)
+  block_coeff <-
+    do.call(
+      function(...) {
+        polynomial_block(..., order = order, name = paste0(name, "_Coeff"), m0 = m0, C0 = C0, D = D, W = W)
+      },
+      dummy_var
+    )
+
+  block=block_state+block_coeff
   k <- block$k
 
   if (order == 1) {
@@ -326,14 +338,12 @@ AR_block <- function(..., order, noise_var, pulse = 0, name = "Var_AR", AR_suppo
   if (any(pulse != 0)) {
     k <- if.null(dim(pulse)[2], 1)
     t <- if.null(dim(pulse)[1], length(pulse))
-    pulse_var <- list()
-    pulse_var[[names(list(...))[1]]] <- rep(0, t)
     block_pulse <-
       do.call(
         function(...) {
           polynomial_block(..., order = k, name = paste0(name, "_Pulse"), m0 = m0_pulse, C0 = C0_pulse, D = D_pulse, W = W_pulse)
         },
-        pulse_var
+        dummy_var
       )
     block_pulse$G <- diag(k)
     block <- block + block_pulse
