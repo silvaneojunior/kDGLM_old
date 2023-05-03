@@ -160,6 +160,9 @@ fit_model <- function(..., outcomes, pred_cred = 0.95, smooth_flag = TRUE, p_mon
     structure$W <- array(structure$W, c(structure$n, structure$n, structure$t), dimnames = dimnames(structure$W))
     structure$FF <- array(structure$FF, c(structure$n, structure$k, structure$t), dimnames = dimnames(structure$FF))
   }
+  structure$G[,,1]=diag(structure$n)
+  structure$D[,,1]=1
+  structure$W[,,1]=0
   if (t != structure$t) {
     stop(paste0("Error: outcome does not have the same time length as structure: got ", t, " from outcome, expected ", structure$t))
   }
@@ -854,16 +857,16 @@ dlm_sampling <- function(model, sample_size, filtered_distr = FALSE) {
     } else {
       mt_now <- mt[, t]
 
-      G_ref <- calc_current_G(mts[, t], G[, , t], G_labs)$G
-      simple_Rt_inv <- Ct %*% transpose(G_ref) %*% ginv(Rt)
+      G_ref <- calc_current_G(mt_now, G[, , t+1], G_labs)$G
+      simple_Rt_inv <- Ct %*% crossprod(G_ref, ginv(Rt))
       simple_Rt_inv_t <- transpose(simple_Rt_inv)
       # simple_Rt_inv_t <- solve(Rt, G_ref %*% Ct)
       # simple_Rt_inv <- transpose(simple_Rt_inv_t)
 
 
       mts <- mt[, t] + simple_Rt_inv %*% (mt_sample_i - at[, t + 1])
-      # Cts <- Ct - simple_Rt_inv %*% Rt %*% simple_Rt_inv_t
-      Cts <- Ct - crossprod(simple_Rt_inv_t, Rt) %*% simple_Rt_inv_t
+      Cts <- Ct - simple_Rt_inv %*% Rt %*% simple_Rt_inv_t
+      # Cts <- Ct - crossprod(simple_Rt_inv_t, Rt) %*% simple_Rt_inv_t
       Ct_chol <- var_decomp(Cts)
       mt_sample_i <- crossprod(Ct_chol, mt_sample[, t, ]) + mts
     }

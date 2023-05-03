@@ -255,14 +255,14 @@ plot_lat_var <- function(model, var = "", smooth = model$smooth, cut_off = 10, p
     } else {
       plt <- plotly::ggplotly(plt)
 
-      for (i in (1:size) - 1) {
-        plt$x$data[[i + 1+1]]$legendgroup <-
-          plt$x$data[[i + 1 + size+1]]$legendgroup <-
-          plt$x$data[[i + 1+1]]$name <-
-          plt$x$data[[i + 1 + size+1]]$name <- plt$x$data[[i + 1 + size+1]]$name
-
-        plt$x$data[[i + 1+1]]$showlegend <- FALSE
-      }
+      # for (i in (1:size) - 1) {
+      #   plt$x$data[[i + 1+1]]$legendgroup <-
+      #     plt$x$data[[i + 1 + size+1]]$legendgroup <-
+      #     plt$x$data[[i + 1+1]]$name <-
+      #     plt$x$data[[i + 1 + size+1]]$name <- plt$x$data[[i + 1 + size+1]]$name
+      #
+      #   plt$x$data[[i + 1+1]]$showlegend <- FALSE
+      # }
     }
   }
   return(list("plot" = plt, "data" = plot_data))

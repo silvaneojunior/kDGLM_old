@@ -1818,7 +1818,7 @@ update_multi_NG_correl <- function(conj_prior, ft, Qt, y, parms) {
 
   if(r>1){
     var_vals=diag(Qt_up[var_index,var_index])
-    index_go=order(var_vals)
+    index_go=order(-var_vals)
     # index_go=1:r
     index_back=order(index_go)
 
@@ -1869,7 +1869,7 @@ update_multi_NG_correl <- function(conj_prior, ft, Qt, y, parms) {
     for (i in 2:r) {
 
         var_vals=diag(Qt_up[var_index,var_index])
-        index_go=c(gone,((1:r)[!(1:r %in% gone)])[order(var_vals[!(1:r %in% gone)])])
+        index_go=c(gone,((1:r)[!(1:r %in% gone)])[order(-var_vals[!(1:r %in% gone)])])
         # index_go=1:r
         # print(index_go)
         index_back=order(index_go)

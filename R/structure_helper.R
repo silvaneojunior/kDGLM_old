@@ -239,6 +239,7 @@ harmonic_block <- function(..., period, name = "Var_Sazo", D = 1, W = 0, m0 = 0,
 #' @param ... Named values for the planing matrix.
 #' @param order Positive integer: The order of the AR block.
 #' @param noise_var Non negative scalar: The variance of the white noise added to the latent state.
+#' @param noise_var Non negative scalar: The variance of the white noise added to the latent state.
 #' @param pulse Vector or scalar: An optional argument providing the values for the pulse for a Transfer Function. Default is 0.
 #' @param name String: An optional argument providing the name for this block. Can be useful to identify the models with meaningful labels, also, the name used will be used in some auxiliary functions.
 #' @param AR_support String: Either "constrained" or "free". If AR_support is "constrained", then the AR coefficients will be forced to be on the interval (-1,1), otherwise, the coefficients will be unrestricted. Beware that, under no restriction on the coefficients, there is no guarantee that the estimated coefficients will imply in a stationary process, furthermore, if the order of the AR block is greater than 1, then the restriction imposed when AR_support is equal to "constrained" does NOT guarantee that the process will be stationary (although it may help).
@@ -250,6 +251,7 @@ harmonic_block <- function(..., period, name = "Var_Sazo", D = 1, W = 0, m0 = 0,
 #' @param C0 Matrix, vector or scalar: The prior covariance matrix for the coefficients associated with this block. If C0 is a matrix, it's dimensions should be n x n, where n is the order of the AR block. If C0 is a vector or scalar, a covariance matrix will be created as a diagonal matrix with the values of C0 in the diagonal. If the coefficients are restricted to the interval (-1,1), the C0 is interpreted as the covariance matrix for logit((rho+1)/2), where rho is the AR coefficient.
 #' @param m0_states Vector or scalar: The prior mean for the states associated with this block. If m0_states is a vector, it's dimension should be equal to the order of the AR block. If m0_states is a scalar, it's value will be used for all coefficients.
 #' @param C0_states Matrix, vector or scalar: The prior covariance matrix for the states associated with this block. If C0_states is a matrix, it's dimensions should be n x n, where n is the order of the AR block. If C0_state is a vector or scalar, a covariance matrix will be created as a diagonal matrix with the values of C0_state in the diagonal.
+#' @param D_states Array, Matrix, vector or  scalar: The values for the discount factors for the states associated with this block. If D_states is a array, it's dimensions should be n x n x t, where n is the order of the AR block and t is the length of the outcomes. If D_states is a matrix, it's dimensions should be n x n and it's values will be used for each time. If D_states is a vector or scalar, a discount factor matrix will be created as a diagonal matrix with the values of D_states in the diagonal.
 #' @param m0_pulse Vector or scalar: The prior mean for the coefficients associated with the pulses. If m0_pulse is a vector, it's dimension should be equal to the number of pulses. If m0_pulse is a scalar, it's value will be used for all coefficients.
 #' @param C0_pulse  Matrix, vector or scalar: The prior covariance matrix for the coefficients associated with the pulses. If C0_pulse is a matrix, it's dimensions should be n x n, where n is the number of pulses. If C0_pulse is a vector or scalar, a covariance matrix will be created as a diagonal matrix with the values of C0_pulse in the diagonal.
 #' @param D_pulse Array, Matrix, vector or  scalar: The values for the discount factors associated with pulse coefficients at each time. If D_pulse is a array, it's dimensions should be n x n x t, where n is the number of pulses and t is the length of the outcomes. If D_pulse is a matrix, it's dimensions should be n x n and it's values will be used for each time. If D_pulse is a vector or scalar, a discount factor matrix will be created as a diagonal matrix with the values of D_pulse in the diagonal.
@@ -290,9 +292,9 @@ harmonic_block <- function(..., period, name = "Var_Sazo", D = 1, W = 0, m0 = 0,
 #'
 #' @seealso \code{\link{fit_model}}
 #' @family {auxiliary functions for structural blocks}
-AR_block <- function(..., order, noise_var, pulse = 0, name = "Var_AR", AR_support = "constrained", D = 1, W = 0, m0 = 0, C0 = 1, m0_states = 0, C0_states = 1, m0_pulse = 0, C0_pulse = 1, D_pulse = 1, W_pulse = 0) {
+AR_block <- function(..., order, noise_var, pulse = 0, name = "Var_AR", AR_support = "constrained", D = 1, W = 0, m0 = 0, C0 = 1, m0_states = 0, C0_states = 1, D_states = 1, m0_pulse = 0, C0_pulse = 1, D_pulse = 1, W_pulse = 0) {
   block_state <-
-    polynomial_block(..., order = order, name = paste0(name, "_State"), m0 = m0_states, C0 = C0_states, D = 1, W = noise_var)
+    polynomial_block(..., order = order, name = paste0(name, "_State"), m0 = m0_states, C0 = C0_states, D = D_states, W = noise_var)
 
 
   dummy_var <- list()
