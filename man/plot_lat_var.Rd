@@ -58,6 +58,7 @@ Other {auxiliary visualization functions for the fitted_dlm class}:
 \code{\link{plot_lin_pred}()},
 \code{\link{report_distr}()},
 \code{\link{report_dlm}()},
+\code{\link{report_searched_dlm}()},
 \code{\link{show_fit}()}
 }
 \concept{{auxiliary visualization functions for the fitted_dlm class}}

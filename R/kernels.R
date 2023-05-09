@@ -20,17 +20,18 @@
 #'
 #' For the details about the implementation see \insertCite{ArtigoPacote;textual}{kDGLM}.
 #'
-#' For the details about the algorithm implemented see \insertCite{Petris-DLM;textual}{kDGLM}, chapter 2, and \insertCite{WestHarr-DLM;textual}{kDGLM}, chapter 4.
+#' For the details about the algorithm implemented see \insertCite{ArtigokParametrico;textual}{kDGLM}, \insertCite{Petris-DLM;textual}{kDGLM}, chapter 2, \insertCite{WestHarr-DLM;textual}{kDGLM}, chapter 4, and \insertCite{Kalman_filter_origins;textual}{kDGLM}.
 #'
 #' @seealso \code{\link{fit_model}}
 #' @seealso \code{\link{analytic_filter}}
-#' @seealso \code{\link{Kalman_filter_origins}}
+#' @references
+#'    \insertAllCited{}
 generic_smoother <- function(mt, Ct, at, Rt, G, G_labs) {
   T <- dim(mt)[2]
   n <- dim(mt)[1]
   mts <- mt
   Cts <- Ct
-  if(T>1){
+  if (T > 1) {
     for (t in (T - 1):1) {
       mt_now <- mt[, t]
       G_step <- calc_current_G(mt_now, G[, , t + 1], G_labs)$G
@@ -39,12 +40,9 @@ generic_smoother <- function(mt, Ct, at, Rt, G, G_labs) {
 
       simple_Rt_inv <- restricted_Ct %*% transpose(G_step) %*% ginv(restricted_Rt)
       simple_Rt_inv_t <- transpose(simple_Rt_inv)
-      # simple_Rt_inv_t=solve(restricted_Rt,G_now %*% restricted_Ct)
-      # simple_Rt_inv <- transpose(simple_Rt_inv_t)
 
       mts[, t] <- mt_now + simple_Rt_inv %*% (mts[, t + 1] - at[, t + 1])
-      # Cts[, , t] <- restricted_Ct + simple_Rt_inv %*% (Cts[, , t + 1] - restricted_Rt) %*% simple_Rt_inv_t
-      Cts[, , t] <- restricted_Ct + crossprod(simple_Rt_inv_t, (Cts[, , t + 1] - restricted_Rt)) %*% simple_Rt_inv_t
+      Cts[, , t] <- restricted_Ct + simple_Rt_inv %*% (Cts[, , t + 1] - restricted_Rt) %*% simple_Rt_inv_t
     }
   }
   return(list("mts" = mts, "Cts" = Cts))
@@ -90,11 +88,12 @@ generic_smoother <- function(mt, Ct, at, Rt, G, G_labs) {
 #'
 #' For the details about the implementation see \insertCite{ArtigoPacote;textual}{kDGLM}.
 #'
-#' For the details about the algorithm implemented see \insertCite{ArtigokParametrico;textual}{kDGLM}, \insertCite{Petris-DLM;textual}{kDGLM}, chapter 2, and \insertCite{WestHarr-DLM;textual}{kDGLM}, chapter 4.
+#' For the details about the algorithm implemented see \insertCite{ArtigokParametrico;textual}{kDGLM}, \insertCite{Petris-DLM;textual}{kDGLM}, chapter 2, \insertCite{WestHarr-DLM;textual}{kDGLM}, chapter 4, and \insertCite{Kalman_filter_origins;textual}{kDGLM}.
 #'
 #' @seealso \code{\link{fit_model}}
 #' @seealso \code{\link{generic_smoother}}
-#' @seealso \code{\link{Kalman_filter_origins}}
+#' @references
+#'    \insertAllCited{}
 analytic_filter <- function(outcomes, m0 = 0, C0 = 1, FF, G, G_labs, D, W, p_monit = NA, c_monit = 1) {
   # Defining quantities
   T <- dim(FF)[3]
@@ -129,12 +128,12 @@ analytic_filter <- function(outcomes, m0 = 0, C0 = 1, FF, G, G_labs, D, W, p_mon
     if (!inherits(outcomes[[outcome_name]], "dlm_distr")) {
       stop(paste0("Error: Outcome contains is not of the right class Expected a dlm_distr object, got a ", class(outcomes[[outcome_name]]), " object."))
     }
-    param_names <- outcomes[[outcome_name]]$param_names(outcomes[[outcome_name]]$outcome)
+    param_names <- outcomes[[outcome_name]]$param_names
     outcomes[[outcome_name]]$conj_prior_param <- matrix(NA, T, length(param_names)) %>% as.data.frame()
     names(outcomes[[outcome_name]]$conj_prior_param) <- param_names
 
     outcomes[[outcome_name]]$log.like.null <- rep(NA, T)
-    outcomes[[outcome_name]]$log.like.alt <- rep(NA, T)
+    outcomes[[outcome_name]]$log.like.alt <- rep(-Inf, T)
     outcomes[[outcome_name]]$alt.flags <- rep(0, T)
 
 
@@ -146,31 +145,23 @@ analytic_filter <- function(outcomes, m0 = 0, C0 = 1, FF, G, G_labs, D, W, p_mon
   }
 
   c <- c_monit
-  p <- if (is.na(p_monit)) {
-    0
-  } else {
-    p_monit
-  }
+  p <- if.na(p_monit, 0)
   threshold <- log(c_monit) + log(p) - log(1 - p)
   last_C_D <- last_C
 
   for (t in 1:T) {
-    model_list <- if (is.na(p_monit)) {
-      c("null_model")
-    } else {
-      c("alt_model", "null_model")
+    model_list <- c("null_model")
+    if (!is.na(p_monit)) {
+      model_list <- c("alt_model", model_list)
     }
     for (model in model_list) {
       D_p <- D_inv[, , t]
       D_p[!D_flags[, , t]] <- D_p[!D_flags[, , t]] * D_mult[[model]]
       next_step <- one_step_evolve(last_m, last_C, G[, , t] %>% matrix(n, n), G_labs, D_p**0, W[, , t] + diag(n) * W_add[[model]] + last_C_D * (D_p - 1))
-      # print(diag(next_step$Rt))
 
       models[[model]] <- list(
-        "at" = next_step$at,
-        "Rt" = next_step$Rt,
-        "at_step" = next_step$at,
-        "Rt_step" = next_step$Rt
+        "at" = next_step$at, "Rt" = next_step$Rt,
+        "at_step" = next_step$at, "Rt_step" = next_step$Rt
       )
     }
     for (outcome_name in names(outcomes)) {
@@ -193,72 +184,54 @@ analytic_filter <- function(outcomes, m0 = 0, C0 = 1, FF, G, G_labs, D, W, p_mon
           ft_canom <- outcome$convert_mat_canom %*% ft_canom
           Qt_canom <- outcome$convert_mat_canom %*% Qt_canom %*% transpose(outcome$convert_mat_canom)
         }
+        if (!na.flag) {
+          offset_pred <- outcome$apply_offset(ft_canom, Qt_canom, offset_step)
+          ft_canom <- offset_pred$ft
+          Qt_canom <- offset_pred$Qt
+        }
 
-        next_step <- outcome$apply_offset(ft_canom, Qt_canom, if (na.flag) {
-          1
-        } else {
-          offset_step
-        })
-
-        conj_prior <- outcome$conj_prior(next_step$ft, next_step$Qt, parms = outcome$parms)
+        conj_prior <- outcome$conj_prior(ft_canom, Qt_canom, parms = outcome$parms)
+        log.like <- NULL
+        if (is.na(p_monit)) {
+          log.like <- outcome$calc_pred(conj_prior, outcome$outcome[t, ], parms = outcome$parms, pred_cred = NA)$log.like
+        }
 
         models[[model]] <- list(
-          "at" = models[[model]]$at,
-          "Rt" = models[[model]]$Rt,
-          "at_step" = at_step,
-          "Rt_step" = Rt_step,
-          "ft_step" = next_step$ft,
-          "Qt_step" = next_step$Qt,
+          "at" = models[[model]]$at, "Rt" = models[[model]]$Rt,
+          "at_step" = at_step, "Rt_step" = Rt_step,
+          "ft_step" = ft_canom, "Qt_step" = Qt_canom,
           "FF_step" = lin_pred$FF,
           "conj_prior" = conj_prior,
-          "log_like" = outcome$calc_pred(conj_prior, if (is.na(p_monit)) {
-            NULL
-          } else {
-            outcome$outcome[t, ]
-          }, parms = outcome$parms, pred_cred = NA)$log.like
+          "log_like" = log.like
         )
       }
+      model <- models$null_model
+      if (!is.na(p_monit)) {
+        outcomes[[outcome_name]]$log.like.null[t] <- models$null_model$log_like
+        outcomes[[outcome_name]]$log.like.alt[t] <- models$alt_model$log_like
+        bayes_factor <- sum(outcomes[[outcome_name]]$log.like.null[t:(t - monit_win + 1)] - outcomes[[outcome_name]]$log.like.alt[t:(t - monit_win + 1)]) %>% if.nan(0)
 
-      outcomes[[outcome_name]]$log.like.null[t] <- if (is.na(p_monit)) {
-        NA
-      } else {
-        models$null_model$log_like
-      }
-      outcomes[[outcome_name]]$log.like.alt[t] <- if (is.na(p_monit)) {
-        -Inf
-      } else {
-        models$alt_model$log_like
-      }
-      if (monit_win > 0 & !is.na(p_monit)) {
-        bayes_factor <- sum(outcomes[[outcome_name]]$log.like.null[t:(t - monit_win + 1)] - outcomes[[outcome_name]]$log.like.alt[t:(t - monit_win + 1)])
-      } else {
-        bayes_factor <- -1e-10
-      }
-      bayes_factor <- ifelse(is.nan(bayes_factor), 0, bayes_factor)
-      if (bayes_factor < threshold) {
-        model <- models$alt_model
-        conj_prior <- models$alt_model$conj_prior
-        D_inv[, , t] <- D_inv[, , t] * D_mult$alt_model
-        W[, , t] <- W[, , t] * W_add$alt_model
-        monit_win <- -5
-        outcomes[[outcome_name]]$alt.flags[t] <- 1
-      } else {
-        outcomes[[outcome_name]]$alt.flags[t] <- 0
-        model <- models$null_model
-        if (bayes_factor < 0) {
-          monit_win <- monit_win + 1
-        } else {
-          monit_win <- 1
+        if (monit_win > 0) {
+          if (bayes_factor < threshold) {
+            model <- models$alt_model
+            conj_prior <- models$alt_model$conj_prior
+            D_inv[, , t] <- D_inv[, , t] * D_mult$alt_model
+            W[, , t] <- W[, , t] * W_add$alt_model
+            monit_win <- -6
+            outcomes[[outcome_name]]$alt.flags[t] <- 1
+          } else if (bayes_factor > 0) {
+            monit_win <- 0
+          }
         }
+        monit_win <- monit_win + 1
       }
 
       mt_step <- model$at_step
       Ct_step <- model$Rt_step
       ft_step <- model$ft_step
       Qt_step <- model$Qt_step
-      if (na.flag) {
-        norm_post <- list(ft = ft_step, Qt = Qt_step)
-      } else {
+      norm_post <- list(ft = ft_step, Qt = Qt_step)
+      if (!na.flag) {
         conj_prior <- outcome$conj_prior(ft_step, Qt_step, parms = outcome$parms)
         conj_post <- outcome$update(conj_prior, ft = ft_step, Qt = Qt_step, y = outcome$outcome[t, ], parms = outcome$parms)
 
@@ -277,12 +250,8 @@ analytic_filter <- function(outcomes, m0 = 0, C0 = 1, FF, G, G_labs, D, W, p_mon
           error_Qt <- outcome$convert_mat_default %*% error_Qt %*% transpose(outcome$convert_mat_default)
         }
         At <- Ct_step %*% model$FF %*% ginv(Qt_step)
-        At_t <- t(At)
-        # At_t <- solve(Qt_step,t(model$FF) %*% Ct_step)
-        # At <- t(At_t)
         models[["null_model"]]$at_step <- mt_step <- mt_step + At %*% error_ft
-        models[["null_model"]]$Rt_step <- Ct_step <- Ct_step + crossprod(At_t, error_Qt) %*% At_t
-
+        models[["null_model"]]$Rt_step <- Ct_step <- Ct_step + At %*% error_Qt %*% t(At)
         last_C_D <- Ct_step
       }
 
@@ -300,43 +269,32 @@ analytic_filter <- function(outcomes, m0 = 0, C0 = 1, FF, G, G_labs, D, W, p_mon
         offset_step <- outcome$offset[t, ]
         na.flag <- any(is.null(offset_step) | any(offset_step == 0) | any(is.na(offset_step)))
 
-        lin_pred <- list(
-          ft = lin_pred_ref$ft[pred_index, , drop = FALSE],
-          Qt = lin_pred_ref$Qt[pred_index, pred_index, drop = FALSE]
-        )
+        ft_canom <- lin_pred_ref$ft[pred_index, , drop = FALSE]
+        Qt_canom <- lin_pred_ref$Qt[pred_index, pred_index, drop = FALSE]
+
+        lin_pred <- list(ft = ft_canom, Qt = Qt_canom)
 
         if (outcome$convert_canom_flag) {
-          ft_canom <- outcome$convert_mat_canom %*% lin_pred$ft
-          Qt_canom <- outcome$convert_mat_canom %*% lin_pred$Qt %*% transpose(outcome$convert_mat_canom)
-        } else {
-          ft_canom <- lin_pred$ft
-          Qt_canom <- lin_pred$Qt
+          ft_canom <- outcome$convert_mat_canom %*% ft_canom
+          Qt_canom <- outcome$convert_mat_canom %*% Qt_canom %*% transpose(outcome$convert_mat_canom)
         }
-
-        next_step <- outcome$apply_offset(ft_canom, Qt_canom, if (na.flag) {
-          1
-        } else {
-          offset_step
-        })
-
-        conj_prior <- outcome$conj_prior(next_step$ft, next_step$Qt, parms = outcome$parms)
+        if (!na.flag) {
+          offset_pred <- outcome$apply_offset(ft_canom, Qt_canom, offset_step)
+          ft_canom <- offset_pred$ft
+          Qt_canom <- offset_pred$Qt
+        }
+        conj_prior <- outcome$conj_prior(ft_canom, Qt_canom, parms = outcome$parms)
         outcomes[[outcome_name]]$conj_prior_param[t, ] <- conj_prior
       }
 
       mt[, t] <- last_m <- mt_step
       Ct[, , t] <- last_C <- Ct_step
-      eigen_Ct <- eigen(last_C)$values
-      pos_eigen_Ct <- eigen_Ct[eigen_Ct > 0]
-      if (log10(max(pos_eigen_Ct)) - log10(min(pos_eigen_Ct)) > 15) {
-        warning("Covariance for the latent variables is numerical instable. Results may be unreliable.")
-      }
     }
   }
 
   result <- list(
     "mt" = mt, "Ct" = Ct,
     "at" = at, "Rt" = Rt,
-    # Consultar Mariane sobre oq fazer com o predictor linear.
     "ft" = ft, "Qt" = Qt,
     "FF" = FF, "G" = G, "G_labs" = G_labs,
     "D" = D, "W" = W,
@@ -360,7 +318,7 @@ calc_current_G <- function(m0, G, G_labs) {
       } else {
         G_now[index_row, index_col] <- m0[index_col + 1]
         G_now[index_row, index_col + 1] <- m0[index_col]
-        G_diff[index_row] <- G_diff[index_row] - m0[index_col + 1] * m0[index_col]
+        G_diff[index_row] <- G_diff[index_row] - m0[index_col] * m0[index_col + 1]
       }
     }
   }
@@ -371,8 +329,6 @@ one_step_evolve <- function(m0, C0, G, G_labs, D_inv, W) {
   G_vals <- calc_current_G(m0, G, G_labs)
   G_now <- G_vals$G
   G_diff <- G_vals$G_diff
-  # G_now=G
-  # G_diff=G_vals$G_diff*0
   at <- (G_now %*% m0) + G_diff
   G_now_t <- transpose(G_now)
   Pt <- G_now %*% C0 %*% G_now_t
@@ -450,5 +406,19 @@ format_param <- function(conj_param, parms) {
       t() %>%
       array(c(r, r, t))
   }
+  if(t==1){
+    Qt=matrix(Qt,r,r)
+  }
   return(list("ft" = ft, "Qt" = Qt))
+}
+
+generic_param_names <- function(k) {
+  c(
+    paste("ft_", 1:k, sep = ""),
+    paste("Qt_",
+      c(matrix(1:k, k, k)),
+      c(matrix(1:k, k, k, byrow = TRUE)),
+      sep = ""
+    )
+  )
 }

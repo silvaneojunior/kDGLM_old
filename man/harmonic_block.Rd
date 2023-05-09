@@ -43,6 +43,11 @@ An object of the class dlm_block containing the following values:
 Creates the structure for a harmonic block with desired periodicity.
 }
 \details{
+For the ..., D, W, m0 and C0 arguments, the user may set one or more of it's values as a string.
+By doing so, the user will leave the block partially undefined and it can no longer be used in the \code{\link{fit_model}} function.
+Instead, the user must use the \code{\link{search_model}} function to search the best hyper parameters among a defined range of possible values.
+See the \code{\link{search_model}} function for details on it's usage.
+
 For the details about the implementation see \insertCite{ArtigoPacote;textual}{kDGLM}.
 
 For the details about the modelling of seasonal trends using harmonics in the context of DLM's, see \insertCite{WestHarr-DLM;textual}{kDGLM}, chapter 8.
@@ -60,8 +65,13 @@ season_2 <- harmonic_block(alpha2 = 1, period = 6)
 season_3 <- harmonic_block(alpha = 1, alpha2 = 1, period = 12)
 
 }
+\references{
+\insertAllCited{}
+}
 \seealso{
 \code{\link{fit_model}}
+
+\code{\link{search_model}}
 
 Other {auxiliary functions for structural blocks}: 
 \code{\link{AR_block}()},

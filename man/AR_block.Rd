@@ -17,6 +17,7 @@ AR_block(
   C0 = 1,
   m0_states = 0,
   C0_states = 1,
+  D_states = 1,
   m0_pulse = 0,
   C0_pulse = 1,
   D_pulse = 1,
@@ -47,6 +48,8 @@ AR_block(
 \item{m0_states}{Vector or scalar: The prior mean for the states associated with this block. If m0_states is a vector, it's dimension should be equal to the order of the AR block. If m0_states is a scalar, it's value will be used for all coefficients.}
 
 \item{C0_states}{Matrix, vector or scalar: The prior covariance matrix for the states associated with this block. If C0_states is a matrix, it's dimensions should be n x n, where n is the order of the AR block. If C0_state is a vector or scalar, a covariance matrix will be created as a diagonal matrix with the values of C0_state in the diagonal.}
+
+\item{D_states}{Array, Matrix, vector or  scalar: The values for the discount factors for the states associated with this block. If D_states is a array, it's dimensions should be n x n x t, where n is the order of the AR block and t is the length of the outcomes. If D_states is a matrix, it's dimensions should be n x n and it's values will be used for each time. If D_states is a vector or scalar, a discount factor matrix will be created as a diagonal matrix with the values of D_states in the diagonal.}
 
 \item{m0_pulse}{Vector or scalar: The prior mean for the coefficients associated with the pulses. If m0_pulse is a vector, it's dimension should be equal to the number of pulses. If m0_pulse is a scalar, it's value will be used for all coefficients.}
 
@@ -81,6 +84,11 @@ As the package suppose that the structure of the model is linear, a linearizatio
 This block also supports Transfer Functions, being necessary to specify the associated pulse when calling the AR_block function (see arg.).
 }
 \details{
+For the ..., noise_var, D, W, m0, C0, m0_states, C0_states, D_states, m0_pulse, C0_pulse, D_pulse, W_pulse arguments, the user may set one or more of it's values as a string.
+By doing so, the user will leave the block partially undefined and it can no longer be used in the \code{\link{fit_model}} function.
+Instead, the user must use the \code{\link{search_model}} function to search the best hyper parameters among a defined range of possible values.
+See the \code{\link{search_model}} function for details on it's usage.
+
 For the details about the implementation see \insertCite{ArtigoPacote;textual}{kDGLM}.
 
 For the details about Auto regressive models in the context of DLM's, see \insertCite{WestHarr-DLM;textual}{kDGLM}, chapter 9.
@@ -93,6 +101,9 @@ For the details about dynamic regression models in the context of DLM's, see \in
 
 AR_block(mu = 1, pulse = rnorm(200), order = 3, noise_var = 0.1)
 
+}
+\references{
+\insertAllCited{}
 }
 \seealso{
 \code{\link{fit_model}}

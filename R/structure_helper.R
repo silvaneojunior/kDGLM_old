@@ -40,6 +40,11 @@
 #'
 #' @details
 #'
+#' For the ..., D, W, m0 and C0 arguments, the user may set one or more of it's values as a string.
+#' By doing so, the user will leave the block partially undefined and it can no longer be used in the \code{\link{fit_model}} function.
+#' Instead, the user must use the \code{\link{search_model}} function to search the best hyper parameters among a defined range of possible values.
+#' See the \code{\link{search_model}} function for details on it's usage.
+#'
 #' For the details about the implementation see \insertCite{ArtigoPacote;textual}{kDGLM}.
 #'
 #' For the details about polynomial trend in the context of DLM's, see \insertCite{WestHarr-DLM;textual}{kDGLM}, chapter 7.
@@ -47,9 +52,14 @@
 #' For the details about dynamic regression models in the context of DLM's, see \insertCite{WestHarr-DLM;textual}{kDGLM}, chapters 6 and 9.
 #'
 #' @seealso \code{\link{fit_model}}
+#' @seealso \code{\link{search_model}}
 #' @family {auxiliary functions for structural blocks}
-polynomial_block <- function(..., order = 1, name = "Var_Poly", D = 1, W = 0, m0 = 0, C0 = 1) {
-  if (any(D > 1 | D < 0)) {
+#'
+#'
+#' @references
+#'    \insertAllCited{}
+polynomial_block <- function(..., order = 1, name = "Var_Poly", D = 1, W = 0, m0 = 0, C0 = c(NA, rep(1, order - 1))) {
+  if (any(D > 1 | D < 0) & is.numeric(D)) {
     stop("Error: The discount factor D must be a value between 0 and 1 (included).")
   }
   if (any(D == 0)) {
@@ -68,7 +78,7 @@ polynomial_block <- function(..., order = 1, name = "Var_Poly", D = 1, W = 0, m0
   }
 
   if (length(D) == 1) {
-    D <- array(1, c(order, order, t)) * D
+    D <- array(D, c(order, order, t))
   } else if (is.vector(D)) {
     D <- array(D, c(length(D), order, order)) %>% aperm(c(3, 2, 1))
   } else if (is.matrix(D)) {
@@ -85,12 +95,16 @@ polynomial_block <- function(..., order = 1, name = "Var_Poly", D = 1, W = 0, m0
   }
 
   if (length(W) == 1) {
-    W <- array(diag(order), c(order, order, t)) * W
+    pre_W <- diag(order)
+    diag(pre_W) <- W
+    W <- array(pre_W, c(order, order, t))
   } else if (is.vector(W)) {
     W_vals <- W
-    W <- array(diag(order), c(order, order, length(W_vals)))
+    pre_W <- diag(order)
+    W <- array(0, c(order, order, length(W_vals)))
     for (i in 1:length(W_vals)) {
-      W[, , i] <- W[, , i] * W_vals[i]
+      diag(pre_W) <- W_vals[i]
+      W[, , i] <- pre_W
     }
   } else if (is.matrix(W)) {
     W <- array(W, c(dim(W)[1], dim(W)[2], t))
@@ -129,13 +143,27 @@ polynomial_block <- function(..., order = 1, name = "Var_Poly", D = 1, W = 0, m0
   } else {
     m0
   }
-  C0 <- if (length(C0) == 1) {
-    diag(order) * C0
-  } else if (is.vector(C0)) {
-    diag(C0)
+  if (length(C0) == 1 | is.vector(C0)) {
+    pre_C0 <- diag(order)
+    diag(pre_C0) <- C0
+    C0 <- pre_C0
   } else {
     C0
   }
+  if (any(is.na(C0))) {
+    ref_val <- as.numeric(c(...))
+    ref_val <- ref_val[!is.na(ref_val)]
+    if (all(ref_val == 0 | ref_val == 1) | if.na(var(ref_val), 0) == 0) {
+      ref_var <- 1
+    } else {
+      ref_var <- 1 / var(ref_val)
+    }
+    if (is.na(C0[1, 1])) {
+      C0[1, 1] <- ref_var
+    }
+    C0[is.na(C0)] <- 1
+  }
+
 
   if (length(dim(C0)) > 2) {
     stop(paste0("Error: C0 must be a matrix, but it has ", length(dim(C0)), " dimensions."))
@@ -163,6 +191,17 @@ polynomial_block <- function(..., order = 1, name = "Var_Poly", D = 1, W = 0, m0
     "type" = "Polynomial"
   )
   class(block) <- "dlm_block"
+  if (any(is.character(if.na(FF, 0))) |
+    any(is.character(if.na(G, 0))) |
+    any(is.character(if.na(D, 0))) |
+    any(is.character(if.na(W, 0))) |
+    any(is.character(if.na(m0, 0))) |
+    any(is.character(if.na(C0, 0)))
+  ) {
+    block$status <- "undefined"
+  } else {
+    block$status <- "defined"
+  }
   return(block)
 }
 
@@ -209,6 +248,11 @@ polynomial_block <- function(..., order = 1, name = "Var_Poly", D = 1, W = 0, m0
 #'
 #' @details
 #'
+#' For the ..., D, W, m0 and C0 arguments, the user may set one or more of it's values as a string.
+#' By doing so, the user will leave the block partially undefined and it can no longer be used in the \code{\link{fit_model}} function.
+#' Instead, the user must use the \code{\link{search_model}} function to search the best hyper parameters among a defined range of possible values.
+#' See the \code{\link{search_model}} function for details on it's usage.
+#'
 #' For the details about the implementation see \insertCite{ArtigoPacote;textual}{kDGLM}.
 #'
 #' For the details about the modelling of seasonal trends using harmonics in the context of DLM's, see \insertCite{WestHarr-DLM;textual}{kDGLM}, chapter 8.
@@ -216,7 +260,12 @@ polynomial_block <- function(..., order = 1, name = "Var_Poly", D = 1, W = 0, m0
 #' For the details about dynamic regression models in the context of DLM's, see \insertCite{WestHarr-DLM;textual}{kDGLM}, chapters 6 and 9.
 #'
 #' @seealso \code{\link{fit_model}}
+#' @seealso \code{\link{search_model}}
 #' @family {auxiliary functions for structural blocks}
+#'
+#'
+#' @references
+#'    \insertAllCited{}
 harmonic_block <- function(..., period, name = "Var_Sazo", D = 1, W = 0, m0 = 0, C0 = 1) {
   w <- 2 * pi / period
   order <- 2
@@ -282,6 +331,11 @@ harmonic_block <- function(..., period, name = "Var_Sazo", D = 1, W = 0, m0 = 0,
 #'
 #' @details
 #'
+#' For the ..., noise_var, D, W, m0, C0, m0_states, C0_states, D_states, m0_pulse, C0_pulse, D_pulse, W_pulse arguments, the user may set one or more of it's values as a string.
+#' By doing so, the user will leave the block partially undefined and it can no longer be used in the \code{\link{fit_model}} function.
+#' Instead, the user must use the \code{\link{search_model}} function to search the best hyper parameters among a defined range of possible values.
+#' See the \code{\link{search_model}} function for details on it's usage.
+#'
 #' For the details about the implementation see \insertCite{ArtigoPacote;textual}{kDGLM}.
 #'
 #' For the details about Auto regressive models in the context of DLM's, see \insertCite{WestHarr-DLM;textual}{kDGLM}, chapter 9.
@@ -292,6 +346,9 @@ harmonic_block <- function(..., period, name = "Var_Sazo", D = 1, W = 0, m0 = 0,
 #'
 #' @seealso \code{\link{fit_model}}
 #' @family {auxiliary functions for structural blocks}
+#'
+#' @references
+#'    \insertAllCited{}
 AR_block <- function(..., order, noise_var, pulse = 0, name = "Var_AR", AR_support = "constrained", D = 1, W = 0, m0 = 0, C0 = 1, m0_states = 0, C0_states = 1, D_states = 1, m0_pulse = 0, C0_pulse = 1, D_pulse = 1, W_pulse = 0) {
   block_state <-
     polynomial_block(..., order = order, name = paste0(name, "_State"), m0 = m0_states, C0 = C0_states, D = D_states, W = noise_var)
@@ -307,7 +364,7 @@ AR_block <- function(..., order, noise_var, pulse = 0, name = "Var_AR", AR_suppo
       dummy_var
     )
 
-  block=block_state+block_coeff
+  block <- block_state + block_coeff
   k <- block$k
 
   if (order == 1) {
@@ -340,6 +397,8 @@ AR_block <- function(..., order, noise_var, pulse = 0, name = "Var_AR", AR_suppo
   if (any(pulse != 0)) {
     k <- if.null(dim(pulse)[2], 1)
     t <- if.null(dim(pulse)[1], length(pulse))
+    dummy_var <- list()
+    dummy_var[[names(list(...))[1]]] <- rep(0, t)
     block_pulse <-
       do.call(
         function(...) {
@@ -386,8 +445,11 @@ AR_block <- function(..., order, noise_var, pulse = 0, name = "Var_AR", AR_suppo
 #' @examples
 #' # EXAMPLE
 #'
-#'
 #' @family {auxiliary functions for structural blocks}
+#'
+#'
+#' @references
+#'    \insertAllCited{}
 correlation_block <- function(var_names, order = 1, name = "Var_cor", D = 1, W = 0, m0 = 0, C0 = 1) {
   k <- length(var_names)
   arg_list <- c(rep(0, k), list(order = k, name = name, D = D, W = W, m0 = m0, C0 = C0))
@@ -508,6 +570,7 @@ block_merge <- function(...) {
   m0 <- c()
   C0 <- matrix(0, n, n)
   position <- 1
+  status <- "defined"
   for (block in blocks) {
     k_i <- length(block$var_names)
     current_range <- position:(position + block$n - 1)
@@ -520,8 +583,27 @@ block_merge <- function(...) {
     m0 <- c(m0, block$m0)
     C0[current_range, current_range] <- block$C0
     position <- position + block$n
+    status <- if (block$status == "undefined") {
+      "undefined"
+    } else {
+      status
+    }
   }
-  block <- list("FF" = FF, "G" = G, "G_labs" = G_labs, "D" = D, "W" = W, "m0" = m0, "C0" = C0, "n" = n, "t" = t, "k" = k, "names" = names, "var_names" = var_names)
+  block <- list(
+    "FF" = FF,
+    "G" = G,
+    "G_labs" = G_labs,
+    "D" = D,
+    "W" = W,
+    "m0" = m0,
+    "C0" = C0,
+    "n" = n,
+    "t" = t,
+    "k" = k,
+    "status" = status,
+    "names" = names,
+    "var_names" = var_names
+  )
   class(block) <- "dlm_block"
   return(block)
 }

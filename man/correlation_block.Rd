@@ -50,7 +50,9 @@ DESCRIPTION
 \examples{
 # EXAMPLE
 
-
+}
+\references{
+\insertAllCited{}
 }
 \seealso{
 Other {auxiliary functions for structural blocks}: 

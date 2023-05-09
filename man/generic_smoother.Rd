@@ -30,13 +30,14 @@ For the models covered in this package, we always assume that the latent states 
 
 For the details about the implementation see \insertCite{ArtigoPacote;textual}{kDGLM}.
 
-For the details about the algorithm implemented see \insertCite{Petris-DLM;textual}{kDGLM}, chapter 2, and \insertCite{WestHarr-DLM;textual}{kDGLM}, chapter 4.
+For the details about the algorithm implemented see \insertCite{ArtigokParametrico;textual}{kDGLM}, \insertCite{Petris-DLM;textual}{kDGLM}, chapter 2, \insertCite{WestHarr-DLM;textual}{kDGLM}, chapter 4, and \insertCite{Kalman_filter_origins;textual}{kDGLM}.
+}
+\references{
+\insertAllCited{}
 }
 \seealso{
 \code{\link{fit_model}}
 
 \code{\link{analytic_filter}}
-
-\code{\link{Kalman_filter_origins}}
 }
 \keyword{internal}

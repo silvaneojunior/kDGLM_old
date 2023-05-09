@@ -52,9 +52,7 @@ show_fit(fitted_data, smooth = TRUE)$plot
 \code{\link{fit_model}}
 
 Other {auxiliary functions for a creating outcomes}: 
-\code{\link{Dirichlet}()},
 \code{\link{Gamma}()},
-\code{\link{Laplace}()},
 \code{\link{Normal}()},
 \code{\link{Poisson}()}
 }

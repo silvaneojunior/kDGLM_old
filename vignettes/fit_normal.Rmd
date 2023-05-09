@@ -1,0 +1,81 @@
+---
+title: "Fitting a model for Normal outcomes"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Fitting a model for Normal outcomes}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+## Introduction
+
+This vignette is intended as an introduction to use of the kDGLM package, specifically for users who want to fit data coming from a Normal distribution with unknown mean and (possibly) unknown variance/covariance.
+
+## The Normal model with known variance
+
+We will consider the following model:
+
+$$
+\begin{align}
+Y_t|\theta_t &\sim \mathcal{N}\left(\mu_t,\sigma^2\right),\\
+\mu_t &=\lambda_{t}=F_t'\theta_t,\\
+\theta_t&=G_t\theta_{t-1}+\epsilon_t,\\
+\epsilon_t &\sim \mathcal{N}(0,\Sigma_t).
+\end{align}
+$$
+where $Y_t$ is the observed outcome, $\theta_t$ is a vector of latent variables, $F_t$ and $G_t$ are (generally) known matrices, $\Sigma_t$ is a covariance matrix (i.e., symmetric and positive defined) and $\sigma^2$ is a known positive value.
+
+We also will consider $\mathcal{D}_t$ as representing the knowledge we have after observing the data first $t$ time iterations. In this notation, we have that $\mathcal{D}_t=\{Y_t\} \cup D_{t-1}$, while $\mathcal{D}_0$ represent our prior knowledge about the phenomena we are studying.
+
+To fit a model with this specification, the user must first specify the model structure. For this task, the package offers a variety of functions to allow the user to create pre-specified types of structures. For now, we will focus on the use of the `polynomial_block` function, whose usage syntax is as follows:
+
+```{r eval=FALSE, include=TRUE}
+polynomial_block(
+  ...,
+  order = 1,
+  name = "Var_Poly",
+  D = 1,
+  W = 0,
+  m0 = 0,
+  C0 = c(NA, rep(1, order - 1))
+)
+```
+
+This function will create a latent vector $\theta_t=(\theta_{1t},...,\theta_{k\ t})'$,, where $k$ is the order of the polynomial block, so that:
+
+$$
+\begin{align}
+\theta_{it} &= \theta_{it-1}+\theta_{i+1\ t-1}+\epsilon_{it},\\
+\theta_{kt} &= \theta_{kt-1}+\epsilon_{kt},\\
+\theta_1&\sim \mathcal{N}_k(m_0,C_0),\\
+\epsilon_{1t},...,\epsilon_{kt}&\sim \mathcal{N}_k(0,\Sigma_t),
+\end{align}
+$$
+where $\Sigma_t=\frac{1-D_t}{D_t}Var[\theta_t|\mathcal{D}_{t-1}]+W_t$.
+
+Notice that the user do not need to specify the matrix $G_t$, since it is implicitly determined by the order of the polynomial block (each type of block will define it own matrix $G_t$).
+
+It is easy to see the correspondence between most of the arguments of the `polynomial_block` function and their respective meaning in the block specification, remaining only to explain the use of the `...` and `name` arguments.
+
+The argument `...` is used to specify the matrix $F_t$, specifically, the user must provide a list of named values, whose name indicate a linear predictor $\lambda_t$ and it's associated value represent the effect of $\theta_{1t}$ in this predictor. Naturally, if a linear predictor is not present in `...`, it is understood that $\theta_{1t}$ have no effect whatsoever in that linear predictor. It may seem strange such specification of $F_t$, but as the reader will see further bellow (and in other types of models, specilly the ones with multiple outcomes), this way of specifying $F_t$ is very useful to avoid confusion when dealing with multiple linear predictors.
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>"
+)
+```
+
+```{r setup}
+library(kDGLM)
+```
+
+
+$$
+\begin{align}
+Y_t|\theta_t &\sim \mathcal{N}\left(\mu_t,\tau_t^{-1}\right),\\
+\begin{bmatrix}\mu_t\\\ln(\tau_t)\end{bmatrix} &=\begin{bmatrix}\lambda_{1t}\\\lambda_{2t}\end{bmatrix}=F_t'\theta_t,\\
+\theta_t&=G_t\theta_{t-1}+\epsilon_t,\\
+\epsilon_t &\sim \mathcal{N}(0,\Sigma_t).
+\end{align}
+$$

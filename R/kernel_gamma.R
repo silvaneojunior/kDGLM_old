@@ -69,25 +69,19 @@ Gamma <- function(phi = NA, mu = NA, alpha = NA, beta = NA, sigma = NA, outcome,
     convert_mat_default <- convert_mat_canom <- diag(1)
     convert_canom_flag <- FALSE
     distr <- list(
-      "conj_prior" = convert_Gamma_Normal,
-      "conj_post" = convert_Normal_Gamma,
-      "update" = update_Gamma,
-      "log.like.cond" = function(param, outcome) {
-        dgamma(outcome, phi, phi / param, log = TRUE)
-      },
-      "smoother" = generic_smoother,
-      "calc_pred" = gamma_pred,
-      "apply_offset" = function(ft, Qt, offset) {
+      conj_prior = convert_Gamma_Normal,
+      conj_post = convert_Normal_Gamma,
+      update = update_Gamma,
+      smoother = generic_smoother,
+      calc_pred = gamma_pred,
+      apply_offset = function(ft, Qt, offset) {
         t <- if.null(dim(ft)[2], 1)
         offset <- matrix(offset, t, r)
 
         list("ft" = ft + log(t(offset)), "Qt" = Qt)
       },
-      "link_function" = log,
-      "inv_link_function" = exp,
-      "param_names" = function(y) {
-        c("alpha", "beta")
-      }
+      link_function = log, inv_link_function = exp,
+      param_names = c("alpha", "beta")
     )
     if (alt_method) {
       distr$update <- update_Gamma_alt
@@ -113,22 +107,16 @@ Gamma <- function(phi = NA, mu = NA, alpha = NA, beta = NA, sigma = NA, outcome,
     var_names <- c(phi, mu, alpha, beta, sigma)[flags]
 
     distr <- list(
-      "conj_prior" = convert_FGamma_Normal,
-      "conj_post" = convert_Normal_FGamma,
-      "update" = update_FGamma,
-      "log.like.cond" = function(param, outcome) {
-        dgamma(outcome, param[1], param[1] / param[2], log = TRUE)
-      },
-      "smoother" = generic_smoother,
-      "calc_pred" = Fgamma_pred,
-      "apply_offset" = function(ft, Qt, offset) {
+      conj_prior = convert_FGamma_Normal,
+      conj_post = convert_Normal_FGamma,
+      update = update_FGamma,
+      smoother = generic_smoother,
+      calc_pred = Fgamma_pred,
+      apply_offset = function(ft, Qt, offset) {
         list("ft" = ft + matrix(c(0, log(offset)), 2, dim(ft)[2]), "Qt" = Qt)
       },
-      "link_function" = log,
-      "inv_link_function" = exp,
-      "param_names" = function(y) {
-        c("n", "k", "tau", "theta")
-      }
+      link_function = log, inv_link_function = exp,
+      param_names = c("n", "k", "tau", "theta")
     )
 
     if (alt_method) {
@@ -136,9 +124,7 @@ Gamma <- function(phi = NA, mu = NA, alpha = NA, beta = NA, sigma = NA, outcome,
       distr$conj_post <- format_param
       distr$update <- update_FGamma_alt
       distr$calc_pred <- Fgamma_pred_alt
-      distr$param_names <- function(y) {
-        c("f1", "f2", "Q11", "Q12", "21", "Q22")
-      }
+      distr$param_names <- generic_param_names(k)
     }
   }
 
@@ -438,50 +424,51 @@ Fgamma_pred <- function(conj_param, outcome = NULL, parms = list(), pred_cred = 
   t <- length(conj_param$k)
   k <- 2
 
-  if (pred.flag) {
-    pred <- matrix(NA, r, t)
-    var.pred <- array(NA, c(r, r, t))
-    icl.pred <- matrix(NA, r, t)
-    icu.pred <- matrix(NA, r, t)
-  } else {
-    pred <- NULL
-    var.pred <- NULL
-    icl.pred <- NULL
-    icu.pred <- NULL
-  }
-  if (like.flag) {
-    outcome <- matrix(outcome, t, r)
-    log.like <- rep(NA, t)
-  } else {
-    log.like <- NULL
-  }
-  N <- 5000
+  pred <- NULL
+  var.pred <- NULL
+  icl.pred <- NULL
+  icu.pred <- NULL
+  log.like <- NULL
 
-  for (i in 1:t) {
-    n <- conj_param$n[i]
-    k <- conj_param$k[i]
-    tau <- conj_param$tau[i]
-    theta <- conj_param$theta[i]
-
-
-    a <- (k + 1) / 2
-    b <- (n - k + n * log(tau / n) - theta)
-
-    alpha_i <- rgamma(N, a, b)
-    mu_i <- 1 / rgamma(N, n * alpha_i + 1, alpha_i * tau)
-
-    sample_y <- rgamma(N, alpha_i, alpha_i / mu_i)
+  if (pred.flag | like.flag) {
     if (pred.flag) {
-      pred[, i] <- mean(sample_y)
-      var.pred[, , i] <- var(sample_y)
-      icl.pred[, i] <- quantile(sample_y, (1 - pred_cred) / 2)
-      icu.pred[, i] <- quantile(sample_y, 1 - (1 - pred_cred) / 2)
+      pred <- matrix(NA, r, t)
+      var.pred <- array(NA, c(r, r, t))
+      icl.pred <- matrix(NA, r, t)
+      icu.pred <- matrix(NA, r, t)
     }
     if (like.flag) {
-      log.like.list <- dgamma(outcome[i, ], alpha_i, alpha_i / mu_i, log = TRUE)
-      max.log.like <- max(log.like.list)
-      like.list <- exp(log.like.list - max.log.like)
-      log.like[i] <- log(mean(like.list)) + max.log.like
+      outcome <- matrix(outcome, t, r)
+      log.like <- rep(NA, t)
+    }
+    N <- 5000
+
+    for (i in 1:t) {
+      n <- conj_param$n[i]
+      k <- conj_param$k[i]
+      tau <- conj_param$tau[i]
+      theta <- conj_param$theta[i]
+
+
+      a <- (k + 1) / 2
+      b <- (n - k + n * log(tau / n) - theta)
+
+      alpha_i <- rgamma(N, a, b)
+      mu_i <- 1 / rgamma(N, n * alpha_i + 1, alpha_i * tau)
+
+      sample_y <- rgamma(N, alpha_i, alpha_i / mu_i)
+      if (pred.flag) {
+        pred[, i] <- mean(sample_y)
+        var.pred[, , i] <- var(sample_y)
+        icl.pred[, i] <- quantile(sample_y, (1 - pred_cred) / 2)
+        icu.pred[, i] <- quantile(sample_y, 1 - (1 - pred_cred) / 2)
+      }
+      if (like.flag) {
+        log.like.list <- dgamma(outcome[i, ], alpha_i, alpha_i / mu_i, log = TRUE)
+        max.log.like <- max(log.like.list)
+        like.list <- exp(log.like.list - max.log.like)
+        log.like[i] <- log(mean(like.list)) + max.log.like
+      }
     }
   }
 
@@ -643,19 +630,8 @@ gamma_pred <- function(conj_param, outcome = NULL, parms = list(), pred_cred = 0
 #' @references
 #'    \insertAllCited{}
 update_FGamma_alt <- function(conj_prior, ft, Qt, y, parms) {
-  # y=1
-  # ft=matrix(0,2,1)
-  # Qt=diag(2)*1
-
   f0 <- ft
   S0 <- ginv(Qt)
-
-  # log.like=function(x){
-  #   phi=exp(x[1])
-  #   mu=exp(x[2])
-  #
-  #   phi*log(phi)-phi*log(mu)-lgamma(phi)+(phi-1)*log(y)-phi*y/mu-0.5*crossprod(x-f0,S0)%*%(x-f0)
-  # }
 
   d1.log.like <- function(x) {
     phi <- exp(x[1])
@@ -682,14 +658,6 @@ update_FGamma_alt <- function(conj_prior, ft, Qt, y, parms) {
       ),
       2, 2
     ) - S0
-
-    # mat_inv=mat
-    # mat_inv[1,1]=mat[2,2]
-    # mat_inv[2,2]=mat[1,1]
-    # mat_inv[1,2]=mat_inv[2,1]=-mat[1,2]
-    # det_mat=mat[1,1]*mat[2,2]+mat[1,2]**2
-    # mat_inv=mat_inv/det_mat
-
     return(mat)
   }
 
@@ -735,40 +703,41 @@ Fgamma_pred_alt <- function(conj_param, outcome = NULL, parms = list(), pred_cre
   t <- dim(ft)[2]
   r <- 1
 
-  if (pred.flag) {
-    pred <- matrix(NA, r, t)
-    var.pred <- array(NA, c(r, r, t))
-    icl.pred <- matrix(NA, r, t)
-    icu.pred <- matrix(NA, r, t)
-  } else {
-    pred <- NULL
-    var.pred <- NULL
-    icl.pred <- NULL
-    icu.pred <- NULL
-  }
-  if (like.flag) {
-    outcome <- matrix(outcome, r, t)
-    log.like <- rep(NA, t)
-  } else {
-    log.like <- NULL
-  }
+  pred <- NULL
+  var.pred <- NULL
+  icl.pred <- NULL
+  icu.pred <- NULL
+  log.like <- NULL
 
-  N <- 5000
-  sample <- matrix(rnorm(k * N), N, k)
-  for (i in 1:t) {
-    ft_i <- sample %*% var_decomp(Qt[, , i]) + matrix(ft[, i], N, k, byrow = TRUE)
-    sample_y <- rgamma(N, exp(ft_i[, 1]), exp(ft_i[, 1] - ft_i[, 2]))
+  if (pred.flag | like.flag) {
     if (pred.flag) {
-      pred[, i] <- mean(sample_y)
-      var.pred[, , i] <- var(sample_y)
-      icl.pred[, i] <- quantile(sample_y, (1 - pred_cred) / 2)
-      icu.pred[, i] <- quantile(sample_y, 1 - (1 - pred_cred) / 2)
+      pred <- matrix(NA, r, t)
+      var.pred <- array(NA, c(r, r, t))
+      icl.pred <- matrix(NA, r, t)
+      icu.pred <- matrix(NA, r, t)
     }
     if (like.flag) {
-      log.like.list <- dgamma(outcome[, i], exp(ft_i[1, ]), exp(ft_i[1, ] - ft_i[2, ]), log = TRUE)
-      max.log.like <- max(log.like.list)
-      like.list <- exp(log.like.list - max.log.like)
-      log.like[i] <- log(mean(like.list)) + max.log.like
+      outcome <- matrix(outcome, r, t)
+      log.like <- rep(NA, t)
+    }
+
+    N <- 5000
+    sample <- matrix(rnorm(k * N), N, k)
+    for (i in 1:t) {
+      ft_i <- sample %*% var_decomp(Qt[, , i]) + matrix(ft[, i], N, k, byrow = TRUE)
+      sample_y <- rgamma(N, exp(ft_i[, 1]), exp(ft_i[, 1] - ft_i[, 2]))
+      if (pred.flag) {
+        pred[, i] <- mean(sample_y)
+        var.pred[, , i] <- var(sample_y)
+        icl.pred[, i] <- quantile(sample_y, (1 - pred_cred) / 2)
+        icu.pred[, i] <- quantile(sample_y, 1 - (1 - pred_cred) / 2)
+      }
+      if (like.flag) {
+        log.like.list <- dgamma(outcome[, i], exp(ft_i[1, ]), exp(ft_i[1, ] - ft_i[2, ]), log = TRUE)
+        max.log.like <- max(log.like.list)
+        like.list <- exp(log.like.list - max.log.like)
+        log.like[i] <- log(mean(like.list)) + max.log.like
+      }
     }
   }
 
@@ -812,10 +781,6 @@ Fgamma_pred_alt <- function(conj_param, outcome = NULL, parms = list(), pred_cre
 #' @references
 #'    \insertAllCited{}
 update_Gamma_alt <- function(conj_prior, ft, Qt, y, parms) {
-  # f0 <- ft
-  # Q0 <- Qt
-  # S0 <- ginv(Qt)
-
   f <- function(x) {
     prob <- exp(dgamma(y, parms$phi, parms$phi / x, log = TRUE) + dlnorm(x, ft, sqrt(Qt), log = TRUE))
 

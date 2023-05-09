@@ -11,7 +11,7 @@ polynomial_block(
   D = 1,
   W = 0,
   m0 = 0,
-  C0 = 1
+  C0 = c(NA, rep(1, order - 1))
 )
 }
 \arguments{
@@ -51,6 +51,11 @@ An object of the class dlm_block containing the following values:
 Creates the structure for a polynomial block with desired order.
 }
 \details{
+For the ..., D, W, m0 and C0 arguments, the user may set one or more of it's values as a string.
+By doing so, the user will leave the block partially undefined and it can no longer be used in the \code{\link{fit_model}} function.
+Instead, the user must use the \code{\link{search_model}} function to search the best hyper parameters among a defined range of possible values.
+See the \code{\link{search_model}} function for details on it's usage.
+
 For the details about the implementation see \insertCite{ArtigoPacote;textual}{kDGLM}.
 
 For the details about polynomial trend in the context of DLM's, see \insertCite{WestHarr-DLM;textual}{kDGLM}, chapter 7.
@@ -68,8 +73,13 @@ level_2 <- polynomial_block(alpha2 = 1, order = 1)
 level_3 <- polynomial_block(alpha1 = 1, alpha2 = 1, order = 2)
 
 }
+\references{
+\insertAllCited{}
+}
 \seealso{
 \code{\link{fit_model}}
+
+\code{\link{search_model}}
 
 Other {auxiliary functions for structural blocks}: 
 \code{\link{AR_block}()},
