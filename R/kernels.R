@@ -192,7 +192,7 @@ analytic_filter <- function(outcomes, m0 = 0, C0 = 1, FF, G, G_labs, D, W, p_mon
 
         conj_prior <- outcome$conj_prior(ft_canom, Qt_canom, parms = outcome$parms)
         log.like <- NULL
-        if (is.na(p_monit)) {
+        if (!is.na(p_monit)) {
           log.like <- outcome$calc_pred(conj_prior, outcome$outcome[t, ], parms = outcome$parms, pred_cred = NA)$log.like
         }
 
