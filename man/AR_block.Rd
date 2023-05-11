@@ -16,7 +16,7 @@ AR_block(
   m0 = 0,
   C0 = 1,
   m0_states = 0,
-  C0_states = 1,
+  C0_states = c(NA, rep(1, order - 1)),
   D_states = 1,
   m0_pulse = 0,
   C0_pulse = 1,
@@ -111,6 +111,7 @@ AR_block(mu = 1, pulse = rnorm(200), order = 3, noise_var = 0.1)
 Other {auxiliary functions for structural blocks}: 
 \code{\link{block_merge}()},
 \code{\link{block_mult}()},
+\code{\link{block_rename}()},
 \code{\link{correlation_block}()},
 \code{\link{harmonic_block}()},
 \code{\link{polynomial_block}()}

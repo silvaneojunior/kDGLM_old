@@ -4,7 +4,15 @@
 \alias{harmonic_block}
 \title{Structural blocks for seasonal trends and regressions}
 \usage{
-harmonic_block(..., period, name = "Var_Sazo", D = 1, W = 0, m0 = 0, C0 = 1)
+harmonic_block(
+  ...,
+  period,
+  name = "Var_Sazo",
+  D = 1,
+  W = 0,
+  m0 = 0,
+  C0 = c(NA, 1)
+)
 }
 \arguments{
 \item{...}{Named values for the planing matrix.}
@@ -77,6 +85,7 @@ Other {auxiliary functions for structural blocks}:
 \code{\link{AR_block}()},
 \code{\link{block_merge}()},
 \code{\link{block_mult}()},
+\code{\link{block_rename}()},
 \code{\link{correlation_block}()},
 \code{\link{polynomial_block}()}
 }

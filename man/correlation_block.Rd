@@ -59,6 +59,7 @@ Other {auxiliary functions for structural blocks}:
 \code{\link{AR_block}()},
 \code{\link{block_merge}()},
 \code{\link{block_mult}()},
+\code{\link{block_rename}()},
 \code{\link{harmonic_block}()},
 \code{\link{polynomial_block}()}
 }

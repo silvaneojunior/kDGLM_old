@@ -27,7 +27,7 @@ polynomial_block(
 
 \item{m0}{Vector or scalar: The prior mean for the latent variables associated with this block. If m0 is a vector, it's dimension should be equal to the order of the polynomial block. If m0 is a scalar, it's value will be used for all latent variables.}
 
-\item{C0}{Matrix, vector or scalar: The prior covariance matrix for the latent variables associated with this block. If C0 is a matrix, it's dimensions should be n x n. If W is a vector or scalar, a covariance matrix will be created as a diagonal matrix with the values of C0 in the diagonal.}
+\item{C0}{Matrix, vector or scalar: The prior covariance matrix for the latent variables associated with this block. If C0 is a matrix, it's dimensions should be n x n. If W is a vector or scalar, a covariance matrix will be created as a diagonal matrix with the values of C0 in the diagonal. If the first element of C0 is equal to NA, then a proper variance is calculated for the first latent state based on the scale of the effect of that state on the linear predictor.}
 }
 \value{
 An object of the class dlm_block containing the following values:
@@ -85,6 +85,7 @@ Other {auxiliary functions for structural blocks}:
 \code{\link{AR_block}()},
 \code{\link{block_merge}()},
 \code{\link{block_mult}()},
+\code{\link{block_rename}()},
 \code{\link{correlation_block}()},
 \code{\link{harmonic_block}()}
 }
