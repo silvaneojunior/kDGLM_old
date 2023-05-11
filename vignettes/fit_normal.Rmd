@@ -1,15 +1,54 @@
 ---
-title: "Fitting a model for Normal outcomes"
+title: "kDGLM: an R package for Bayesian analysis of Dynamic Generialized Linear Models"
 output: rmarkdown::html_vignette
 vignette: >
-  %\VignetteIndexEntry{Fitting a model for Normal outcomes}
+  %\VignetteIndexEntry{kDGLM: an R package for Bayesian analysis of Dynamic Generialized Linear Models}
   %\VignetteEngine{knitr::rmarkdown}
   %\VignetteEncoding{UTF-8}
 ---
 
 ## Introduction
 
-This vignette is intended as an introduction to use of the kDGLM package, specifically for users who want to fit data coming from a Normal distribution with unknown mean and (possibly) unknown variance/covariance.
+This vignette is intended as an introduction to use of the kDGLM package. This package aims to routines for Kalman filtering and smoothing, forecasting, sampling and Bayesian analysis of Dynamic Generalized Linear Models, following the theoretical results developed and/or explored in \cite{Kalman_filter_origins}, \cite{WestHarr-DLM} and \cite{ArtigokParametrico}. In this document we will focus exclusively in the usage of the package and will only briefly mention the theory behind these models and only with the intention of setting the notation. We highly recommend all users to read the theoretical work in which we based this package.
+
+This document is organized in the following order: 
+
+\begin{enumerate}
+\item first we introduce the notations and the class of models we will be dealing with;
+\item then we proceed to present the tools offered by our package to specify the model structure in an easy, fast and (hopefully) intuitive way;
+\item in the following section we discuss how the user can specify the observational model; with the model structure defined, we can proceed presenting the tools for fitting a defined model, also showing the auxiliary function that help the user to analyse the fitted model;
+\item in the next section we present a variety of more advanced examples, combining and stacking the basic structures shown in previous sections to create more complex models;
+\item in this section, we show how the user can combine different types of outcomes in a same model to analyse multiple time series simultanously;
+\item Lastly, we show how to make interventions on the model and also present the tools offered for automatic monitoring of time series.
+\end{enumerate}
+
+## Notation
+
+Let us assume that the user is interested in analyzing a Time Serie $Y_t$, $t=1,...T$, in which we can be described by the following model:
+
+$$
+\begin{align}
+Y_t|\theta_t &\sim \mathcal{F}\left(\eta_t\right),\\
+g(\eta_t) &=\lambda_{t}=F_t'\theta_t,\\
+\theta_t&=G_t\theta_{t-1}+\epsilon_t,\\
+\epsilon_t &\sim \mathcal{N}(0,W^*_t),
+\end{align}
+$$
+where:
+\begin{itemize}
+\item $\theta_t$ are the unknown parameter of interest;
+\item $\mathcal{F}$ is a probability distribution in the Exponential Family and indexed by $\eta_t$;
+\item $g$, called the link function, is a pre-specified function (in this package, each choice of $\mathcal{F}$ will have a pre-specified $g$);
+\item $F_t$, called the design matrix, is a (mostly) known matrix specified by the user;
+\item $G_t$, called the evolution matrix, is a (mostly) known matrix specified by the user;
+\item $W^*_t$ is a known covariance matrix specified by the user.
+\end{itemize}
+
+Also, following the notation in \cite{WestHarr-DLM}, we will define $\mathcal{D}_t$ as the information one has after the first $t$ observations, such that $\mathcal{D}_t=\mathcal{D}_{t-1}\cup\{Y_t\}$ (for now, let's assume that there is not external source of information beside $Y_t$ itself) and $\mathcal{D}_0$ denotes the information we have about the process $Y_t$ *prior* to observing the data.
+
+Notice that we **did not** make any assumptions on the dimension of $Y_t$ or $\eta_t$, indeed, this package offers tools for fitting time series made of vectors (as in the Multinomial case) ad/or with multiple unknown parameters (as in the Normal with unknown variance case).
+
+Naturally, the manual specification of all the components of 
 
 ## The Normal model with known variance
 
