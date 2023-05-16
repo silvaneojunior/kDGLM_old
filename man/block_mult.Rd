@@ -28,9 +28,12 @@ final_block <- 5 * polynomial_block(alpha = 1, order = 1)
 
 }
 \seealso{
+\code{\link{block_rename}}
+
 Other {auxiliary functions for structural blocks}: 
 \code{\link{AR_block}()},
 \code{\link{block_merge}()},
+\code{\link{block_rename}()},
 \code{\link{correlation_block}()},
 \code{\link{harmonic_block}()},
 \code{\link{polynomial_block}()}

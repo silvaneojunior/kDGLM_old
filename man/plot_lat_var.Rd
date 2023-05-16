@@ -8,7 +8,7 @@ plot_lat_var(
   model,
   var = "",
   smooth = model$smooth,
-  cut_off = 10,
+  cut_off = round(model$t/10),
   pred_cred = 0.95,
   plotly = requireNamespace("plotly", quietly = TRUE)
 )

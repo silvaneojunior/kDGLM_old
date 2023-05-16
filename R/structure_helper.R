@@ -8,7 +8,7 @@
 #' @param D Array, Matrix, vector or  scalar: The values for the discount factors at each time. If D is a array, it's dimensions should be n x n x t, where n is the order of the polynomial block and t is the length of the outcomes. If D is a matrix, it's dimensions should be n x n and it's values will be used for each time. If D is a vector or scalar, a discount factor matrix will be created as a diagonal matrix with the values of D in the diagonal.
 #' @param W Array, Matrix, vector or  scalar: The values for the covariance matrix for the noise factor at each time. If W is a array, it's dimensions should be n x n x t, where n is the order of the polynomial block and t is the length of the outcomes. If W is a matrix, it's dimensions should be n x n and it's values will be used for each time. If W is a vector or scalar, a discount factor matrix will be created as a diagonal matrix with the values of W in the diagonal.
 #' @param m0 Vector or scalar: The prior mean for the latent variables associated with this block. If m0 is a vector, it's dimension should be equal to the order of the polynomial block. If m0 is a scalar, it's value will be used for all latent variables.
-#' @param C0 Matrix, vector or scalar: The prior covariance matrix for the latent variables associated with this block. If C0 is a matrix, it's dimensions should be n x n. If W is a vector or scalar, a covariance matrix will be created as a diagonal matrix with the values of C0 in the diagonal.
+#' @param C0 Matrix, vector or scalar: The prior covariance matrix for the latent variables associated with this block. If C0 is a matrix, it's dimensions should be n x n. If W is a vector or scalar, a covariance matrix will be created as a diagonal matrix with the values of C0 in the diagonal. If the first element of C0 is equal to NA, then a proper variance is calculated for the first latent state based on the scale of the effect of that state on the linear predictor.
 #'
 #' @return An object of the class dlm_block containing the following values:
 #' \itemize{
@@ -266,7 +266,7 @@ polynomial_block <- function(..., order = 1, name = "Var_Poly", D = 1, W = 0, m0
 #'
 #' @references
 #'    \insertAllCited{}
-harmonic_block <- function(..., period, name = "Var_Sazo", D = 1, W = 0, m0 = 0, C0 = 1) {
+harmonic_block <- function(..., period, name = "Var_Sazo", D = 1, W = 0, m0 = 0, C0=c(NA, 1)) {
   w <- 2 * pi / period
   order <- 2
   block <- polynomial_block(..., order = order, name = name, D = D, W = W, m0 = m0, C0 = C0)
@@ -349,7 +349,10 @@ harmonic_block <- function(..., period, name = "Var_Sazo", D = 1, W = 0, m0 = 0,
 #'
 #' @references
 #'    \insertAllCited{}
-AR_block <- function(..., order, noise_var, pulse = 0, name = "Var_AR", AR_support = "constrained", D = 1, W = 0, m0 = 0, C0 = 1, m0_states = 0, C0_states = 1, D_states = 1, m0_pulse = 0, C0_pulse = 1, D_pulse = 1, W_pulse = 0) {
+AR_block <- function(..., order, noise_var, pulse = 0, name = "Var_AR", AR_support = "constrained",
+                     D = 1, W = 0, m0 = 0, C0 = 1,
+                     m0_states = 0, C0_states = c(NA, rep(1, order - 1)), D_states = 1,
+                     m0_pulse = 0, C0_pulse = 1, D_pulse = 1, W_pulse = 0) {
   block_state <-
     polynomial_block(..., order = order, name = paste0(name, "_State"), m0 = m0_states, C0 = C0_states, D = D_states, W = noise_var)
 
@@ -542,7 +545,7 @@ block_merge <- function(...) {
     for (name in names(ref_names)) {
       ref_names[[name]] <- ref_names[[name]] + n
     }
-    names <- c(names, ref_names)
+    # names <- c(names, ref_names)
     var_names <- c(var_names, block$var_names)
     if (block$t > 1) {
       if (block$t != t & t > 1) {
@@ -551,16 +554,18 @@ block_merge <- function(...) {
       t <- block$t
     }
     n <- n + block$n
+
+    names[[name]] <- c(names[[name]],ref_names[[name]])
   }
   var_names <- sort(unique(var_names))
   k <- length(var_names)
-  for (name in names(names)) {
-    ref_idx <- which(names(names) == name)
-    n_names <- length(ref_idx)
-    if (n_names > 1) {
-      names(names)[ref_idx] <- paste0(names(names)[ref_idx], "_", c(1:n_names))
-    }
-  }
+  # for (name in names(names)) {
+  #   ref_idx <- which(names(names) == name)
+  #   n_names <- length(ref_idx)
+  #   if (n_names > 1) {
+  #     names(names)[ref_idx] <- paste0(names(names)[ref_idx], "_", c(1:n_names))
+  #   }
+  # }
 
   FF <- array(0, c(n, k, t), dimnames = list(NULL, var_names, NULL))
   G <- array(0, c(n, n, t))
@@ -627,19 +632,58 @@ block_merge <- function(...) {
 #' # Short way
 #' final_block <- 5 * polynomial_block(alpha = 1, order = 1)
 #'
+#' @seealso \code{\link{block_rename}}
 #' @family {auxiliary functions for structural blocks}
 block_mult <- function(block, k) {
   block_list <- list()
+  size_total=floor(log10(k))+1
   if (k > 1) {
     block_ref <- block
-    block$var_names <- paste0(block$var_names, "_1")
+    block$var_names <- paste0(block$var_names, "_",paste0(rep('0',size_total-1),collapse=''),"1")
     block_list[[1]] <- block
     for (i in 2:k) {
+      size_i=floor(log10(i))+1
       block_clone <- block_ref
-      block_clone$var_names <- paste0(block_ref$var_names, "_", i)
+      block_clone$var_names <- paste0(block_ref$var_names, "_",paste0(rep('0',size_total-size_i),collapse=''), i)
       block_list[[i]] <- block_clone
     }
     block <- do.call(block_merge, block_list)
   }
+  return(block)
+}
+
+#' block_rename
+#'
+#' @param block A dlm_block object.
+#' @param names A vector of string with names for each linear predictor in block.
+#'
+#' @return A dlm_block with the linear predictors renamed to the values passed in names.
+#' @export
+#'
+#' @examples
+#'
+#' base_block=polynomial_block(
+#' eta=1,
+#' order = 1,
+#' name = "Poly",
+#' D=0.95
+#' )
+#'
+#' final_block=block_rename(2*base_block,c('mu','sigma'))
+#'
+#' @family {auxiliary functions for structural blocks}
+block_rename=function(block,names){
+  if(!inherits(block,'dlm_block')){
+    stop('Error: The block argument is not a dlm_block object.')
+  }
+  if(length(names)!=length(block$var_names)){
+    stop(paste0('Error: The number of names provided does not match the number of linear predictor in the block. Expected ',length(block$var_names),', got ',length(names),'.'))
+  }
+  if(length(names)!=length(unique(names))){
+    stop(paste0('Error: Repeated names are not allowed.'))
+  }
+
+  block$var_names=names
+  colnames(block$FF)=names
   return(block)
 }
