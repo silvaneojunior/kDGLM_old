@@ -239,7 +239,7 @@ system_full_gamma <- function(x, parms) {
 #' @keywords internal
 #' @family {auxiliary functions for a Gamma outcome with unknowned shape}
 convert_FGamma_Normal <- function(ft, Qt, parms) {
-  s <- exp(ft[2, ] + 1)
+  s <- exp(ft[2, ] - 1)
   f1 <- ft[1, ]
   f2 <- ft[2, ] - log(s)
   q1 <- Qt[1, 1]
@@ -581,8 +581,16 @@ gamma_pred <- function(conj_param, outcome = NULL, parms = list(), pred_cred = 0
   log.like <- NULL
 
   if (pred.flag) {
-    pred <- beta / (alpha - 1)
-    var.pred <- ((alpha / (beta - 1))**2) * (alpha + phi - 1) / ((alpha - 2) * phi)
+      pred <- ifelse(alpha>1,
+                     beta / (alpha - 1),
+                     NA
+                     )
+      var.pred <- ifelse(alpha>1,
+                         ((alpha / (beta - 1))**2) * (alpha + phi - 1) / ((alpha - 2) * phi),
+                         Inf
+
+      )
+
 
     icl.pred <- qbetapr((1 - pred_cred) / 2, phi, alpha, beta / phi)
     icu.pred <- qbetapr(1 - (1 - pred_cred) / 2, phi, alpha, beta / phi)
@@ -630,40 +638,89 @@ gamma_pred <- function(conj_param, outcome = NULL, parms = list(), pred_cred = 0
 #' @references
 #'    \insertAllCited{}
 update_FGamma_alt <- function(conj_prior, ft, Qt, y, parms) {
-  f0 <- ft
-  S0 <- ginv(Qt)
+  # ft=c(0,0)
+  # Qt=diag(2)
+  # Qt[2,2]=2
+  # y=6.063814
 
-  d1.log.like <- function(x) {
-    phi <- exp(x[1])
-    mu <- exp(x[2])
+  if(all(diag(Qt)<=0.1)){
+    print('hey!')
+    f0 <- ft
+    S0 <- ginv(Qt)
 
-    c(
-      (log(phi) + 1 - log(mu) - digamma(phi) + log(y) - y / mu) * phi,
-      (-phi / mu + phi * y / (mu**2)) * mu
-    ) - S0 %*% (x - f0)
-  }
+    d1.log.like <- function(x) {
+      phi <- exp(x[1])
+      mu <- exp(x[2])
+      # print(x)
 
-  d2.inv <- function(x) {
-    phi <- exp(x[1])
-    mu <- exp(x[2])
-
-    cross <- (-1 + y / mu) * phi
-
-    mat <- matrix(
       c(
-        (log(phi) + 1 - log(mu) - digamma(phi) + log(y) - y / mu + 1 - phi * trigamma(phi)) * phi,
-        cross,
-        cross,
-        (-1 + y / mu + 1 - 2 * y / mu) * phi
-      ),
-      2, 2
-    ) - S0
-    return(mat)
-  }
+        (log(phi) + 1 - log(mu) - digamma(phi) + log(y) - y / mu) * phi,
+        (-phi / mu + phi * y / (mu**2)) * mu
+      ) - S0 %*% (x - f0)
+    }
 
-  mode <- f_root(d1.log.like, d2.inv, f0)$root
-  H <- d2.inv(mode)
-  S <- ginv(-H)
+    d2.inv <- function(x) {
+      phi <- exp(x[1])
+      mu <- exp(x[2])
+
+      cross <- (-1 + y / mu) * phi
+
+      mat <- matrix(
+        c(
+          (log(phi) + 1 - log(mu) - digamma(phi) + log(y) - y / mu + 1 - phi * trigamma(phi)) * phi,
+          cross,
+          cross,
+          (-1 + y / mu + 1 - 2 * y / mu) * phi
+        ),
+        2, 2
+      ) - S0
+      return(mat)
+    }
+
+    mean <- c(f0[1],log(y))
+
+    tau <- -d2.inv(mean)-S0
+
+    f_start <- ginv(tau + S0) %*% (tau %*% mean + S0 %*% f0)
+    # f_start=c(0.2286328,1.1518655)
+
+    mode <- f_root(d1.log.like, d2.inv, f_start)$root
+    # print(d2.inv(f0))
+    # mode <- rootSolve::multiroot(d1.log.like, f_start)$root
+    H <- d2.inv(mode)
+    S <- ginv(-H)
+  }else{
+
+    f <- function(x) {
+      l.phi=x[1,]
+      l.mu=x[2,]
+      phi=exp(x[1,])
+      mu=exp(x[2,])
+
+      # l.phi=log(x[1,])
+      # l.mu=log(x[2,])
+      # phi=x[1,]
+      # mu=x[2,]
+
+      prob <- exp(dgamma(y, phi, phi/mu, log = TRUE) + dmvnorm(t(x), ft, Qt, log = TRUE))
+
+
+      rbind(
+        prob,
+        l.phi * prob,
+        l.mu * prob,
+        (l.phi**2) * prob,
+        (l.phi*l.mu) * prob,
+        (l.mu*l.phi) * prob,
+        (l.mu**2) * prob
+      )
+    }
+
+    # val <- cubintegrate(f, c(exp(mu2-6*sqrt(sigma2))), c(exp(mu2+6*sqrt(sigma2))), fDim = 7, nVec = 1000)$integral
+    val <- cubintegrate(f, c(-Inf,-Inf), c(Inf,Inf), fDim = 7, nVec = 1000)$integral
+    mode <- matrix(val[2:3] / val[1], 2, 1)
+    S <- matrix(val[4:7], 2, 2) / val[1] - mode %*% t(mode)
+  }
 
   return(list("ft" = matrix(mode, 2, 1), "Qt" = S))
 }
@@ -708,6 +765,8 @@ Fgamma_pred_alt <- function(conj_param, outcome = NULL, parms = list(), pred_cre
   icl.pred <- NULL
   icu.pred <- NULL
   log.like <- NULL
+
+  Qt <- array(Qt,c(k,k,t))
 
   if (pred.flag | like.flag) {
     if (pred.flag) {

@@ -19,7 +19,8 @@ knitr::opts_chunk$set(
   comment = "#>"
 )
 
-library(kDGLM)
+# library(kDGLM)
+devtools::load_all()
 library(tidyverse)
 library(plotly)
 library(latex2exp)
@@ -563,11 +564,11 @@ $$
 \end{align}
 $$
 
-Naturally, the user **CANNOT** specify both $\alpha_t$ AND $\phi_t$ or $\beta_t$ AND $sigma_t$, as such specification is reduntant at best, and incoherent at worst. Outside of those cases, in which the package will raise an error, any combination can be used by the user, allowing for the structure of the model to be define with the variables that are most convenient (it may be easier or more intuitive to specify the structure in the mean $\mu_t$ and the scale $\sigma_t$, than on the shape $\alpha_t$ and rate $\beta_t$).
+Naturally, the user **CANNOT** specify both $\alpha_t$ AND $\phi_t$ or $\beta_t$ AND $sigma_t$, as such specification is redundant at best, and incoherent at worst. Outside of those cases, in which the package will raise an error, any combination can be used by the user, allowing for the structure of the model to be define with the variables that are most convenient (it may be easier or more intuitive to specify the structure in the mean $\mu_t$ and the scale $\sigma_t$, than on the shape $\alpha_t$ and rate $\beta_t$).
 
 Another particularity of the Gamma outcome is that the user may set the shape parameter $\phi_t$ to a known constant. In that case, the user must specify the structure to the mean parameter $\mu_t$ (he is not allowed to specify neither $\beta_t$ nor $\sigma_t$). In general, it is not expected that the shape parameter is known, still, there are some important applications where it common the use of Exponential Model ($\phi_t=1$) or some other particular cases of the Gamma distribution.
 
-No matter the parametrization, the link function $g$ will always be the logarithm function. 
+No matter the parametrization, the link function $g$ will always be the logarithm function, since, given a certain parametrization, we can write the linear predictor of any other parametrization as a linear transformation of the original linear predictors.
 
 In the examples of this section, we will always use the parameters $\phi_t$ (when applicable) and $\mu_t$, but code used can be trivially adapted to other parametrizations.
 
@@ -593,15 +594,72 @@ Y_t|\theta_t &\sim \mathcal{G}\left(\alpha_t,\beta_t E_t^{-1}\right).
 \end{align}
 $$
 
-The arguments `phi`, `mu`, `alpha`, `beta` and `sigma` should be character strings indicating the name of the linear predictor associated with
+Note that the above relationship implies that:
+
+$$
+\mathbb{E}[Y_t|\theta_t]=\frac{\alpha_t}{\beta_t}E_t.
+$$
+
+The arguments `phi`, `mu`, `alpha`, `beta` and `sigma` should be character strings indicating the name of the linear predictor associated with their respective linear predictor. The user may opt to pass `phi` as a positive numerical value, it that case, the shape parameter $\phi_t$ is considered known and equal to `phi` for all $t$.
+
+
+
+```{r include=FALSE}
+set.seed(1352)
+mu=0
+phi=0.95
+W=0.1
+ht=rep(NA,T)
+ht_i=0
+for(i in 1:T){
+  ht_i=phi*ht_i+rnorm(1,0,sqrt(W))
+  ht[i]=ht_i
+}
+plot(exp(ht))
+
+data=rgamma(T,0.5,0.5/exp(ht))
+```
+
+
+```{r}
+plot(ht)
+lines(fitted_data$mts[1,])
+```
+
+
+```{r}
+
+devtools::load_all()
+# Structure
+volatility=AR_block(h=1,order=1,noise_var=W,AR_support='free')
+
+# Outcome
+outcome <- Gamma(phi = 0.5, mu='h', outcome = data)
+
+# Fitting and ploting
+fitted_data <- fit_model(volatility, outcomes = outcome)
+plot(fitted_data,smooth=TRUE)
+```
+
+```{r}
+devtools::load_all()
+# Structure
+volatility=AR_block(h=1,order=1,noise_var=W,AR_support='free')
+shape=polynomial_block(phi=1)
+
+# Outcome
+outcome <- Gamma(phi = 'phi', mu='h', outcome = data)
+
+# Fitting and ploting
+fitted_data <- fit_model(shape,volatility, outcomes = outcome)
+plot(fitted_data,smooth=TRUE)
+```
 
 ## Multinomial case
 
 ## Normal case
 
 ### Normal outcome with known variance
-
-#### Extension to the multivariate case
 
 ### Normal outcome with unknown variance
 
