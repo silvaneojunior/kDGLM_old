@@ -350,7 +350,7 @@ harmonic_block <- function(..., period, name = "Var_Sazo", D = 1, W = 0, m0 = 0,
 #' @references
 #'    \insertAllCited{}
 AR_block <- function(..., order, noise_var, pulse = 0, name = "Var_AR", AR_support = "constrained",
-                     D = 1, W = 0, m0 = 0, C0 = 1,
+                     D = 1, W = 0, m0 = 1, C0 = 1,
                      m0_states = 0, C0_states = c(NA, rep(1, order - 1)), D_states = 1,
                      m0_pulse = 0, C0_pulse = 1, D_pulse = 1, W_pulse = 0) {
   block_state <-
@@ -544,6 +544,7 @@ block_merge <- function(...) {
     ref_names <- block$names
     for (name in names(ref_names)) {
       ref_names[[name]] <- ref_names[[name]] + n
+      names[[name]] <- c(names[[name]],ref_names[[name]])
     }
     # names <- c(names, ref_names)
     var_names <- c(var_names, block$var_names)
@@ -554,8 +555,6 @@ block_merge <- function(...) {
       t <- block$t
     }
     n <- n + block$n
-
-    names[[name]] <- c(names[[name]],ref_names[[name]])
   }
   var_names <- sort(unique(var_names))
   k <- length(var_names)

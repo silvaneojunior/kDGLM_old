@@ -581,8 +581,16 @@ gamma_pred <- function(conj_param, outcome = NULL, parms = list(), pred_cred = 0
   log.like <- NULL
 
   if (pred.flag) {
-    pred <- beta / (alpha - 1)
-    var.pred <- ((alpha / (beta - 1))**2) * (alpha + phi - 1) / ((alpha - 2) * phi)
+      pred <- ifelse(alpha>1,
+                     beta / (alpha - 1),
+                     NA
+                     )
+      var.pred <- ifelse(alpha>1,
+                         ((alpha / (beta - 1))**2) * (alpha + phi - 1) / ((alpha - 2) * phi),
+                         Inf
+
+      )
+
 
     icl.pred <- qbetapr((1 - pred_cred) / 2, phi, alpha, beta / phi)
     icu.pred <- qbetapr(1 - (1 - pred_cred) / 2, phi, alpha, beta / phi)
@@ -630,12 +638,19 @@ gamma_pred <- function(conj_param, outcome = NULL, parms = list(), pred_cred = 0
 #' @references
 #'    \insertAllCited{}
 update_FGamma_alt <- function(conj_prior, ft, Qt, y, parms) {
+  # ft=c(0,0)
+  # Qt=diag(2)
+  # Qt[2,2]=2
+  # y=6.063814
+
+
   f0 <- ft
   S0 <- ginv(Qt)
 
   d1.log.like <- function(x) {
     phi <- exp(x[1])
     mu <- exp(x[2])
+    # print(x)
 
     c(
       (log(phi) + 1 - log(mu) - digamma(phi) + log(y) - y / mu) * phi,
@@ -661,7 +676,16 @@ update_FGamma_alt <- function(conj_prior, ft, Qt, y, parms) {
     return(mat)
   }
 
-  mode <- f_root(d1.log.like, d2.inv, f0)$root
+  mean <- c(f0[1],log(y))
+
+  tau <- -d2.inv(mean)-S0
+
+  f_start <- ginv(tau + S0) %*% (tau %*% mean + S0 %*% f0)
+  # f_start=c(0.2286328,1.1518655)
+
+  mode <- f_root(d1.log.like, d2.inv, f_start)$root
+  # print(d2.inv(f0))
+  # mode <- rootSolve::multiroot(d1.log.like, f_start)$root
   H <- d2.inv(mode)
   S <- ginv(-H)
 
