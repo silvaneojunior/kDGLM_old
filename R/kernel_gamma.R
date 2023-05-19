@@ -161,21 +161,23 @@ Gamma <- function(phi = NA, mu = NA, alpha = NA, beta = NA, sigma = NA, outcome,
 #' @keywords internal
 system_full_gamma <- function(x, parms) {
   n <- exp(x) # exp(x[1])
-  k <- n # exp(x[2])
-  tau <- (n * parms$Hq1 + 1) / parms$Hq2
-  theta <- n - k + n * log(tau / n) - (k + 1) / (2 * parms$Hq1)
+  tau <- (n * parms$Hq1 - 1) / parms$Hq2
+  theta <- n * log(tau / n) - (n + 5) / (2 * parms$Hq1)
 
-  a <- (k + 1) / 2
-  b <- (n - k + n * log(tau / n) - theta)
+  a <- (n + 5) / 2
+  b <- (n * log(tau / n) - theta)
 
   # print((parms$Hq3 + parms$Hq4))
-  if (a <= 5) {
+  if (a <= 5 | TRUE) {
     # Densidade marginal aproximada de alpha (uso opcional).
     # f_densi=function(x){dgamma(a,b))}
     # c_val=1
     # Densidade marginal exata de phi.
+    # f_densi_raw <- function(x) {
+    #   exp(n * (x + 1) * log(x) + lgamma(n * x + 1) + theta * x - n * lgamma(x + 1) - (n * x + 1) * log(x * tau))
+    # }
     f_densi_raw <- function(x) {
-      exp(k * (x + 1) * log(x) + lgamma(n * x + 1) + theta * x - k * lgamma(x + 1) - (n * x + 1) * log(x * tau))
+      exp(-n*lgamma(x)+x*theta+lgamma(n*x-1)+log(x)-n*x*log(tau))
     }
     lim_sup <- Inf
     c_val <- cubintegrate(f_densi_raw, 0, lim_sup, nVec = 200)$integral
@@ -184,13 +186,13 @@ system_full_gamma <- function(x, parms) {
     }
     # print('a')
     f <- function(x) {
-      (x * digamma(x * n + 1) - x * log(x) - x * log(tau)) * f_densi(x)
+      -x*(digamma(x * n - 1) - log(x*tau)) * f_densi(x)
     }
     Hp3 <- cubintegrate(f, 0, lim_sup, nVec = 200)$integral
 
     # print('b')
     f <- function(x) {
-      (x * log(x) - lgamma(x)) * f_densi(x)
+      (-x * log(x) + lgamma(x)) * f_densi(x)
     }
     Hp4 <- cubintegrate(f, 0, lim_sup, nVec = 200)$integral
 
@@ -212,7 +214,7 @@ system_full_gamma <- function(x, parms) {
     # Hp3 <- log(tau / n) * a / b - 1 / n + b / (12 * (n**2) * (a - 1))
     # Hp4 <- a / b + 0.5 * (digamma(a) - log(b)) - b / (12 * (a - 1)) - 11 / 12
     # Hp5=Hp3+Hp4
-    Hp5 <- parms$Hq1 * (log(tau / n) - 1) - 0.5 * digamma((n + 1) / 2) + 0.5 * log(n * log(tau / n) - theta) + (log(tau / n) - theta / n) / 6 + 11 / 12 - 1 / (2 * n)
+    Hp5 <- a*log(tau/n)/b+1/n+1+b/(12*(n**2)*(a-1))
   }
 
   f_all <- c(
@@ -239,7 +241,8 @@ system_full_gamma <- function(x, parms) {
 #' @keywords internal
 #' @family {auxiliary functions for a Gamma outcome with unknowned shape}
 convert_FGamma_Normal <- function(ft, Qt, parms) {
-  s <- exp(ft[2, ] - 1)
+  # s <- exp(ft[2, ] + 1)
+  s=1
   f1 <- ft[1, ]
   f2 <- ft[2, ] - log(s)
   q1 <- Qt[1, 1]
@@ -248,10 +251,10 @@ convert_FGamma_Normal <- function(ft, Qt, parms) {
 
   Hq1 <- exp(f1 + q1 / 2)
   Hq2 <- exp(f1 - f2 + (q1 + q2 - 2 * q12) / 2)
-  Hq3 <- -(f2 + q12) * Hq1
+  Hq3 <- (f2 + q12) * Hq1
 
   Hq4 <- cubintegrate(function(x) {
-    (x * log(x) - lgamma(x)) * dlnorm(x, f1, sqrt(q1))
+    (-x * log(x) + lgamma(x)) * dlnorm(x, f1, sqrt(q1))
   }, 0, Inf, nVec = 200)$integral
 
   parms <- list(
@@ -261,20 +264,18 @@ convert_FGamma_Normal <- function(ft, Qt, parms) {
     "Hq4" = Hq4
   )
 
-  ss1 <- multiroot(f = system_full_gamma, start = c(0), parms = parms, maxiter = 2000, atol = 10**-20)
+  ss1 <- multiroot(f = system_full_gamma, start = c(0), parms = parms, maxiter = 2000)
 
   x <- as.numeric(ss1$root)
   n <- exp(x) # exp(x[1])
 
-  k <- n # exp(x[2])
-
   # Calculando tau e theta dado n e k
   tau <- ((n * parms$Hq1 + 1) / parms$Hq2)
   # tau=exp(x[3])
-  theta <- (n - k + n * log(tau / n) - (k + 1) / (2 * parms$Hq1))
+  theta <- (n * log(tau / n) - (n + 1) / (2 * parms$Hq1))
   tau <- tau * s
   theta <- theta + n * log(s)
-  return(list("n" = n, "k" = k, "tau" = tau, "theta" = theta))
+  return(list("n" = n, "k" = n, "tau" = tau, "theta" = theta))
 }
 
 #' convert_Normal_FGamma
