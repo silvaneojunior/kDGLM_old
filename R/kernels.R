@@ -310,15 +310,15 @@ calc_current_G <- function(m0, G, G_labs) {
   if (any(G_labs != "const")) {
     for (index_row in (1:n)[rowSums(is.na(G)) > 0]) {
       index_col <- (1:n)[is.na(G_now[index_row, ])]
-      if (G_labs[index_row, index_col] == "constrained") {
+      if (all(G_labs[index_row, index_col] == "constrained")) {
         p <- 1 / (1 + exp(-m0[index_col + 1]))
         G_now[index_row, index_col] <- (2 * p - 1)
         G_now[index_row, index_col + 1] <- 2 * p * (1 - p) * m0[index_col]
-        G_diff[index_row] <- G_diff[index_row] - 2 * p * (1 - p) * m0[index_col] * m0[index_col + 1]
+        G_diff[index_row] <- sum(G_diff[index_row] - 2 * p * (1 - p) * m0[index_col] * m0[index_col + 1])
       } else {
         G_now[index_row, index_col] <- m0[index_col + 1]
         G_now[index_row, index_col + 1] <- m0[index_col]
-        G_diff[index_row] <- G_diff[index_row] - m0[index_col] * m0[index_col + 1]
+        G_diff[index_row] <- sum(G_diff[index_row] - m0[index_col] * m0[index_col + 1])
       }
     }
   }

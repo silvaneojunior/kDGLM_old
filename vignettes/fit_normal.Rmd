@@ -605,40 +605,41 @@ The arguments `phi`, `mu`, `alpha`, `beta` and `sigma` should be character strin
 
 
 ```{r include=FALSE}
-set.seed(1352)
-mu=0
-phi=0.95
-W=0.1
-ht=rep(NA,T)
-ht_i=0
-for(i in 1:T){
-  ht_i=phi*ht_i+rnorm(1,0,sqrt(W))
-  ht[i]=ht_i
-}
-plot(exp(ht))
+T <- 200
+w <- (200 / 40) * 2 * pi
+phi <- 2.5
+data <- matrix(rgamma(T, phi, phi / (20 * (sin(w * 1:T / T) + 2))), T, 1)
 
-data=rgamma(T,0.5,0.5/exp(ht))
+level <- polynomial_block(mu = 1, D = 0.95)
+season <- harmonic_block(mu = 1, period = 40, D = 0.98)
+scale <- polynomial_block(phi = 1, D = 1)
 ```
 
 
 ```{r}
-plot(ht)
-lines(fitted_data$mts[1,])
+
+
+# Known shape
+outcome <- Gamma(phi = phi, mu = "mu", outcome = data)
+
+fitted_data <- fit_model(level, season, outcomes = outcome)
+summary(fitted_data)
+
+show_fit(fitted_data, smooth = TRUE)$plot
 ```
 
 
 ```{r}
 
 devtools::load_all()
-# Structure
-volatility=AR_block(h=1,order=1,noise_var=W,AR_support='free')
 
-# Outcome
-outcome <- Gamma(phi = 0.5, mu='h', outcome = data)
+# Unknown shape
+outcome <- Gamma(phi = "phi", mu = "mu", outcome = data)
 
-# Fitting and ploting
-fitted_data <- fit_model(volatility, outcomes = outcome)
-plot(fitted_data,smooth=TRUE)
+fitted_data <- fit_model(level, season, scale, outcomes = outcome)
+summary(fitted_data)
+
+show_fit(fitted_data, smooth = TRUE)$plot
 ```
 
 ```{r}

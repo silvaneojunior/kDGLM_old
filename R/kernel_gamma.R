@@ -168,7 +168,7 @@ system_full_gamma <- function(x, parms) {
   b <- (n * log(tau / n) - theta)
 
   # print((parms$Hq3 + parms$Hq4))
-  if (a <= 5 | TRUE) {
+  if (n<50) {
     # Densidade marginal aproximada de alpha (uso opcional).
     # f_densi=function(x){dgamma(a,b))}
     # c_val=1
@@ -180,7 +180,10 @@ system_full_gamma <- function(x, parms) {
       exp(-n*lgamma(x)+x*theta+lgamma(n*x-1)+log(x)-n*x*log(tau))
     }
     lim_sup <- Inf
-    c_val <- cubintegrate(f_densi_raw, 0, lim_sup, nVec = 200)$integral
+    c_val <- cubintegrate(f_densi_raw, (1+1e-1)/n, lim_sup, nVec = 200)$integral
+    print('--------------------')
+    print(n)
+    print(c_val)
     f_densi <- function(x) {
       f_densi_raw(x) / c_val
     }
@@ -188,13 +191,13 @@ system_full_gamma <- function(x, parms) {
     f <- function(x) {
       -x*(digamma(x * n - 1) - log(x*tau)) * f_densi(x)
     }
-    Hp3 <- cubintegrate(f, 0, lim_sup, nVec = 200)$integral
+    Hp3 <- cubintegrate(f, 1/n+1e-2, lim_sup, nVec = 200)$integral
 
     # print('b')
     f <- function(x) {
       (-x * log(x) + lgamma(x)) * f_densi(x)
     }
-    Hp4 <- cubintegrate(f, 0, lim_sup, nVec = 200)$integral
+    Hp4 <- cubintegrate(f, 1/n+1e-2, lim_sup, nVec = 200)$integral
 
     # print('c')
     # f <- function(x) {
@@ -222,6 +225,37 @@ system_full_gamma <- function(x, parms) {
   )
   # print(f_all)
   return(f_all)
+}
+
+a=log(7e-18)
+
+system_full_gamma2 <- function(x, parms) {
+  n <- exp(x[1]) # exp(x[1])
+  tau <- exp(x[2])
+  theta <- exp(x[3])
+
+  f_densi_raw <- function(x) {
+    l.fx=log_f_densi_raw(x[1,],x[2,])
+    a=max(l.fx,a)
+    fx=exp(l.fx-a)%>%as.matrix
+
+    rbind(fx,
+          log(x[1,])*fx,
+          log(x[2,])*fx,
+          (x[1,]*log(x[2,])-x[1,]*log(x[1,])+x[1,]*log(x[2,])+lgamma(x[1,]))*fx)
+  }
+  lim_sup=Inf
+  vals=cubintegrate(f_densi_raw,c(0,0),c(lim_sup,lim_sup),fDim=4,nVec=200)$integral
+
+  Hp1=vals[2]/vals[1]
+  Hp2=vals[3]/vals[1]
+  Hp3=vals[4]/vals[1]
+  print(vals)
+  return(c(
+    Hq1-Hp1,
+    Hq2-Hp2,
+    Hq3+Hq4-Hp3
+    ))
 }
 
 #' convert_FGamma_Normal
@@ -264,17 +298,23 @@ convert_FGamma_Normal <- function(ft, Qt, parms) {
     "Hq4" = Hq4
   )
 
-  ss1 <- multiroot(f = system_full_gamma, start = c(0), parms = parms, maxiter = 2000)
+  # ss1 <- multiroot(f = system_full_gamma, start = c(0), parms = parms, maxiter = 2000)
+  # ss1 <- multiroot(function(x){trigamma((exp(x)+5)/2)-q1},0)
+  ss1 <- multiroot(f = system_full_gamma2, start = c(0,0,0), parms = parms, maxiter = 2000)
+
 
   x <- as.numeric(ss1$root)
-  n <- exp(x) # exp(x[1])
+  # n <- exp(x) # exp(x[1])
+  # n=max(2/q1-5,1/Hq1+1e-2)
 
   # Calculando tau e theta dado n e k
-  tau <- ((n * parms$Hq1 + 1) / parms$Hq2)
-  # tau=exp(x[3])
-  theta <- (n * log(tau / n) - (n + 1) / (2 * parms$Hq1))
-  tau <- tau * s
-  theta <- theta + n * log(s)
+  # tau <- (n * Hq1 - 1) / Hq2
+  # theta <- n * log(tau / n) - (n + 5) / (2 * Hq1)
+  # tau <- tau * s
+  # theta <- theta + n * log(s)
+  n=exp(x[1])
+  tau=exp(x[2])
+  theta=exp(x[3])
   return(list("n" = n, "k" = n, "tau" = tau, "theta" = theta))
 }
 
@@ -297,18 +337,18 @@ convert_Normal_FGamma <- function(conj_prior, parms) {
   theta <- conj_prior$theta
   k <- conj_prior$k
 
-  s <- (10 * tau / n)
+  s <- 1
 
   tau <- tau / s
   theta <- theta - n * log(s)
 
   # Parâmetros da densidade aproximada de alpha
-  a <- (k + 1) / 2
-  b <- (n - k + n * log(tau / n) - theta)
+  a <- (n + 5) / 2
+  b <- (n * log(tau / n) - theta)
 
   # Comentar essas linhas caso a densidade aproximada seja usada.
   f_densi <- function(x) {
-    exp(k * (x + 1) * log(x) + lgamma(n * x + 1) + theta * x - k * lgamma(x + 1) - (n * x + 1) * log(x * tau))
+    exp(-n*lgamma(x)+x*theta+lgamma(n*x-1)+log(x)-n*x*log(tau))
   }
   c_val <- cubintegrate(f_densi, 0, Inf, nVec = 200)$integral
 
@@ -323,7 +363,7 @@ convert_Normal_FGamma <- function(conj_prior, parms) {
   # Média 2 calculada com a densidade exata.
   # Lembremos que mu|phi ~ IG(n*phi+1,phi*tau), logo E[log(mu)]=E[E[log(mu)|phi]]=E[digamma(n*phi+1)-log(tau*phi)]
   f <- function(x) {
-    (-digamma(n * x + 1) + log(x * tau)) * f_densi(x)
+    (-digamma(n * x - 1) + log(x * tau)) * f_densi(x)
   }
   f2 <- cubintegrate(f, 0, Inf, nVec = 200)$integral / c_val
   # Média 2 calculada com a densidade aproximada
@@ -340,7 +380,7 @@ convert_Normal_FGamma <- function(conj_prior, parms) {
   # Variância 2 calculada com a densidade exata.
   # O mesmo argumento para a média foi usado para o segundo momento.
   f <- function(x) {
-    ((-digamma(n * x + 1) + log(x * tau))**2) * f_densi(x)
+    ((-digamma(n * x - 1) + log(x * tau))**2) * f_densi(x)
   }
   Q2 <- cubintegrate(f, 0, Inf, nVec = 200)$integral / c_val - f2**2
   # Variância 2 calculada com a densidade aproximada.
@@ -348,7 +388,7 @@ convert_Normal_FGamma <- function(conj_prior, parms) {
   # Covariância calculada com a densidade exata.
   # O mesmo argumento para a média e para o segundo momento foi usado para a covariância.
   f <- function(x) {
-    (log(x) - f1) * (-digamma(n * x + 1) + log(x * tau) - f2) * f_densi(x)
+    (log(x) - f1) * (-digamma(n * x - 1) + log(x * tau) - f2) * f_densi(x)
   }
   Q12 <- cubintegrate(f, 0, Inf, nVec = 200)$integral / c_val
   # Covariância calculada com a densidade aproximada

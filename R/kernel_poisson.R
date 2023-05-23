@@ -285,14 +285,14 @@ update_Poisson_alt <- function(conj_prior, ft, Qt, y, parms) {
   # S0 <- ginv(Qt)
 
   # val_const=lgamma(y+1)
-  c_val <- -Inf
+  c_val <- 0
 
   f <- function(x) {
     log.prob <- y * log(x) - x + dlnorm(x, ft, sqrt(Qt), log = TRUE)
-    max.prob <- max(log.prob)
-    if (max.prob > c_val) {
-      c_val <- max.prob
-    }
+    # max.prob <- max(log.prob)
+    # if (max.prob > c_val) {
+    #   c_val <- max.prob
+    # }
 
     prob <- exp(log.prob - c_val)
 

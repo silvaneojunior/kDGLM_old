@@ -353,8 +353,10 @@ AR_block <- function(..., order, noise_var, pulse = 0, name = "Var_AR", AR_suppo
                      D = 1, W = 0, m0 = 1, C0 = 1,
                      m0_states = 0, C0_states = c(NA, rep(1, order - 1)), D_states = 1,
                      m0_pulse = 0, C0_pulse = 1, D_pulse = 1, W_pulse = 0) {
+  W_states=diag(order)*0
+  W_states[1,1]=noise_var
   block_state <-
-    polynomial_block(..., order = order, name = paste0(name, "_State"), m0 = m0_states, C0 = C0_states, D = D_states, W = noise_var)
+    polynomial_block(..., order = order, name = paste0(name, "_State"), m0 = m0_states, C0 = C0_states, D = D_states, W = W_states)
 
 
   dummy_var <- list()
@@ -379,7 +381,7 @@ AR_block <- function(..., order, noise_var, pulse = 0, name = "Var_AR", AR_suppo
     G <- matrix(0, 2 * order, 2 * order)
     G_labs <- matrix("const", 2 * order, 2 * order)
     G[1, 1:order] <- NA
-    G_labs[1, 1:order] <- tolower(AR_support)
+    G_labs[1, 2*(1:order)-1] <- tolower(AR_support)
     G[2:order, -(order:(2 * order))] <- diag(order - 1)
     G[(order + 1):(2 * order), (order + 1):(2 * order)] <- diag(order)
     index <- sort(c(c(1:order), c(1:order)))
