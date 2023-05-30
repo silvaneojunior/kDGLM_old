@@ -198,6 +198,7 @@ search_model <- function(..., outcomes, search_grid, condition = "TRUE", smooth 
 #' @family {auxiliary visualization functions for the fitted_dlm class}
 report_dlm <- function(fitted_dlm, t = fitted_dlm$t, smooth = fitted_dlm$smooth, metric_cutoff = round(fitted_dlm$t / 10)) {
   r <- length(fitted_dlm$outcomes)
+  k <- dim(fitted_dlm$mt)[1]
   distr_names <- list()
   distr_like <- rep(NA, r)
   distr_rae <- rep(NA, r)
@@ -230,14 +231,14 @@ report_dlm <- function(fitted_dlm, t = fitted_dlm$t, smooth = fitted_dlm$smooth,
   } else {
     "Ct"
   }
-  coef_names <- c()
+  coef_names <- rep(NA,k)
   for (name in names(fitted_dlm$names)) {
     name_len <- length(fitted_dlm$names[[name]])
+    name_i=name
     if (name_len > 1) {
-      coef_names <- c(coef_names, paste0(name, "_", 1:length(fitted_dlm$names[[name]])))
-    } else {
-      coef_names <- c(coef_names, name)
+      name_i <- paste0(name, "_", 1:length(fitted_dlm$names[[name]]))
     }
+    coef_names[fitted_dlm$names[[name]]]=name_i
   }
   len_names <- max(sapply(as.character(coef_names), function(x) {
     nchar(x)
@@ -247,9 +248,9 @@ report_dlm <- function(fitted_dlm, t = fitted_dlm$t, smooth = fitted_dlm$smooth,
   mean_coef <- fitted_dlm[[coef_mean_name]][, t]
   var_mat <- fitted_dlm[[coef_var_name]][, , t]
   if (length(var_mat) == 1) {
-    std_coef <- sqrt(var_mat)
+    std_coef <- sqrt(abs(var_mat))
   } else {
-    std_coef <- sqrt(diag(var_mat))
+    std_coef <- sqrt(abs(diag(var_mat)))
   }
   t_coef <- mean_coef / std_coef
   p_val <- 2 * (1 - pnorm(abs(mean_coef) / std_coef))

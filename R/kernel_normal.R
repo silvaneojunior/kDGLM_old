@@ -428,7 +428,7 @@ normal_pred <- function(conj_param, outcome = NULL, parms = list(), pred_cred = 
     outcome <- matrix(outcome, t, r)
   }
   for (i in 1:t) {
-    mu <- pred[i, ]
+    mu <- pred[, i]
     sigma2 <- (var.pred[, , i] + parms$Sigma) %>% matrix(r, r)
     if (pred.flag) {
       var.pred[, , i] <- sigma2

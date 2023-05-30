@@ -349,8 +349,8 @@ harmonic_block <- function(..., period, name = "Var_Sazo", D = 1, W = 0, m0 = 0,
 #'
 #' @references
 #'    \insertAllCited{}
-AR_block <- function(..., order, noise_var, pulse = 0, name = "Var_AR", AR_support = "constrained",
-                     D = 1, W = 0, m0 = 1, C0 = 1,
+AR_block <- function(..., order, noise_var, pulse = 0, name = "Var_AR", AR_support = "free",
+                     D = 1, W = 0, m0 = c(1,rep(0,order-1)), C0 = 1,
                      m0_states = 0, C0_states = c(NA, rep(1, order - 1)), D_states = 1,
                      m0_pulse = 0, C0_pulse = 1, D_pulse = 1, W_pulse = 0) {
   W_states=diag(order)*0

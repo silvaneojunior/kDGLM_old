@@ -13,7 +13,7 @@ AR_block(
   AR_support = "constrained",
   D = 1,
   W = 0,
-  m0 = 0,
+  m0 = 1,
   C0 = 1,
   m0_states = 0,
   C0_states = c(NA, rep(1, order - 1)),
