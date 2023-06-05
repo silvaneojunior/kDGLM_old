@@ -12,9 +12,9 @@ rowQuantile(X, q)
 \item{q}{Numeric: A number between 0 and 1.}
 }
 \value{
-Vector: The chosen quatile for each row of X.
+Vector: The chosen quantile for each row of X.
 }
 \description{
-A function that calculates the row-wise quantiles of a matrix.
+A function that calculates the row-wise quantile of a matrix.
 }
 \keyword{internal}

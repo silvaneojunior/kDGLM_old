@@ -51,9 +51,6 @@ Poisson <- function(lambda, outcome, offset = outcome**0, alt_method = FALSE) {
     conj_prior = convert_Poisson_Normal,
     conj_post = convert_Normal_Poisson,
     update = update_Poisson,
-    log.like.cond = function(param, outcome) {
-      dpois(outcome, param, log = TRUE)
-    },
     smoother = generic_smoother,
     calc_pred = poisson_pred,
     apply_offset = function(ft, Qt, offset) {
@@ -62,11 +59,8 @@ Poisson <- function(lambda, outcome, offset = outcome**0, alt_method = FALSE) {
 
       list("ft" = ft + log(t(offset)), "Qt" = Qt)
     },
-    link_function = log,
-    inv_link_function = exp,
-    param_names = function(y) {
-      c(paste0("alpha_", 1:dim(y)[2]), paste("beta_", 1:dim(y)[2]))
-    },
+    link_function = log, inv_link_function = exp,
+    param_names = c("alpha", "beta"),
     var_names = c(lambda),
     r = r,
     k = k,
@@ -131,6 +125,14 @@ convert_Normal_Poisson <- function(conj_prior, parms) {
   ft <- digamma(alpha) - log(beta)
   Qt <- trigamma(alpha)
   return(list("ft" = ft, "Qt" = Qt))
+}
+
+#' convert_Poisson_Normal_LB
+convert_Poisson_Normal_LB <- function(ft, Qt, parms) {
+  h <- -3 + 3 * sqrt(1 + 2 * Qt / 3)
+  alpha <- (1 / h)
+  beta <- alpha * exp(-ft + 0.5 * Qt)
+  return(list("alpha" = alpha, "beta" = beta))
 }
 
 #' update_Poisson
@@ -283,14 +285,14 @@ update_Poisson_alt <- function(conj_prior, ft, Qt, y, parms) {
   # S0 <- ginv(Qt)
 
   # val_const=lgamma(y+1)
-  c_val <- -Inf
+  c_val <- 0
 
   f <- function(x) {
     log.prob <- y * log(x) - x + dlnorm(x, ft, sqrt(Qt), log = TRUE)
-    max.prob <- max(log.prob)
-    if (max.prob > c_val) {
-      c_val <- max.prob
-    }
+    # max.prob <- max(log.prob)
+    # if (max.prob > c_val) {
+    #   c_val <- max.prob
+    # }
 
     prob <- exp(log.prob - c_val)
 

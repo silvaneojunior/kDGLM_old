@@ -34,6 +34,7 @@ final_block <- polynomial_block(alpha1 = 1, order = 1) +
 Other {auxiliary functions for structural blocks}: 
 \code{\link{AR_block}()},
 \code{\link{block_mult}()},
+\code{\link{block_rename}()},
 \code{\link{correlation_block}()},
 \code{\link{harmonic_block}()},
 \code{\link{polynomial_block}()}

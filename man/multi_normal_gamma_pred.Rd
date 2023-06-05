@@ -35,13 +35,10 @@ multi_normal_gamma_pred
 }
 \seealso{
 Other {auxiliary functions for a Normal outcome}: 
-\code{\link{convert_NG_Normal}()},
-\code{\link{convert_dummy_post}()},
-\code{\link{convert_dummy_prior}()},
 \code{\link{convert_multi_NG_Normal}()},
 \code{\link{normal_pred}()},
 \code{\link{update_NG_alt}()},
-\code{\link{update_Normal_dummy}()},
+\code{\link{update_Normal}()},
 \code{\link{update_multi_NG_correl}()}
 }
 \concept{{auxiliary functions for a Normal outcome}}

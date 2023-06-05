@@ -63,13 +63,14 @@ For the models covered in this package, we always use the approach described in 
 
 For the details about the implementation see \insertCite{ArtigoPacote;textual}{kDGLM}.
 
-For the details about the algorithm implemented see \insertCite{ArtigokParametrico;textual}{kDGLM}, \insertCite{Petris-DLM;textual}{kDGLM}, chapter 2, and \insertCite{WestHarr-DLM;textual}{kDGLM}, chapter 4.
+For the details about the algorithm implemented see \insertCite{ArtigokParametrico;textual}{kDGLM}, \insertCite{Petris-DLM;textual}{kDGLM}, chapter 2, \insertCite{WestHarr-DLM;textual}{kDGLM}, chapter 4, and \insertCite{Kalman_filter_origins;textual}{kDGLM}.
+}
+\references{
+\insertAllCited{}
 }
 \seealso{
 \code{\link{fit_model}}
 
 \code{\link{generic_smoother}}
-
-\code{\link{Kalman_filter_origins}}
 }
 \keyword{internal}

@@ -62,11 +62,9 @@ Dirichlet <- function(alpha, outcome, offset = outcome**0) {
     convert_canom_flag = FALSE,
     parms = parms,
     name = "Dirichlet",
-    conj_prior = convert_Dirichlet_Normal,
+    conj_prior = format_ft,
+    conj_post = format_param,
     update = update_Dirichlet,
-    log.like.cond = function(param, outcome) {
-      ddirichlet(outcome, param, log = TRUE)
-    },
     calc_pred = Dirichlet_pred,
     smoother = generic_smoother,
     apply_offset = function(ft, Qt, offset) {
@@ -77,35 +75,11 @@ Dirichlet <- function(alpha, outcome, offset = outcome**0) {
     },
     link_function = log,
     inv_link_function = exp,
-    param_names = function(y) {
-      c(
-        paste("ft_", 1:dim(y)[2], sep = ""),
-        paste("Qt_",
-          c(matrix(1:dim(y)[2], dim(y)[2], dim(y)[2])),
-          c(matrix(1:dim(y)[2], dim(y)[2], dim(y)[2], byrow = TRUE)),
-          sep = ""
-        )
-      )
-    }
+    param_names = generic_param_names(r)
   )
   class(distr) <- "dlm_distr"
   distr$alt_method <- TRUE
   return(distr)
-}
-
-#' convert_Dirichlet_Normal
-#'
-#' This is a dummy function, since, for an Dirichelt outcome, the conjugated prior is not used.
-#'
-#' @param ft vector: A vector representing the means from the normal distribution.
-#' @param Qt matrix: A matrix representing the covariance matrix of the normal distribution.
-#' @param parms list: A list of extra known parameters of the distribution. Not used in this function.
-#'
-#' @return The parameters of the conjugated distribution of the linear predictor.
-#' @keywords internal
-#' @family {auxiliary functions for a Dirichlet outcome}
-convert_Dirichlet_Normal <- function(ft, Qt, parms) {
-  return(do.call(c, list(ft, Qt)))
 }
 
 #' update_Dirichlet
@@ -208,40 +182,39 @@ Dirichlet_pred <- function(conj_param, outcome = NULL, parms = list(), pred_cred
   r <- k <- dim(ft)[1]
   t <- dim(ft)[2]
 
-  if (pred.flag) {
-    pred <- matrix(NA, r, t)
-    var.pred <- array(NA, c(r, r, t))
-    icl.pred <- matrix(NA, r, t)
-    icu.pred <- matrix(NA, r, t)
-  } else {
-    pred <- NULL
-    var.pred <- NULL
-    icl.pred <- NULL
-    icu.pred <- NULL
-  }
-  if (like.flag) {
-    log.like <- rep(NA, t)
-  } else {
-    log.like <- NULL
-  }
-  N <- 5000
-
-  outcome <- matrix(outcome, r, t)
-  sample <- matrix(rnorm(r * N), N, r)
-  for (i in 1:t) {
-    ft_i <- sample %*% var_decomp(Qt[, , i]) + matrix(ft[, i], N, r, byrow = TRUE)
-    sample_y <- rdirichlet(N, alpha = exp(ft_i))
+  pred <- NULL
+  var.pred <- NULL
+  icl.pred <- NULL
+  icu.pred <- NULL
+  log.like <- NULL
+  if (pred.flag | like.flag) {
     if (pred.flag) {
-      pred[, i] <- colMeans(sample_y)
-      var.pred[, , i] <- var(sample_y)
-      icl.pred[, i] <- colQuantile(sample_y, (1 - pred_cred) / 2)
-      icu.pred[, i] <- colQuantile(sample_y, 1 - (1 - pred_cred) / 2)
+      pred <- matrix(NA, r, t)
+      var.pred <- array(NA, c(r, r, t))
+      icl.pred <- matrix(NA, r, t)
+      icu.pred <- matrix(NA, r, t)
     }
     if (like.flag) {
-      log.like.list <- ddirichlet(outcome[, i], alpha = exp(t(ft_i)), log = TRUE)
-      max.log.like <- max(log.like.list)
-      like.list <- exp(log.like.list - max.log.like)
-      log.like[i] <- log(mean(like.list)) + max.log.like
+      log.like <- rep(NA, t)
+    }
+    N <- 5000
+    outcome <- matrix(outcome, r, t)
+    sample <- matrix(rnorm(r * N), N, r)
+    for (i in 1:t) {
+      ft_i <- sample %*% var_decomp(Qt[, , i]) + matrix(ft[, i], N, r, byrow = TRUE)
+      sample_y <- rdirichlet(N, alpha = exp(ft_i))
+      if (pred.flag) {
+        pred[, i] <- colMeans(sample_y)
+        var.pred[, , i] <- var(sample_y)
+        icl.pred[, i] <- colQuantile(sample_y, (1 - pred_cred) / 2)
+        icu.pred[, i] <- colQuantile(sample_y, 1 - (1 - pred_cred) / 2)
+      }
+      if (like.flag) {
+        log.like.list <- ddirichlet(outcome[, i], alpha = exp(t(ft_i)), log = TRUE)
+        max.log.like <- max(log.like.list)
+        like.list <- exp(log.like.list - max.log.like)
+        log.like[i] <- log(mean(like.list)) + max.log.like
+      }
     }
   }
 

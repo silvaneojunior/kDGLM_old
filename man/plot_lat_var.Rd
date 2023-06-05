@@ -8,7 +8,7 @@ plot_lat_var(
   model,
   var = "",
   smooth = model$smooth,
-  cut_off = 10,
+  cut_off = round(model$t/10),
   pred_cred = 0.95,
   plotly = requireNamespace("plotly", quietly = TRUE)
 )
@@ -58,6 +58,7 @@ Other {auxiliary visualization functions for the fitted_dlm class}:
 \code{\link{plot_lin_pred}()},
 \code{\link{report_distr}()},
 \code{\link{report_dlm}()},
+\code{\link{report_searched_dlm}()},
 \code{\link{show_fit}()}
 }
 \concept{{auxiliary visualization functions for the fitted_dlm class}}

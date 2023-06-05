@@ -69,25 +69,19 @@ Gamma <- function(phi = NA, mu = NA, alpha = NA, beta = NA, sigma = NA, outcome,
     convert_mat_default <- convert_mat_canom <- diag(1)
     convert_canom_flag <- FALSE
     distr <- list(
-      "conj_prior" = convert_Gamma_Normal,
-      "conj_post" = convert_Normal_Gamma,
-      "update" = update_Gamma,
-      "log.like.cond" = function(param, outcome) {
-        dgamma(outcome, phi, phi / param, log = TRUE)
-      },
-      "smoother" = generic_smoother,
-      "calc_pred" = gamma_pred,
-      "apply_offset" = function(ft, Qt, offset) {
+      conj_prior = convert_Gamma_Normal,
+      conj_post = convert_Normal_Gamma,
+      update = update_Gamma,
+      smoother = generic_smoother,
+      calc_pred = gamma_pred,
+      apply_offset = function(ft, Qt, offset) {
         t <- if.null(dim(ft)[2], 1)
         offset <- matrix(offset, t, r)
 
         list("ft" = ft + log(t(offset)), "Qt" = Qt)
       },
-      "link_function" = log,
-      "inv_link_function" = exp,
-      "param_names" = function(y) {
-        c("alpha", "beta")
-      }
+      link_function = log, inv_link_function = exp,
+      param_names = c("alpha", "beta")
     )
     if (alt_method) {
       distr$update <- update_Gamma_alt
@@ -95,6 +89,7 @@ Gamma <- function(phi = NA, mu = NA, alpha = NA, beta = NA, sigma = NA, outcome,
 
     parms <- list(phi = phi)
   } else {
+    warning("The estimation of the shape parameter phi is still under development. Results are not reliable.")
     k <- 2
     flags <- !is.na(c(phi, mu, alpha, beta, sigma))
     if (sum(flags) < 2) {
@@ -113,22 +108,16 @@ Gamma <- function(phi = NA, mu = NA, alpha = NA, beta = NA, sigma = NA, outcome,
     var_names <- c(phi, mu, alpha, beta, sigma)[flags]
 
     distr <- list(
-      "conj_prior" = convert_FGamma_Normal,
-      "conj_post" = convert_Normal_FGamma,
-      "update" = update_FGamma,
-      "log.like.cond" = function(param, outcome) {
-        dgamma(outcome, param[1], param[1] / param[2], log = TRUE)
-      },
-      "smoother" = generic_smoother,
-      "calc_pred" = Fgamma_pred,
-      "apply_offset" = function(ft, Qt, offset) {
+      conj_prior = convert_FGamma_Normal,
+      conj_post = convert_Normal_FGamma,
+      update = update_FGamma,
+      smoother = generic_smoother,
+      calc_pred = Fgamma_pred,
+      apply_offset = function(ft, Qt, offset) {
         list("ft" = ft + matrix(c(0, log(offset)), 2, dim(ft)[2]), "Qt" = Qt)
       },
-      "link_function" = log,
-      "inv_link_function" = exp,
-      "param_names" = function(y) {
-        c("n", "k", "tau", "theta")
-      }
+      link_function = log, inv_link_function = exp,
+      param_names = c("n", "k", "tau", "theta")
     )
 
     if (alt_method) {
@@ -136,9 +125,7 @@ Gamma <- function(phi = NA, mu = NA, alpha = NA, beta = NA, sigma = NA, outcome,
       distr$conj_post <- format_param
       distr$update <- update_FGamma_alt
       distr$calc_pred <- Fgamma_pred_alt
-      distr$param_names <- function(y) {
-        c("f1", "f2", "Q11", "Q12", "21", "Q22")
-      }
+      distr$param_names <- generic_param_names(k)
     }
   }
 
@@ -175,38 +162,43 @@ Gamma <- function(phi = NA, mu = NA, alpha = NA, beta = NA, sigma = NA, outcome,
 #' @keywords internal
 system_full_gamma <- function(x, parms) {
   n <- exp(x) # exp(x[1])
-  k <- n # exp(x[2])
-  tau <- (n * parms$Hq1 + 1) / parms$Hq2
-  theta <- n - k + n * log(tau / n) - (k + 1) / (2 * parms$Hq1)
+  tau <- (n * parms$Hq1 - 1) / parms$Hq2
+  theta <- n * log(tau / n) - (n + 5) / (2 * parms$Hq1)
 
-  a <- (k + 1) / 2
-  b <- (n - k + n * log(tau / n) - theta)
+  a <- (n + 5) / 2
+  b <- (n * log(tau / n) - theta)
 
   # print((parms$Hq3 + parms$Hq4))
-  if (a <= 5) {
+  if (n<50) {
     # Densidade marginal aproximada de alpha (uso opcional).
     # f_densi=function(x){dgamma(a,b))}
     # c_val=1
     # Densidade marginal exata de phi.
+    # f_densi_raw <- function(x) {
+    #   exp(n * (x + 1) * log(x) + lgamma(n * x + 1) + theta * x - n * lgamma(x + 1) - (n * x + 1) * log(x * tau))
+    # }
     f_densi_raw <- function(x) {
-      exp(k * (x + 1) * log(x) + lgamma(n * x + 1) + theta * x - k * lgamma(x + 1) - (n * x + 1) * log(x * tau))
+      exp(-n*lgamma(x)+x*theta+lgamma(n*x-1)+log(x)-n*x*log(tau))
     }
     lim_sup <- Inf
-    c_val <- cubintegrate(f_densi_raw, 0, lim_sup, nVec = 200)$integral
+    c_val <- cubintegrate(f_densi_raw, (1+1e-1)/n, lim_sup, nVec = 200)$integral
+    print('--------------------')
+    print(n)
+    print(c_val)
     f_densi <- function(x) {
       f_densi_raw(x) / c_val
     }
     # print('a')
     f <- function(x) {
-      (x * digamma(x * n + 1) - x * log(x) - x * log(tau)) * f_densi(x)
+      -x*(digamma(x * n - 1) - log(x*tau)) * f_densi(x)
     }
-    Hp3 <- cubintegrate(f, 0, lim_sup, nVec = 200)$integral
+    Hp3 <- cubintegrate(f, 1/n+1e-2, lim_sup, nVec = 200)$integral
 
     # print('b')
     f <- function(x) {
-      (x * log(x) - lgamma(x)) * f_densi(x)
+      (-x * log(x) + lgamma(x)) * f_densi(x)
     }
-    Hp4 <- cubintegrate(f, 0, lim_sup, nVec = 200)$integral
+    Hp4 <- cubintegrate(f, 1/n+1e-2, lim_sup, nVec = 200)$integral
 
     # print('c')
     # f <- function(x) {
@@ -226,7 +218,7 @@ system_full_gamma <- function(x, parms) {
     # Hp3 <- log(tau / n) * a / b - 1 / n + b / (12 * (n**2) * (a - 1))
     # Hp4 <- a / b + 0.5 * (digamma(a) - log(b)) - b / (12 * (a - 1)) - 11 / 12
     # Hp5=Hp3+Hp4
-    Hp5 <- parms$Hq1 * (log(tau / n) - 1) - 0.5 * digamma((n + 1) / 2) + 0.5 * log(n * log(tau / n) - theta) + (log(tau / n) - theta / n) / 6 + 11 / 12 - 1 / (2 * n)
+    Hp5 <- a*log(tau/n)/b+1/n+1+b/(12*(n**2)*(a-1))
   }
 
   f_all <- c(
@@ -234,6 +226,37 @@ system_full_gamma <- function(x, parms) {
   )
   # print(f_all)
   return(f_all)
+}
+
+a=log(7e-18)
+
+system_full_gamma2 <- function(x, parms) {
+  n <- exp(x[1]) # exp(x[1])
+  tau <- exp(x[2])
+  theta <- exp(x[3])
+
+  f_densi_raw <- function(x) {
+    l.fx=log_f_densi_raw(x[1,],x[2,])
+    a=max(l.fx,a)
+    fx=exp(l.fx-a)%>%as.matrix
+
+    rbind(fx,
+          log(x[1,])*fx,
+          log(x[2,])*fx,
+          (x[1,]*log(x[2,])-x[1,]*log(x[1,])+x[1,]*log(x[2,])+lgamma(x[1,]))*fx)
+  }
+  lim_sup=Inf
+  vals=cubintegrate(f_densi_raw,c(0,0),c(lim_sup,lim_sup),fDim=4,nVec=200)$integral
+
+  Hp1=vals[2]/vals[1]
+  Hp2=vals[3]/vals[1]
+  Hp3=vals[4]/vals[1]
+  print(vals)
+  return(c(
+    Hq1-Hp1,
+    Hq2-Hp2,
+    Hq3+Hq4-Hp3
+    ))
 }
 
 #' convert_FGamma_Normal
@@ -253,7 +276,8 @@ system_full_gamma <- function(x, parms) {
 #' @keywords internal
 #' @family {auxiliary functions for a Gamma outcome with unknowned shape}
 convert_FGamma_Normal <- function(ft, Qt, parms) {
-  s <- exp(ft[2, ] + 1)
+  # s <- exp(ft[2, ] + 1)
+  s=1
   f1 <- ft[1, ]
   f2 <- ft[2, ] - log(s)
   q1 <- Qt[1, 1]
@@ -262,10 +286,10 @@ convert_FGamma_Normal <- function(ft, Qt, parms) {
 
   Hq1 <- exp(f1 + q1 / 2)
   Hq2 <- exp(f1 - f2 + (q1 + q2 - 2 * q12) / 2)
-  Hq3 <- -(f2 + q12) * Hq1
+  Hq3 <- (f2 + q12) * Hq1
 
   Hq4 <- cubintegrate(function(x) {
-    (x * log(x) - lgamma(x)) * dlnorm(x, f1, sqrt(q1))
+    (-x * log(x) + lgamma(x)) * dlnorm(x, f1, sqrt(q1))
   }, 0, Inf, nVec = 200)$integral
 
   parms <- list(
@@ -275,20 +299,24 @@ convert_FGamma_Normal <- function(ft, Qt, parms) {
     "Hq4" = Hq4
   )
 
-  ss1 <- multiroot(f = system_full_gamma, start = c(0), parms = parms, maxiter = 2000, atol = 10**-20)
+  # ss1 <- multiroot(f = system_full_gamma, start = c(0), parms = parms, maxiter = 2000)
+  # ss1 <- multiroot(function(x){trigamma((exp(x)+5)/2)-q1},0)
+  ss1 <- multiroot(f = system_full_gamma2, start = c(0,0,0), parms = parms, maxiter = 2000)
+
 
   x <- as.numeric(ss1$root)
-  n <- exp(x) # exp(x[1])
-
-  k <- n # exp(x[2])
+  # n <- exp(x) # exp(x[1])
+  # n=max(2/q1-5,1/Hq1+1e-2)
 
   # Calculando tau e theta dado n e k
-  tau <- ((n * parms$Hq1 + 1) / parms$Hq2)
-  # tau=exp(x[3])
-  theta <- (n - k + n * log(tau / n) - (k + 1) / (2 * parms$Hq1))
-  tau <- tau * s
-  theta <- theta + n * log(s)
-  return(list("n" = n, "k" = k, "tau" = tau, "theta" = theta))
+  # tau <- (n * Hq1 - 1) / Hq2
+  # theta <- n * log(tau / n) - (n + 5) / (2 * Hq1)
+  # tau <- tau * s
+  # theta <- theta + n * log(s)
+  n=exp(x[1])
+  tau=exp(x[2])
+  theta=exp(x[3])
+  return(list("n" = n, "k" = n, "tau" = tau, "theta" = theta))
 }
 
 #' convert_Normal_FGamma
@@ -310,18 +338,18 @@ convert_Normal_FGamma <- function(conj_prior, parms) {
   theta <- conj_prior$theta
   k <- conj_prior$k
 
-  s <- (10 * tau / n)
+  s <- 1
 
   tau <- tau / s
   theta <- theta - n * log(s)
 
   # Parâmetros da densidade aproximada de alpha
-  a <- (k + 1) / 2
-  b <- (n - k + n * log(tau / n) - theta)
+  a <- (n + 5) / 2
+  b <- (n * log(tau / n) - theta)
 
   # Comentar essas linhas caso a densidade aproximada seja usada.
   f_densi <- function(x) {
-    exp(k * (x + 1) * log(x) + lgamma(n * x + 1) + theta * x - k * lgamma(x + 1) - (n * x + 1) * log(x * tau))
+    exp(-n*lgamma(x)+x*theta+lgamma(n*x-1)+log(x)-n*x*log(tau))
   }
   c_val <- cubintegrate(f_densi, 0, Inf, nVec = 200)$integral
 
@@ -336,7 +364,7 @@ convert_Normal_FGamma <- function(conj_prior, parms) {
   # Média 2 calculada com a densidade exata.
   # Lembremos que mu|phi ~ IG(n*phi+1,phi*tau), logo E[log(mu)]=E[E[log(mu)|phi]]=E[digamma(n*phi+1)-log(tau*phi)]
   f <- function(x) {
-    (-digamma(n * x + 1) + log(x * tau)) * f_densi(x)
+    (-digamma(n * x - 1) + log(x * tau)) * f_densi(x)
   }
   f2 <- cubintegrate(f, 0, Inf, nVec = 200)$integral / c_val
   # Média 2 calculada com a densidade aproximada
@@ -353,7 +381,7 @@ convert_Normal_FGamma <- function(conj_prior, parms) {
   # Variância 2 calculada com a densidade exata.
   # O mesmo argumento para a média foi usado para o segundo momento.
   f <- function(x) {
-    ((-digamma(n * x + 1) + log(x * tau))**2) * f_densi(x)
+    ((-digamma(n * x - 1) + log(x * tau))**2) * f_densi(x)
   }
   Q2 <- cubintegrate(f, 0, Inf, nVec = 200)$integral / c_val - f2**2
   # Variância 2 calculada com a densidade aproximada.
@@ -361,7 +389,7 @@ convert_Normal_FGamma <- function(conj_prior, parms) {
   # Covariância calculada com a densidade exata.
   # O mesmo argumento para a média e para o segundo momento foi usado para a covariância.
   f <- function(x) {
-    (log(x) - f1) * (-digamma(n * x + 1) + log(x * tau) - f2) * f_densi(x)
+    (log(x) - f1) * (-digamma(n * x - 1) + log(x * tau) - f2) * f_densi(x)
   }
   Q12 <- cubintegrate(f, 0, Inf, nVec = 200)$integral / c_val
   # Covariância calculada com a densidade aproximada
@@ -438,50 +466,51 @@ Fgamma_pred <- function(conj_param, outcome = NULL, parms = list(), pred_cred = 
   t <- length(conj_param$k)
   k <- 2
 
-  if (pred.flag) {
-    pred <- matrix(NA, r, t)
-    var.pred <- array(NA, c(r, r, t))
-    icl.pred <- matrix(NA, r, t)
-    icu.pred <- matrix(NA, r, t)
-  } else {
-    pred <- NULL
-    var.pred <- NULL
-    icl.pred <- NULL
-    icu.pred <- NULL
-  }
-  if (like.flag) {
-    outcome <- matrix(outcome, t, r)
-    log.like <- rep(NA, t)
-  } else {
-    log.like <- NULL
-  }
-  N <- 5000
+  pred <- NULL
+  var.pred <- NULL
+  icl.pred <- NULL
+  icu.pred <- NULL
+  log.like <- NULL
 
-  for (i in 1:t) {
-    n <- conj_param$n[i]
-    k <- conj_param$k[i]
-    tau <- conj_param$tau[i]
-    theta <- conj_param$theta[i]
-
-
-    a <- (k + 1) / 2
-    b <- (n - k + n * log(tau / n) - theta)
-
-    alpha_i <- rgamma(N, a, b)
-    mu_i <- 1 / rgamma(N, n * alpha_i + 1, alpha_i * tau)
-
-    sample_y <- rgamma(N, alpha_i, alpha_i / mu_i)
+  if (pred.flag | like.flag) {
     if (pred.flag) {
-      pred[, i] <- mean(sample_y)
-      var.pred[, , i] <- var(sample_y)
-      icl.pred[, i] <- quantile(sample_y, (1 - pred_cred) / 2)
-      icu.pred[, i] <- quantile(sample_y, 1 - (1 - pred_cred) / 2)
+      pred <- matrix(NA, r, t)
+      var.pred <- array(NA, c(r, r, t))
+      icl.pred <- matrix(NA, r, t)
+      icu.pred <- matrix(NA, r, t)
     }
     if (like.flag) {
-      log.like.list <- dgamma(outcome[i, ], alpha_i, alpha_i / mu_i, log = TRUE)
-      max.log.like <- max(log.like.list)
-      like.list <- exp(log.like.list - max.log.like)
-      log.like[i] <- log(mean(like.list)) + max.log.like
+      outcome <- matrix(outcome, t, r)
+      log.like <- rep(NA, t)
+    }
+    N <- 5000
+
+    for (i in 1:t) {
+      n <- conj_param$n[i]
+      k <- conj_param$k[i]
+      tau <- conj_param$tau[i]
+      theta <- conj_param$theta[i]
+
+
+      a <- (k + 1) / 2
+      b <- (n - k + n * log(tau / n) - theta)
+
+      alpha_i <- rgamma(N, a, b)
+      mu_i <- 1 / rgamma(N, n * alpha_i + 1, alpha_i * tau)
+
+      sample_y <- rgamma(N, alpha_i, alpha_i / mu_i)
+      if (pred.flag) {
+        pred[, i] <- mean(sample_y)
+        var.pred[, , i] <- var(sample_y)
+        icl.pred[, i] <- quantile(sample_y, (1 - pred_cred) / 2)
+        icu.pred[, i] <- quantile(sample_y, 1 - (1 - pred_cred) / 2)
+      }
+      if (like.flag) {
+        log.like.list <- dgamma(outcome[i, ], alpha_i, alpha_i / mu_i, log = TRUE)
+        max.log.like <- max(log.like.list)
+        like.list <- exp(log.like.list - max.log.like)
+        log.like[i] <- log(mean(like.list)) + max.log.like
+      }
     }
   }
 
@@ -594,8 +623,16 @@ gamma_pred <- function(conj_param, outcome = NULL, parms = list(), pred_cred = 0
   log.like <- NULL
 
   if (pred.flag) {
-    pred <- beta / (alpha - 1)
-    var.pred <- ((alpha / (beta - 1))**2) * (alpha + phi - 1) / ((alpha - 2) * phi)
+      pred <- ifelse(alpha>1,
+                     beta / (alpha - 1),
+                     NA
+                     )
+      var.pred <- ifelse(alpha>1,
+                         ((alpha / (beta - 1))**2) * (alpha + phi - 1) / ((alpha - 2) * phi),
+                         Inf
+
+      )
+
 
     icl.pred <- qbetapr((1 - pred_cred) / 2, phi, alpha, beta / phi)
     icu.pred <- qbetapr(1 - (1 - pred_cred) / 2, phi, alpha, beta / phi)
@@ -643,59 +680,89 @@ gamma_pred <- function(conj_param, outcome = NULL, parms = list(), pred_cred = 0
 #' @references
 #'    \insertAllCited{}
 update_FGamma_alt <- function(conj_prior, ft, Qt, y, parms) {
-  # y=1
-  # ft=matrix(0,2,1)
-  # Qt=diag(2)*1
+  # ft=c(0,0)
+  # Qt=diag(2)
+  # Qt[2,2]=2
+  # y=6.063814
 
-  f0 <- ft
-  S0 <- ginv(Qt)
+  if(all(diag(Qt)<=0.1)){
+    print('hey!')
+    f0 <- ft
+    S0 <- ginv(Qt)
 
-  # log.like=function(x){
-  #   phi=exp(x[1])
-  #   mu=exp(x[2])
-  #
-  #   phi*log(phi)-phi*log(mu)-lgamma(phi)+(phi-1)*log(y)-phi*y/mu-0.5*crossprod(x-f0,S0)%*%(x-f0)
-  # }
+    d1.log.like <- function(x) {
+      phi <- exp(x[1])
+      mu <- exp(x[2])
+      # print(x)
 
-  d1.log.like <- function(x) {
-    phi <- exp(x[1])
-    mu <- exp(x[2])
-
-    c(
-      (log(phi) + 1 - log(mu) - digamma(phi) + log(y) - y / mu) * phi,
-      (-phi / mu + phi * y / (mu**2)) * mu
-    ) - S0 %*% (x - f0)
-  }
-
-  d2.inv <- function(x) {
-    phi <- exp(x[1])
-    mu <- exp(x[2])
-
-    cross <- (-1 + y / mu) * phi
-
-    mat <- matrix(
       c(
-        (log(phi) + 1 - log(mu) - digamma(phi) + log(y) - y / mu + 1 - phi * trigamma(phi)) * phi,
-        cross,
-        cross,
-        (-1 + y / mu + 1 - 2 * y / mu) * phi
-      ),
-      2, 2
-    ) - S0
+        (log(phi) + 1 - log(mu) - digamma(phi) + log(y) - y / mu) * phi,
+        (-phi / mu + phi * y / (mu**2)) * mu
+      ) - S0 %*% (x - f0)
+    }
 
-    # mat_inv=mat
-    # mat_inv[1,1]=mat[2,2]
-    # mat_inv[2,2]=mat[1,1]
-    # mat_inv[1,2]=mat_inv[2,1]=-mat[1,2]
-    # det_mat=mat[1,1]*mat[2,2]+mat[1,2]**2
-    # mat_inv=mat_inv/det_mat
+    d2.inv <- function(x) {
+      phi <- exp(x[1])
+      mu <- exp(x[2])
 
-    return(mat)
+      cross <- (-1 + y / mu) * phi
+
+      mat <- matrix(
+        c(
+          (log(phi) + 1 - log(mu) - digamma(phi) + log(y) - y / mu + 1 - phi * trigamma(phi)) * phi,
+          cross,
+          cross,
+          (-1 + y / mu + 1 - 2 * y / mu) * phi
+        ),
+        2, 2
+      ) - S0
+      return(mat)
+    }
+
+    mean <- c(f0[1],log(y))
+
+    tau <- -d2.inv(mean)-S0
+
+    f_start <- ginv(tau + S0) %*% (tau %*% mean + S0 %*% f0)
+    # f_start=c(0.2286328,1.1518655)
+
+    mode <- f_root(d1.log.like, d2.inv, f_start)$root
+    # print(d2.inv(f0))
+    # mode <- rootSolve::multiroot(d1.log.like, f_start)$root
+    H <- d2.inv(mode)
+    S <- ginv(-H)
+  }else{
+
+    f <- function(x) {
+      l.phi=x[1,]
+      l.mu=x[2,]
+      phi=exp(x[1,])
+      mu=exp(x[2,])
+
+      # l.phi=log(x[1,])
+      # l.mu=log(x[2,])
+      # phi=x[1,]
+      # mu=x[2,]
+
+      prob <- exp(dgamma(y, phi, phi/mu, log = TRUE) + dmvnorm(t(x), ft, Qt, log = TRUE))
+
+
+      rbind(
+        prob,
+        l.phi * prob,
+        l.mu * prob,
+        (l.phi**2) * prob,
+        (l.phi*l.mu) * prob,
+        (l.mu*l.phi) * prob,
+        (l.mu**2) * prob
+      )
+    }
+
+    # val <- cubintegrate(f, c(exp(mu2-6*sqrt(sigma2))), c(exp(mu2+6*sqrt(sigma2))), fDim = 7, nVec = 1000)$integral
+    val <- cubintegrate(f, c(-Inf,-Inf), c(Inf,Inf), fDim = 7, nVec = 1000)$integral
+    mode <- matrix(val[2:3] / val[1], 2, 1)
+    S <- matrix(val[4:7], 2, 2) / val[1] - mode %*% t(mode)
   }
-
-  mode <- f_root(d1.log.like, d2.inv, f0)$root
-  H <- d2.inv(mode)
-  S <- ginv(-H)
 
   return(list("ft" = matrix(mode, 2, 1), "Qt" = S))
 }
@@ -735,40 +802,43 @@ Fgamma_pred_alt <- function(conj_param, outcome = NULL, parms = list(), pred_cre
   t <- dim(ft)[2]
   r <- 1
 
-  if (pred.flag) {
-    pred <- matrix(NA, r, t)
-    var.pred <- array(NA, c(r, r, t))
-    icl.pred <- matrix(NA, r, t)
-    icu.pred <- matrix(NA, r, t)
-  } else {
-    pred <- NULL
-    var.pred <- NULL
-    icl.pred <- NULL
-    icu.pred <- NULL
-  }
-  if (like.flag) {
-    outcome <- matrix(outcome, r, t)
-    log.like <- rep(NA, t)
-  } else {
-    log.like <- NULL
-  }
+  pred <- NULL
+  var.pred <- NULL
+  icl.pred <- NULL
+  icu.pred <- NULL
+  log.like <- NULL
 
-  N <- 5000
-  sample <- matrix(rnorm(k * N), N, k)
-  for (i in 1:t) {
-    ft_i <- sample %*% var_decomp(Qt[, , i]) + matrix(ft[, i], N, k, byrow = TRUE)
-    sample_y <- rgamma(N, exp(ft_i[, 1]), exp(ft_i[, 1] - ft_i[, 2]))
+  Qt <- array(Qt,c(k,k,t))
+
+  if (pred.flag | like.flag) {
     if (pred.flag) {
-      pred[, i] <- mean(sample_y)
-      var.pred[, , i] <- var(sample_y)
-      icl.pred[, i] <- quantile(sample_y, (1 - pred_cred) / 2)
-      icu.pred[, i] <- quantile(sample_y, 1 - (1 - pred_cred) / 2)
+      pred <- matrix(NA, r, t)
+      var.pred <- array(NA, c(r, r, t))
+      icl.pred <- matrix(NA, r, t)
+      icu.pred <- matrix(NA, r, t)
     }
     if (like.flag) {
-      log.like.list <- dgamma(outcome[, i], exp(ft_i[1, ]), exp(ft_i[1, ] - ft_i[2, ]), log = TRUE)
-      max.log.like <- max(log.like.list)
-      like.list <- exp(log.like.list - max.log.like)
-      log.like[i] <- log(mean(like.list)) + max.log.like
+      outcome <- matrix(outcome, r, t)
+      log.like <- rep(NA, t)
+    }
+
+    N <- 5000
+    sample <- matrix(rnorm(k * N), N, k)
+    for (i in 1:t) {
+      ft_i <- sample %*% var_decomp(Qt[, , i]) + matrix(ft[, i], N, k, byrow = TRUE)
+      sample_y <- rgamma(N, exp(ft_i[, 1]), exp(ft_i[, 1] - ft_i[, 2]))
+      if (pred.flag) {
+        pred[, i] <- mean(sample_y)
+        var.pred[, , i] <- var(sample_y)
+        icl.pred[, i] <- quantile(sample_y, (1 - pred_cred) / 2)
+        icu.pred[, i] <- quantile(sample_y, 1 - (1 - pred_cred) / 2)
+      }
+      if (like.flag) {
+        log.like.list <- dgamma(outcome[, i], exp(ft_i[1, ]), exp(ft_i[1, ] - ft_i[2, ]), log = TRUE)
+        max.log.like <- max(log.like.list)
+        like.list <- exp(log.like.list - max.log.like)
+        log.like[i] <- log(mean(like.list)) + max.log.like
+      }
     }
   }
 
@@ -812,10 +882,6 @@ Fgamma_pred_alt <- function(conj_param, outcome = NULL, parms = list(), pred_cre
 #' @references
 #'    \insertAllCited{}
 update_Gamma_alt <- function(conj_prior, ft, Qt, y, parms) {
-  # f0 <- ft
-  # Q0 <- Qt
-  # S0 <- ginv(Qt)
-
   f <- function(x) {
     prob <- exp(dgamma(y, parms$phi, parms$phi / x, log = TRUE) + dlnorm(x, ft, sqrt(Qt), log = TRUE))
 

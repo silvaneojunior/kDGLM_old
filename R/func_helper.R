@@ -50,7 +50,6 @@ var_decomp <- function(S) {
   Chol_decomp <- cholesky(S)
   if (prod(if.nan(diag(Chol_decomp), 0)) == 0) {
     svd_decomp <- svd(S)
-    # return(svd_decomp$u%*%diag(svd_decomp$d)%*%t(svd_decomp$u))
     d <- sqrt(svd_decomp$d)
     u_t <- transpose(svd_decomp$u)
     return(diag(d) %*% u_t)
@@ -67,19 +66,21 @@ var_decomp <- function(S) {
 #'
 #' @importFrom Rfast cholesky
 #' @keywords internal
+# ginv <- MASS::ginv
 ginv <- function(S) {
   Chol_decomp <- cholesky(S)
-  if (prod(if.nan(diag(Chol_decomp), 0)) == 0) {
-    svd_decomp <- svd(S, nv = 0)
+  if (prod(if.nan(diag(Chol_decomp), 0)) < 1e-6) {
+    svd_decomp <- svd(S)
     # Q=(svd_decomp$u+svd_decomp$v)/2
     # Q=svd_decomp$u
-    Q_t <- transpose(svd_decomp$u)
+    Q_l <- svd_decomp$u
+    Q_r <- svd_decomp$v
     D <- svd_decomp$d
-    D <- ifelse(D > 0, 1 / D, 0)
+    D <- ifelse(D > 1e-6, 1 / D, 0)
     # D <- 1/D
     D_mat <- diag(length(D))
     diag(D_mat) <- D
-    return(crossprod(Q_t, D_mat) %*% Q_t)
+    return(Q_l %*% D_mat %*% transpose(Q_r))
   } else {
     return(chol2inv(Chol_decomp))
   }
@@ -99,10 +100,6 @@ bdiag <- function(...) {
     n0 <- n0 + n_i
   }
   mat_final
-}
-
-colProd <- function(x) {
-  apply(x, 2, prod)
 }
 
 #' calcula_max
@@ -141,14 +138,14 @@ calcula_max <- function(pre_max) {
 
 #' colQuantile
 #'
-#' A function that calculates the column-wise quantiles of a matrix.
+#' A function that calculates the column-wise quantile of a matrix.
 #'
 #' @param X Matrix.
 #' @param q Numeric: A number between 0 and 1.
 #'
 #' @importFrom Rfast colnth
 #'
-#' @return Vector: The chosen quatile for each column of X.
+#' @return Vector: The chosen quantile for each column of X.
 #' @keywords internal
 colQuantile <- function(X, q) {
   n <- dim(X)[1]
@@ -160,14 +157,14 @@ colQuantile <- function(X, q) {
 
 #' rowQuantile
 #'
-#' A function that calculates the row-wise quantiles of a matrix.
+#' A function that calculates the row-wise quantile of a matrix.
 #'
 #' @param X Matrix.
 #' @param q Numeric: A number between 0 and 1.
 #'
 #' @importFrom Rfast rownth
 #'
-#' @return Vector: The chosen quatile for each row of X.
+#' @return Vector: The chosen quantile for each row of X.
 #' @keywords internal
 rowQuantile <- function(X, q) {
   n <- dim(X)[1]

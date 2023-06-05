@@ -2,14 +2,14 @@
 #'
 #' Fit a model given it's structure and the observed data. This function can be used for any supported family (see vignette).
 #'
-#' @param ... dlm_block object: The structural blocks of the model.
+#' @param ... dlm_block object: The structural blocks of the model. All block must be completely defined.
 #' @param outcomes List: The observed data. It should contain objects of the class dlm_distr.
 #' @param pred_cred Numeric: A number between 0 and 1 (not included) indicating the credibility interval for predictions. If not within the valid range of values, predictions are not made.
-#' @param smooth_flag Bool: A flag indicating if the smoothed distribution for the latent variables should be calculated.
+#' @param smooth Bool: A flag indicating if the smoothed distribution for the latent variables should be calculated.
 #' @param p_monit numeric (optional): The prior probability of changes in the latent space variables that are not part of it's dynamic.
 #' @param c_monit numeric (optional, if p_monit is not specified): The relative cost of false alarm in the monitoring compared to the cost of not detecting abnormalities.
 #'
-#' @return The fitted model (an object of the <undefined class> or list). Contains the values of the estimated parameter and some extra info regarding the quality of the fit.
+#' @return The fitted model (a fitted_dlm object). Contains the values of the estimated parameter and some extra info regarding the quality of the fit.
 #' @export
 #'
 #' @examples
@@ -119,10 +119,11 @@
 #'
 #' For the details about the Dynamic Linear Models see  \insertCite{WestHarr-DLM;textual}{kDGLM} and \insertCite{Petris-DLM;textual}{kDGLM}.
 #'
-#' @seealso auxiliary function for creating outcomes \code{\link{Poisson}}, \code{\link{Multinom}}, \code{\link{Normal}}, \code{\link{Gamma}}, \code{\link{Dirichlet}}
-#' @seealso auxiliary function for creating structural blocks \code{\link{polynomial_block}}, \code{\link{harmonic_block}}, \code{\link{AR_block}}
+#' @seealso auxiliary functions for creating outcomes \code{\link{Poisson}}, \code{\link{Multinom}}, \code{\link{Normal}}, \code{\link{Gamma}}, \code{\link{Dirichlet}}
+#' @seealso auxiliary functions for creating structural blocks \code{\link{polynomial_block}}, \code{\link{harmonic_block}}, \code{\link{AR_block}}
+#' @seealso auxiliary function for choosing hyper parameters \code{\link{search_model}}.
 #' @family {auxiliary functions for fitted_dlm objects}
-fit_model <- function(..., outcomes, pred_cred = 0.95, smooth_flag = TRUE, p_monit = NA, c_monit = 1) {
+fit_model <- function(..., outcomes, pred_cred = 0.95, smooth = TRUE, p_monit = NA, c_monit = 1) {
   pred_cred <- if (is.numeric(pred_cred)) {
     if (pred_cred > 0 & pred_cred < 1) {
       pred_cred
@@ -152,6 +153,9 @@ fit_model <- function(..., outcomes, pred_cred = 0.95, smooth_flag = TRUE, p_mon
   t <- max(t)
 
   structure <- block_merge(...)
+  if (structure$status == "undefined") {
+    stop("Error: One or more hiper parameter are undefined. Did you meant to use the search_model function?")
+  }
 
   if (structure$t == 1) {
     structure$t <- t
@@ -160,6 +164,9 @@ fit_model <- function(..., outcomes, pred_cred = 0.95, smooth_flag = TRUE, p_mon
     structure$W <- array(structure$W, c(structure$n, structure$n, structure$t), dimnames = dimnames(structure$W))
     structure$FF <- array(structure$FF, c(structure$n, structure$k, structure$t), dimnames = dimnames(structure$FF))
   }
+  structure$G[, , 1] <- diag(structure$n)
+  structure$D[, , 1] <- 1
+  structure$W[, , 1] <- 0
   if (t != structure$t) {
     stop(paste0("Error: outcome does not have the same time length as structure: got ", t, " from outcome, expected ", structure$t))
   }
@@ -188,7 +195,7 @@ fit_model <- function(..., outcomes, pred_cred = 0.95, smooth_flag = TRUE, p_mon
     p_monit = p_monit,
     c_monit = c_monit
   )
-  if (smooth_flag) {
+  if (smooth) {
     smoothed <- generic_smoother(model$mt, model$Ct, model$at, model$Rt, model$G, model$G_labs)
     model$mts <- smoothed$mts
     model$Cts <- smoothed$Cts
@@ -211,7 +218,7 @@ fit_model <- function(..., outcomes, pred_cred = 0.95, smooth_flag = TRUE, p_mon
   model$m0 <- structure$m0
   model$C0 <- structure$C0
   model$names <- structure$names
-  model$smooth <- smooth_flag
+  model$smooth <- smooth
   model$pred_cred <- pred_cred
   model$t <- t
   class(model) <- "fitted_dlm"
@@ -247,7 +254,7 @@ fit_model <- function(..., outcomes, pred_cred = 0.95, smooth_flag = TRUE, p_mon
 #' @import ggplot2
 #' @import dplyr
 #' @import tidyr
-#' @importFrom Rfast transpose
+#' @importFrom Rfast transpose data.frame.to_matrix
 #' @export
 #'
 #' @examples
@@ -295,10 +302,6 @@ forecast <- function(model, t = 1, outcome = NULL, offset = NULL, FF = NULL, G =
     stop(paste0("Error: D should have at most 2 dimensions. Got ", length(dim(offset)), "."))
   }
 
-  # if (t > 10) {
-  #   warning("Warning: Prediction window is big, results will probabily be unreliable.")
-  # }
-
   G_labs <- model$G_labs
   if (is.null(G)) {
     G <- array(model$G[, , t_last], c(n, n, t))
@@ -331,12 +334,6 @@ forecast <- function(model, t = 1, outcome = NULL, offset = NULL, FF = NULL, G =
         W[, , -1] <- 0
       }
     }
-    # if(t>1){
-    #   D[,,2:t]=0
-    # }
-    # if(t>1){
-    #   W[,,2:t]=0
-    # }
   }
 
   if (any(dim(G) != c(n, n, t))) {
@@ -466,7 +463,7 @@ forecast <- function(model, t = 1, outcome = NULL, offset = NULL, FF = NULL, G =
     r_acum <- r_acum + r_cur
   }
 
-  data_list <- list("obs" = output, "pred" = pred %>% as.matrix() %>% t(), "icl.pred" = icl.pred %>% as.matrix() %>% t(), "icu.pred" = icu.pred %>% as.matrix() %>% t())
+  data_list <- list("obs" = output, "pred" = pred %>% data.frame.to_matrix() %>% t(), "icl.pred" = icl.pred %>% as.matrix() %>% t(), "icu.pred" = icu.pred %>% as.matrix() %>% t())
   data_name <- c("Observation", "Prediction", "C.I.lower", "C.I.upper")
 
   data_raw <- lapply(1:4, function(i) {
@@ -567,7 +564,7 @@ forecast <- function(model, t = 1, outcome = NULL, offset = NULL, FF = NULL, G =
 #'    \item icl.pred Matrix: A matrix with the lower bound of the I.C. based on the credibility given in the arguments. Dimensions are k x t, where k is the number of outcomes.
 #'    \item icu.pred Matrix: A matrix with the upper bound of the I.C. based on the credibility given in the arguments. Dimensions are k x t, where k is the number of outcomes.
 #' }
-#' @importFrom Rfast transpose
+#' @importFrom Rfast transpose data.frame.to_matrix
 #' @export
 #'
 #' @examples
@@ -701,7 +698,7 @@ eval_past <- function(model, smooth = FALSE, h = 0, pred_cred = 0.95) {
     r_acum <- r_acum + r_cur
   }
 
-  data_list <- list("obs" = output, "pred" = pred %>% as.matrix() %>% t(), "icl.pred" = icl.pred %>% as.matrix() %>% t(), "icu.pred" = icu.pred %>% as.matrix() %>% t())
+  data_list <- list("obs" = output, "pred" = pred %>% data.frame.to_matrix() %>% t(), "icl.pred" = icl.pred %>% as.matrix() %>% t(), "icu.pred" = icu.pred %>% as.matrix() %>% t())
   data_name <- c("Observation", "Prediction", "C.I.lower", "C.I.upper")
 
   data_raw <- lapply(1:4, function(i) {
@@ -854,16 +851,16 @@ dlm_sampling <- function(model, sample_size, filtered_distr = FALSE) {
     } else {
       mt_now <- mt[, t]
 
-      G_ref <- calc_current_G(mts[, t], G[, , t], G_labs)$G
-      simple_Rt_inv <- Ct %*% transpose(G_ref) %*% ginv(Rt)
+      G_ref <- calc_current_G(mt_now, G[, , t + 1], G_labs)$G
+      simple_Rt_inv <- Ct %*% crossprod(G_ref, ginv(Rt))
       simple_Rt_inv_t <- transpose(simple_Rt_inv)
       # simple_Rt_inv_t <- solve(Rt, G_ref %*% Ct)
       # simple_Rt_inv <- transpose(simple_Rt_inv_t)
 
 
       mts <- mt[, t] + simple_Rt_inv %*% (mt_sample_i - at[, t + 1])
-      # Cts <- Ct - simple_Rt_inv %*% Rt %*% simple_Rt_inv_t
-      Cts <- Ct - crossprod(simple_Rt_inv_t, Rt) %*% simple_Rt_inv_t
+      Cts <- Ct - simple_Rt_inv %*% Rt %*% simple_Rt_inv_t
+      # Cts <- Ct - crossprod(simple_Rt_inv_t, Rt) %*% simple_Rt_inv_t
       Ct_chol <- var_decomp(Cts)
       mt_sample_i <- crossprod(Ct_chol, mt_sample[, t, ]) + mts
     }

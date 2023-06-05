@@ -24,6 +24,19 @@ summary.fitted_dlm <- function(object, ...) {
   report_dlm(object, ...)
 }
 
+#' summary.searched_dlm
+#'
+#' summary method for class searched_dlm
+#'
+#' @param object A searched_dlm object.
+#' @param ... Arguments passed to report_searched_dlm
+#'
+#' @export
+#' @keywords internal
+summary.searched_dlm <- function(object, ...) {
+  report_searched_dlm(object, ...)
+}
+
 #' plot.fitted_dlm
 #'
 #' plot method for class fitted_dlm
@@ -46,6 +59,28 @@ plot.fitted_dlm <- function(x, ...) {
 #' @keywords internal
 print.fitted_dlm <- function(x, ...) {
   summary.fitted_dlm(x, ...)
+}
+
+#' print.dlm_distr
+#'
+#' @param x A dlm_distr object.
+#' @param ... Arguments passed to summary.dlm_distr
+#'
+#' @export
+#' @keywords internal
+print.dlm_distr <- function(x, ...) {
+  summary.dlm_distr(x, ...)
+}
+
+#' print.searched_dlm
+#'
+#' @param x A searched_dlm object.
+#' @param ... Arguments passed to summary.searched_dlm
+#'
+#' @export
+#' @keywords internal
+print.searched_dlm <- function(x, ...) {
+  summary.searched_dlm(x, ...)
 }
 
 #' effects.fitted_dlm

@@ -1,33 +1,23 @@
-#' Laplace outcome for kDGLM models
+#' Student-t outcome for kDGLM models
 #'
-#' Creates an outcome with Laplace distribution with the chosen parameters.
+#' Creates an outcome with Student-t distribution with the chosen parameters.
 #'
-#' @param alpha Vector: A vector of names for the linear predictor associated with the mean parameter of the Laplace distribution. The parameter is treated as unknown and equal to the associated linear predictor.
+#' @param alpha Vector: A vector of names for the linear predictor associated with the mean parameter of the Student-t distribution. The parameter is treated as unknown and equal to the associated linear predictor.
 #' @param outcome Vector: Values of the observed data.
 #' @param offset Vector: The offset at each observation. Must have the same shape as outcome.
 #'
 #' @return A object of the class dlm_distr
-#' @importFrom extraDistr dlaplace
 #' @export
 #'
 #' @details
-#'
-#' For evaluating the posterior parameters, we use a modified version of the method proposed in \insertCite{ArtigokParametrico;textual}{kDGLM}.
-#'
-#' For computational efficiency, we also use a Laplace approximations to obtain the first and second moments of the posterior \insertCite{@see @TierneyKadane1 and @TierneyKadane2 }{kDGLM}.
-#'
-#' For the details about the implementation see  \insertCite{ArtigoPacote;textual}{kDGLM}.
-#'
-#' For the detail about the modification of the method proposed in \insertCite{ArtigokParametrico;textual}{kDGLM}, see \insertCite{ArtigoAltMethod;textual}{kDGLM}.
 #'
 #' @seealso \code{\link{fit_model}}
 #' @family {auxiliary functions for a creating outcomes}
 #'
 #' @examples
-#'
 #' @references
 #'    \insertAllCited{}
-Laplace <- function(mu, outcome, offset = outcome**0) {
+Student_t <- function(nu,mu,sigma, outcome, offset = outcome**0) {
   t <- length(outcome)
   r <- 1
   k <- 1
@@ -35,7 +25,7 @@ Laplace <- function(mu, outcome, offset = outcome**0) {
   parms <- list()
 
   distr <- list(
-    var_names = c(mu),
+    var_names = c(nu,mu,sigma),
     r = r,
     k = k,
     l = k,
@@ -46,53 +36,29 @@ Laplace <- function(mu, outcome, offset = outcome**0) {
     convert_mat_default = convert_mat_default,
     convert_canom_flag = FALSE,
     parms = parms,
-    name = "Laplace",
-    conj_prior = convert_Laplace_Normal,
-    update = update_Laplace,
-    log.like.cond = function(param, outcome) {
-      dlaplacet(outcome, param, log = TRUE)
-    },
-    calc_pred = Laplace_pred,
+    name = "Student-t",
+    update = update_t,
+    conj_prior = format_ft,
+    conj_post = format_param,
+    calc_pred = t_pred,
     smoother = generic_smoother,
     apply_offset = function(ft, Qt, offset) {
       list("ft" = ft, "Qt" = Qt)
     },
-    link_function = function(x){x},
-    inv_link_function = function(x){x},
-    param_names = function(y) {
-      c(
-        paste("ft_", 1:k, sep = ""),
-        paste("Qt_",
-          c(matrix(1:k, k, k)),
-          c(matrix(1:k, k, k, byrow = TRUE)),
-          sep = ""
-        )
-      )
-    }
+    link_function = function(x) {
+      x
+    },
+    inv_link_function = function(x) {
+      x
+    },
+    param_names = generic_param_names(k)
   )
   class(distr) <- "dlm_distr"
   distr$alt_method <- TRUE
   return(distr)
 }
 
-#' convert_Laplace_Normal
-#'
-#' This is a dummy function, since, for an Laplace outcome, the conjugated prior is not used.
-#'
-#' @param ft vector: A vector representing the means from the normal distribution.
-#' @param Qt matrix: A matrix representing the covariance matrix of the normal distribution.
-#' @param parms list: A list of extra known parameters of the distribution. Not used in this function.
-#'
-#' @return The parameters of the conjugated distribution of the linear predictor.
-#' @keywords internal
-#' @family {auxiliary functions for a Laplace outcome}
-convert_Laplace_Normal <- function(ft, Qt, parms) {
-  return(do.call(c, list(ft, Qt)))
-}
-
-#' update_Laplace
-#'
-#' Calculate the (approximated) posterior parameter for the linear predictors, assuming that the observed values came from a Laplace model from which the mean parameter have prior distribution in the Normal family.
+#' update_t
 #'
 #' @param conj_prior list: A vector containing the parameters of the Inverse-Gamma (alpha,beta). Not used in the alternative method.
 #' @param ft vector: A vector representing the means from the prior distribution.
@@ -116,33 +82,59 @@ convert_Laplace_Normal <- function(ft, Qt, parms) {
 #'
 #' @references
 #'    \insertAllCited{}
-update_Laplace <- function(conj_prior, ft, Qt, y, parms) {
-  c_val=-Inf
+update_t <- function(conj_prior, ft, Qt, y, parms) {
   f <- function(x) {
-    log.prob <- -abs(y-x) + dnorm(x, ft, sqrt(Qt), log = TRUE)
-    max.prob <- max(log.prob)
-    if (max.prob > c_val) {
-      c_val <- max.prob
-    }
+    l_nu=x[1,]
+    mu=x[2,]
+    l_sigma=x[3,]
 
-    prob <- exp(log.prob - c_val)
+    log.prob <- dt((y-mu)/exp(l_sigma),exp(l_nu),log=TRUE)- l_sigma + Rfast::dmvnorm(t(x), ft, Qt, logged  = TRUE)
 
-    rbind(
-      prob,
-      x * prob,
-      (x**2) * prob
-    )
+    prob <- exp(log.prob)
+
+    rbind(prob,
+          l_nu*prob,
+          mu*prob,
+          l_sigma*prob,
+          (l_nu**2)*prob,
+          (mu**2)*prob,
+          (l_sigma**2)*prob,
+          (l_nu*mu)*prob,
+          (l_nu*l_sigma)*prob,
+          (mu*l_sigma)*prob)
   }
-  # f(seq(ft-3*sqrt(Qt),ft+3*sqrt(Qt),l=100))
-  val <- cubintegrate(f, c(-Inf), c(Inf), fDim = 3, nVec = 1000)$integral
-  ft <- matrix(val[2] / val[1], 1, 1)
-  Qt <- matrix(val[3], 1, 1) / val[1] - ft**2
+
+  val <- cubintegrate(f, c(-Inf,-Inf,-Inf), c(Inf,Inf,Inf), fDim = 10, nVec = 5000)$integral
+  ft <- matrix(val[2:4] / val[1], 3, 1)
+  Qt <- diag(val[5:7])
+  Qt[1,2] <- Qt[2,1] <- val[8]
+  Qt[1,3] <- Qt[3,1] <- val[9]
+  Qt[2,3] <- Qt[3,2] <- val[10]
+  Qt <- Qt/val[1]-ft%*%t(ft)
+
+  # f <- function(x) {
+  #   l_nu=x[1]
+  #   mu=x[2]
+  #   l_sigma=x[3]
+  #
+  #   log.prob <- dt((y-mu)/exp(l_sigma),exp(l_nu),log=TRUE)- l_sigma +
+  #     Rfast::dmvnorm(x, ft, Qt, logged  = TRUE)
+  #   return(log.prob)
+  # }
+  #
+  # mode=rootSolve::multiroot(function(x){calculus::derivative(f,x)},start=c(0,0,0))$root
+  # S=calculus::hessian(f,mode)
+  #
+  # ft=mode
+  # Qt <- -MASS::ginv(S)
+  print(ft)
+  print(Qt)
 
   return(list("ft" = ft, "Qt" = Qt))
   # return(list("ft" = ft, "Qt" = Qt))
 }
 
-#' Laplace_pred
+#' t_pred
 #'
 #' Calculate the values for the predictive distribution given the values of the parameter of the distribution of the linear predictor.
 #' The data is assumed to have Laplace distribution with unknown concentration parameters having log-Normal distribution.
@@ -165,7 +157,7 @@ update_Laplace <- function(conj_prior, ft, Qt, y, parms) {
 #' @importFrom stats rnorm var
 #' @keywords internal
 #' @family {auxiliary functions for a Laplace outcome}
-Laplace_pred <- function(conj_param, outcome = NULL, parms = list(), pred_cred = 0.95) {
+t_pred <- function(conj_param, outcome = NULL, parms = list(), pred_cred = 0.95) {
   pred.flag <- !is.na(pred_cred)
   like.flag <- !is.null(outcome)
   if (!like.flag & !pred.flag) {
@@ -201,7 +193,7 @@ Laplace_pred <- function(conj_param, outcome = NULL, parms = list(), pred_cred =
   sample <- matrix(rnorm(r * N), N, r)
   for (i in 1:t) {
     ft_i <- sample %*% var_decomp(Qt[, , i]) + matrix(ft[, i], N, r, byrow = TRUE)
-    sample_y <- rlaplace(N, mu = ft_i)
+    sample_y <- rt(N, exp(ft_i[,1]))*exp(ft_i[,3])+ft_i[,2]
     if (pred.flag) {
       pred[, i] <- mean(sample_y)
       var.pred[, , i] <- var(sample_y)

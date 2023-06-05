@@ -8,7 +8,7 @@
 #' @param D Array, Matrix, vector or  scalar: The values for the discount factors at each time. If D is a array, it's dimensions should be n x n x t, where n is the order of the polynomial block and t is the length of the outcomes. If D is a matrix, it's dimensions should be n x n and it's values will be used for each time. If D is a vector or scalar, a discount factor matrix will be created as a diagonal matrix with the values of D in the diagonal.
 #' @param W Array, Matrix, vector or  scalar: The values for the covariance matrix for the noise factor at each time. If W is a array, it's dimensions should be n x n x t, where n is the order of the polynomial block and t is the length of the outcomes. If W is a matrix, it's dimensions should be n x n and it's values will be used for each time. If W is a vector or scalar, a discount factor matrix will be created as a diagonal matrix with the values of W in the diagonal.
 #' @param m0 Vector or scalar: The prior mean for the latent variables associated with this block. If m0 is a vector, it's dimension should be equal to the order of the polynomial block. If m0 is a scalar, it's value will be used for all latent variables.
-#' @param C0 Matrix, vector or scalar: The prior covariance matrix for the latent variables associated with this block. If C0 is a matrix, it's dimensions should be n x n. If W is a vector or scalar, a covariance matrix will be created as a diagonal matrix with the values of C0 in the diagonal.
+#' @param C0 Matrix, vector or scalar: The prior covariance matrix for the latent variables associated with this block. If C0 is a matrix, it's dimensions should be n x n. If W is a vector or scalar, a covariance matrix will be created as a diagonal matrix with the values of C0 in the diagonal. If the first element of C0 is equal to NA, then a proper variance is calculated for the first latent state based on the scale of the effect of that state on the linear predictor.
 #'
 #' @return An object of the class dlm_block containing the following values:
 #' \itemize{
@@ -40,6 +40,11 @@
 #'
 #' @details
 #'
+#' For the ..., D, W, m0 and C0 arguments, the user may set one or more of it's values as a string.
+#' By doing so, the user will leave the block partially undefined and it can no longer be used in the \code{\link{fit_model}} function.
+#' Instead, the user must use the \code{\link{search_model}} function to search the best hyper parameters among a defined range of possible values.
+#' See the \code{\link{search_model}} function for details on it's usage.
+#'
 #' For the details about the implementation see \insertCite{ArtigoPacote;textual}{kDGLM}.
 #'
 #' For the details about polynomial trend in the context of DLM's, see \insertCite{WestHarr-DLM;textual}{kDGLM}, chapter 7.
@@ -47,9 +52,14 @@
 #' For the details about dynamic regression models in the context of DLM's, see \insertCite{WestHarr-DLM;textual}{kDGLM}, chapters 6 and 9.
 #'
 #' @seealso \code{\link{fit_model}}
+#' @seealso \code{\link{search_model}}
 #' @family {auxiliary functions for structural blocks}
-polynomial_block <- function(..., order = 1, name = "Var_Poly", D = 1, W = 0, m0 = 0, C0 = 1) {
-  if (any(D > 1 | D < 0)) {
+#'
+#'
+#' @references
+#'    \insertAllCited{}
+polynomial_block <- function(..., order = 1, name = "Var_Poly", D = 1, W = 0, m0 = 0, C0 = c(NA, rep(1, order - 1))) {
+  if (any(D > 1 | D < 0) & is.numeric(D)) {
     stop("Error: The discount factor D must be a value between 0 and 1 (included).")
   }
   if (any(D == 0)) {
@@ -68,7 +78,7 @@ polynomial_block <- function(..., order = 1, name = "Var_Poly", D = 1, W = 0, m0
   }
 
   if (length(D) == 1) {
-    D <- array(1, c(order, order, t)) * D
+    D <- array(D, c(order, order, t))
   } else if (is.vector(D)) {
     D <- array(D, c(length(D), order, order)) %>% aperm(c(3, 2, 1))
   } else if (is.matrix(D)) {
@@ -85,12 +95,16 @@ polynomial_block <- function(..., order = 1, name = "Var_Poly", D = 1, W = 0, m0
   }
 
   if (length(W) == 1) {
-    W <- array(diag(order), c(order, order, t)) * W
+    pre_W <- diag(order)
+    diag(pre_W) <- W
+    W <- array(pre_W, c(order, order, t))
   } else if (is.vector(W)) {
     W_vals <- W
-    W <- array(diag(order), c(order, order, length(W_vals)))
+    pre_W <- diag(order)
+    W <- array(0, c(order, order, length(W_vals)))
     for (i in 1:length(W_vals)) {
-      W[, , i] <- W[, , i] * W_vals[i]
+      diag(pre_W) <- W_vals[i]
+      W[, , i] <- pre_W
     }
   } else if (is.matrix(W)) {
     W <- array(W, c(dim(W)[1], dim(W)[2], t))
@@ -129,13 +143,27 @@ polynomial_block <- function(..., order = 1, name = "Var_Poly", D = 1, W = 0, m0
   } else {
     m0
   }
-  C0 <- if (length(C0) == 1) {
-    diag(order) * C0
-  } else if (is.vector(C0)) {
-    diag(C0)
+  if (length(C0) == 1 | is.vector(C0)) {
+    pre_C0 <- diag(order)
+    diag(pre_C0) <- C0
+    C0 <- pre_C0
   } else {
     C0
   }
+  if (any(is.na(C0))) {
+    ref_val <- as.numeric(c(...))
+    ref_val <- ref_val[!is.na(ref_val)]
+    if (all(ref_val == 0 | ref_val == 1) | if.na(var(ref_val), 0) == 0) {
+      ref_var <- 1
+    } else {
+      ref_var <- 1 / var(ref_val)
+    }
+    if (is.na(C0[1, 1])) {
+      C0[1, 1] <- ref_var
+    }
+    C0[is.na(C0)] <- 1
+  }
+
 
   if (length(dim(C0)) > 2) {
     stop(paste0("Error: C0 must be a matrix, but it has ", length(dim(C0)), " dimensions."))
@@ -163,6 +191,17 @@ polynomial_block <- function(..., order = 1, name = "Var_Poly", D = 1, W = 0, m0
     "type" = "Polynomial"
   )
   class(block) <- "dlm_block"
+  if (any(is.character(if.na(FF, 0))) |
+    any(is.character(if.na(G, 0))) |
+    any(is.character(if.na(D, 0))) |
+    any(is.character(if.na(W, 0))) |
+    any(is.character(if.na(m0, 0))) |
+    any(is.character(if.na(C0, 0)))
+  ) {
+    block$status <- "undefined"
+  } else {
+    block$status <- "defined"
+  }
   return(block)
 }
 
@@ -209,6 +248,11 @@ polynomial_block <- function(..., order = 1, name = "Var_Poly", D = 1, W = 0, m0
 #'
 #' @details
 #'
+#' For the ..., D, W, m0 and C0 arguments, the user may set one or more of it's values as a string.
+#' By doing so, the user will leave the block partially undefined and it can no longer be used in the \code{\link{fit_model}} function.
+#' Instead, the user must use the \code{\link{search_model}} function to search the best hyper parameters among a defined range of possible values.
+#' See the \code{\link{search_model}} function for details on it's usage.
+#'
 #' For the details about the implementation see \insertCite{ArtigoPacote;textual}{kDGLM}.
 #'
 #' For the details about the modelling of seasonal trends using harmonics in the context of DLM's, see \insertCite{WestHarr-DLM;textual}{kDGLM}, chapter 8.
@@ -216,8 +260,13 @@ polynomial_block <- function(..., order = 1, name = "Var_Poly", D = 1, W = 0, m0
 #' For the details about dynamic regression models in the context of DLM's, see \insertCite{WestHarr-DLM;textual}{kDGLM}, chapters 6 and 9.
 #'
 #' @seealso \code{\link{fit_model}}
+#' @seealso \code{\link{search_model}}
 #' @family {auxiliary functions for structural blocks}
-harmonic_block <- function(..., period, name = "Var_Sazo", D = 1, W = 0, m0 = 0, C0 = 1) {
+#'
+#'
+#' @references
+#'    \insertAllCited{}
+harmonic_block <- function(..., period, name = "Var_Sazo", D = 1, W = 0, m0 = 0, C0=c(NA, 1)) {
   w <- 2 * pi / period
   order <- 2
   block <- polynomial_block(..., order = order, name = name, D = D, W = W, m0 = m0, C0 = C0)
@@ -239,6 +288,7 @@ harmonic_block <- function(..., period, name = "Var_Sazo", D = 1, W = 0, m0 = 0,
 #' @param ... Named values for the planing matrix.
 #' @param order Positive integer: The order of the AR block.
 #' @param noise_var Non negative scalar: The variance of the white noise added to the latent state.
+#' @param noise_var Non negative scalar: The variance of the white noise added to the latent state.
 #' @param pulse Vector or scalar: An optional argument providing the values for the pulse for a Transfer Function. Default is 0.
 #' @param name String: An optional argument providing the name for this block. Can be useful to identify the models with meaningful labels, also, the name used will be used in some auxiliary functions.
 #' @param AR_support String: Either "constrained" or "free". If AR_support is "constrained", then the AR coefficients will be forced to be on the interval (-1,1), otherwise, the coefficients will be unrestricted. Beware that, under no restriction on the coefficients, there is no guarantee that the estimated coefficients will imply in a stationary process, furthermore, if the order of the AR block is greater than 1, then the restriction imposed when AR_support is equal to "constrained" does NOT guarantee that the process will be stationary (although it may help).
@@ -250,6 +300,7 @@ harmonic_block <- function(..., period, name = "Var_Sazo", D = 1, W = 0, m0 = 0,
 #' @param C0 Matrix, vector or scalar: The prior covariance matrix for the coefficients associated with this block. If C0 is a matrix, it's dimensions should be n x n, where n is the order of the AR block. If C0 is a vector or scalar, a covariance matrix will be created as a diagonal matrix with the values of C0 in the diagonal. If the coefficients are restricted to the interval (-1,1), the C0 is interpreted as the covariance matrix for logit((rho+1)/2), where rho is the AR coefficient.
 #' @param m0_states Vector or scalar: The prior mean for the states associated with this block. If m0_states is a vector, it's dimension should be equal to the order of the AR block. If m0_states is a scalar, it's value will be used for all coefficients.
 #' @param C0_states Matrix, vector or scalar: The prior covariance matrix for the states associated with this block. If C0_states is a matrix, it's dimensions should be n x n, where n is the order of the AR block. If C0_state is a vector or scalar, a covariance matrix will be created as a diagonal matrix with the values of C0_state in the diagonal.
+#' @param D_states Array, Matrix, vector or  scalar: The values for the discount factors for the states associated with this block. If D_states is a array, it's dimensions should be n x n x t, where n is the order of the AR block and t is the length of the outcomes. If D_states is a matrix, it's dimensions should be n x n and it's values will be used for each time. If D_states is a vector or scalar, a discount factor matrix will be created as a diagonal matrix with the values of D_states in the diagonal.
 #' @param m0_pulse Vector or scalar: The prior mean for the coefficients associated with the pulses. If m0_pulse is a vector, it's dimension should be equal to the number of pulses. If m0_pulse is a scalar, it's value will be used for all coefficients.
 #' @param C0_pulse  Matrix, vector or scalar: The prior covariance matrix for the coefficients associated with the pulses. If C0_pulse is a matrix, it's dimensions should be n x n, where n is the number of pulses. If C0_pulse is a vector or scalar, a covariance matrix will be created as a diagonal matrix with the values of C0_pulse in the diagonal.
 #' @param D_pulse Array, Matrix, vector or  scalar: The values for the discount factors associated with pulse coefficients at each time. If D_pulse is a array, it's dimensions should be n x n x t, where n is the number of pulses and t is the length of the outcomes. If D_pulse is a matrix, it's dimensions should be n x n and it's values will be used for each time. If D_pulse is a vector or scalar, a discount factor matrix will be created as a diagonal matrix with the values of D_pulse in the diagonal.
@@ -280,6 +331,11 @@ harmonic_block <- function(..., period, name = "Var_Sazo", D = 1, W = 0, m0 = 0,
 #'
 #' @details
 #'
+#' For the ..., noise_var, D, W, m0, C0, m0_states, C0_states, D_states, m0_pulse, C0_pulse, D_pulse, W_pulse arguments, the user may set one or more of it's values as a string.
+#' By doing so, the user will leave the block partially undefined and it can no longer be used in the \code{\link{fit_model}} function.
+#' Instead, the user must use the \code{\link{search_model}} function to search the best hyper parameters among a defined range of possible values.
+#' See the \code{\link{search_model}} function for details on it's usage.
+#'
 #' For the details about the implementation see \insertCite{ArtigoPacote;textual}{kDGLM}.
 #'
 #' For the details about Auto regressive models in the context of DLM's, see \insertCite{WestHarr-DLM;textual}{kDGLM}, chapter 9.
@@ -290,10 +346,30 @@ harmonic_block <- function(..., period, name = "Var_Sazo", D = 1, W = 0, m0 = 0,
 #'
 #' @seealso \code{\link{fit_model}}
 #' @family {auxiliary functions for structural blocks}
-AR_block <- function(..., order, noise_var, pulse = 0, name = "Var_AR", AR_support = "constrained", D = 1, W = 0, m0 = 0, C0 = 1, m0_states = 0, C0_states = 1, m0_pulse = 0, C0_pulse = 1, D_pulse = 1, W_pulse = 0) {
-  block <-
-    polynomial_block(..., order = order, name = paste0(name, "_State"), m0 = m0_states, C0 = C0_states, D = 1, W = noise_var) +
-    polynomial_block(..., order = order, name = paste0(name, "_Coeff"), m0 = m0, C0 = C0, D = D, W = W)
+#'
+#' @references
+#'    \insertAllCited{}
+AR_block <- function(..., order, noise_var, pulse = 0, name = "Var_AR", AR_support = "free",
+                     D = 1, W = 0, m0 = c(1,rep(0,order-1)), C0 = 1,
+                     m0_states = 0, C0_states = c(NA, rep(1, order - 1)), D_states = 1,
+                     m0_pulse = 0, C0_pulse = 1, D_pulse = 1, W_pulse = 0) {
+  W_states=diag(order)*0
+  W_states[1,1]=noise_var
+  block_state <-
+    polynomial_block(..., order = order, name = paste0(name, "_State"), m0 = m0_states, C0 = C0_states, D = D_states, W = W_states)
+
+
+  dummy_var <- list()
+  dummy_var[[names(list(...))[1]]] <- rep(0, block_state$t)
+  block_coeff <-
+    do.call(
+      function(...) {
+        polynomial_block(..., order = order, name = paste0(name, "_Coeff"), m0 = m0, C0 = C0, D = D, W = W)
+      },
+      dummy_var
+    )
+
+  block <- block_state + block_coeff
   k <- block$k
 
   if (order == 1) {
@@ -305,7 +381,7 @@ AR_block <- function(..., order, noise_var, pulse = 0, name = "Var_AR", AR_suppo
     G <- matrix(0, 2 * order, 2 * order)
     G_labs <- matrix("const", 2 * order, 2 * order)
     G[1, 1:order] <- NA
-    G_labs[1, 1:order] <- tolower(AR_support)
+    G_labs[1, 2*(1:order)-1] <- tolower(AR_support)
     G[2:order, -(order:(2 * order))] <- diag(order - 1)
     G[(order + 1):(2 * order), (order + 1):(2 * order)] <- diag(order)
     index <- sort(c(c(1:order), c(1:order)))
@@ -326,14 +402,14 @@ AR_block <- function(..., order, noise_var, pulse = 0, name = "Var_AR", AR_suppo
   if (any(pulse != 0)) {
     k <- if.null(dim(pulse)[2], 1)
     t <- if.null(dim(pulse)[1], length(pulse))
-    pulse_var <- list()
-    pulse_var[[names(list(...))[1]]] <- rep(0, t)
+    dummy_var <- list()
+    dummy_var[[names(list(...))[1]]] <- rep(0, t)
     block_pulse <-
       do.call(
         function(...) {
           polynomial_block(..., order = k, name = paste0(name, "_Pulse"), m0 = m0_pulse, C0 = C0_pulse, D = D_pulse, W = W_pulse)
         },
-        pulse_var
+        dummy_var
       )
     block_pulse$G <- diag(k)
     block <- block + block_pulse
@@ -374,8 +450,11 @@ AR_block <- function(..., order, noise_var, pulse = 0, name = "Var_AR", AR_suppo
 #' @examples
 #' # EXAMPLE
 #'
-#'
 #' @family {auxiliary functions for structural blocks}
+#'
+#'
+#' @references
+#'    \insertAllCited{}
 correlation_block <- function(var_names, order = 1, name = "Var_cor", D = 1, W = 0, m0 = 0, C0 = 1) {
   k <- length(var_names)
   arg_list <- c(rep(0, k), list(order = k, name = name, D = D, W = W, m0 = m0, C0 = C0))
@@ -467,8 +546,9 @@ block_merge <- function(...) {
     ref_names <- block$names
     for (name in names(ref_names)) {
       ref_names[[name]] <- ref_names[[name]] + n
+      names[[name]] <- c(names[[name]],ref_names[[name]])
     }
-    names <- c(names, ref_names)
+    # names <- c(names, ref_names)
     var_names <- c(var_names, block$var_names)
     if (block$t > 1) {
       if (block$t != t & t > 1) {
@@ -480,13 +560,13 @@ block_merge <- function(...) {
   }
   var_names <- sort(unique(var_names))
   k <- length(var_names)
-  for (name in names(names)) {
-    ref_idx <- which(names(names) == name)
-    n_names <- length(ref_idx)
-    if (n_names > 1) {
-      names(names)[ref_idx] <- paste0(names(names)[ref_idx], "_", c(1:n_names))
-    }
-  }
+  # for (name in names(names)) {
+  #   ref_idx <- which(names(names) == name)
+  #   n_names <- length(ref_idx)
+  #   if (n_names > 1) {
+  #     names(names)[ref_idx] <- paste0(names(names)[ref_idx], "_", c(1:n_names))
+  #   }
+  # }
 
   FF <- array(0, c(n, k, t), dimnames = list(NULL, var_names, NULL))
   G <- array(0, c(n, n, t))
@@ -496,6 +576,7 @@ block_merge <- function(...) {
   m0 <- c()
   C0 <- matrix(0, n, n)
   position <- 1
+  status <- "defined"
   for (block in blocks) {
     k_i <- length(block$var_names)
     current_range <- position:(position + block$n - 1)
@@ -508,8 +589,27 @@ block_merge <- function(...) {
     m0 <- c(m0, block$m0)
     C0[current_range, current_range] <- block$C0
     position <- position + block$n
+    status <- if (block$status == "undefined") {
+      "undefined"
+    } else {
+      status
+    }
   }
-  block <- list("FF" = FF, "G" = G, "G_labs" = G_labs, "D" = D, "W" = W, "m0" = m0, "C0" = C0, "n" = n, "t" = t, "k" = k, "names" = names, "var_names" = var_names)
+  block <- list(
+    "FF" = FF,
+    "G" = G,
+    "G_labs" = G_labs,
+    "D" = D,
+    "W" = W,
+    "m0" = m0,
+    "C0" = C0,
+    "n" = n,
+    "t" = t,
+    "k" = k,
+    "status" = status,
+    "names" = names,
+    "var_names" = var_names
+  )
   class(block) <- "dlm_block"
   return(block)
 }
@@ -533,19 +633,58 @@ block_merge <- function(...) {
 #' # Short way
 #' final_block <- 5 * polynomial_block(alpha = 1, order = 1)
 #'
+#' @seealso \code{\link{block_rename}}
 #' @family {auxiliary functions for structural blocks}
 block_mult <- function(block, k) {
   block_list <- list()
+  size_total=floor(log10(k))+1
   if (k > 1) {
     block_ref <- block
-    block$var_names <- paste0(block$var_names, "_1")
+    block$var_names <- paste0(block$var_names, "_",paste0(rep('0',size_total-1),collapse=''),"1")
     block_list[[1]] <- block
     for (i in 2:k) {
+      size_i=floor(log10(i))+1
       block_clone <- block_ref
-      block_clone$var_names <- paste0(block_ref$var_names, "_", i)
+      block_clone$var_names <- paste0(block_ref$var_names, "_",paste0(rep('0',size_total-size_i),collapse=''), i)
       block_list[[i]] <- block_clone
     }
     block <- do.call(block_merge, block_list)
   }
+  return(block)
+}
+
+#' block_rename
+#'
+#' @param block A dlm_block object.
+#' @param names A vector of string with names for each linear predictor in block.
+#'
+#' @return A dlm_block with the linear predictors renamed to the values passed in names.
+#' @export
+#'
+#' @examples
+#'
+#' base_block=polynomial_block(
+#' eta=1,
+#' order = 1,
+#' name = "Poly",
+#' D=0.95
+#' )
+#'
+#' final_block=block_rename(2*base_block,c('mu','sigma'))
+#'
+#' @family {auxiliary functions for structural blocks}
+block_rename=function(block,names){
+  if(!inherits(block,'dlm_block')){
+    stop('Error: The block argument is not a dlm_block object.')
+  }
+  if(length(names)!=length(block$var_names)){
+    stop(paste0('Error: The number of names provided does not match the number of linear predictor in the block. Expected ',length(block$var_names),', got ',length(names),'.'))
+  }
+  if(length(names)!=length(unique(names))){
+    stop(paste0('Error: Repeated names are not allowed.'))
+  }
+
+  block$var_names=names
+  colnames(block$FF)=names
   return(block)
 }

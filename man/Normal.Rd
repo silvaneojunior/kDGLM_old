@@ -15,7 +15,7 @@ Normal(
 )
 }
 \arguments{
-\item{mu}{character: Name of the linear predictor associated with the mean parameter of the Normal distribution. The parameter is treated as unknown and equal to the associated linear predictor.}
+\item{mu}{character: Name of the linear predictor associated with the mean parameter of the Normal distribution. The parameter is treated as unknowed and equal to the associated linear predictor.}
 
 \item{Tau}{character or numeric: If Tau is a character, it is interpreted as the names of the linear preditors associated with the precisions parameter of the Normal distribution. If Tau is numeric, the precision is considered known and equal to the value of Tau, otherwise, the precison is considere unknowned and equal to the exponential of the linear predictor informed in Tau. If the outcome is a Multivariate Normal, then Tau must be a matrix and, if the precision is unknowned, the elements outside it's main diagonal are treated as the linear predictor associated with the correlation between the each coordinate of the outcome, otherwise Tau is treated as the precision matrix. The user cannot be specify Tau with Sigma or Sd.}
 
@@ -77,9 +77,7 @@ show_fit(fitted_data, smooth = TRUE)$plot
 \code{\link{fit_model}}
 
 Other {auxiliary functions for a creating outcomes}: 
-\code{\link{Dirichlet}()},
 \code{\link{Gamma}()},
-\code{\link{Laplace}()},
 \code{\link{Multinom}()},
 \code{\link{Poisson}()}
 }

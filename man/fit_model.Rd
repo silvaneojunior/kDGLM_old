@@ -8,26 +8,26 @@ fit_model(
   ...,
   outcomes,
   pred_cred = 0.95,
-  smooth_flag = TRUE,
+  smooth = TRUE,
   p_monit = NA,
   c_monit = 1
 )
 }
 \arguments{
-\item{...}{dlm_block object: The structural blocks of the model.}
+\item{...}{dlm_block object: The structural blocks of the model. All block must be completely defined.}
 
 \item{outcomes}{List: The observed data. It should contain objects of the class dlm_distr.}
 
 \item{pred_cred}{Numeric: A number between 0 and 1 (not included) indicating the credibility interval for predictions. If not within the valid range of values, predictions are not made.}
 
-\item{smooth_flag}{Bool: A flag indicating if the smoothed distribution for the latent variables should be calculated.}
+\item{smooth}{Bool: A flag indicating if the smoothed distribution for the latent variables should be calculated.}
 
 \item{p_monit}{numeric (optional): The prior probability of changes in the latent space variables that are not part of it's dynamic.}
 
 \item{c_monit}{numeric (optional, if p_monit is not specified): The relative cost of false alarm in the monitoring compared to the cost of not detecting abnormalities.}
 }
 \value{
-The fitted model (an object of the <undefined class> or list). Contains the values of the estimated parameter and some extra info regarding the quality of the fit.
+The fitted model (a fitted_dlm object). Contains the values of the estimated parameter and some extra info regarding the quality of the fit.
 }
 \description{
 Fit a model given it's structure and the observed data. This function can be used for any supported family (see vignette).
@@ -140,9 +140,11 @@ show_fit(fitted_data, smooth = TRUE)$plot
 
 }
 \seealso{
-auxiliary function for creating outcomes \code{\link{Poisson}}, \code{\link{Multinom}}, \code{\link{Normal}}, \code{\link{Gamma}}, \code{\link{Dirichlet}}
+auxiliary functions for creating outcomes \code{\link{Poisson}}, \code{\link{Multinom}}, \code{\link{Normal}}, \code{\link{Gamma}}, \code{\link{Dirichlet}}
 
-auxiliary function for creating structural blocks \code{\link{polynomial_block}}, \code{\link{harmonic_block}}, \code{\link{AR_block}}
+auxiliary functions for creating structural blocks \code{\link{polynomial_block}}, \code{\link{harmonic_block}}, \code{\link{AR_block}}
+
+auxiliary function for choosing hyper parameters \code{\link{search_model}}.
 
 Other {auxiliary functions for fitted_dlm objects}: 
 \code{\link{dlm_sampling}()},
