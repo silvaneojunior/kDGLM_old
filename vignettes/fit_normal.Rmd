@@ -179,7 +179,7 @@ outcome <- list('Static mean'=Normal(mu = "mu1", Sigma = 1, outcome = data),
 
 fitted_data <- fit_model(level1,level2, outcomes = outcome)
 
-show_fit(fitted_data, smooth = TRUE)$plot
+plot(fitted_data, smooth = TRUE)
 ```
 
 The detailed theory behind the structure discussed in this section can be found in chapters 6, 7 and 9 from @WestHarr-DLM.
@@ -236,7 +236,7 @@ outcome <- Poisson(lambda = "rate", outcome = data)
 
 fitted_data <- fit_model(level, season, outcomes = outcome)
 
-show_fit(fitted_data, smooth = TRUE)$plot
+plot(fitted_data, smooth = TRUE)
 ```
 
 
@@ -564,15 +564,15 @@ $$
 \end{align}
 $$
 
-Naturally, the user **CANNOT** specify both $\alpha_t$ AND $\phi_t$ or $\beta_t$ AND $sigma_t$, as such specification is redundant at best, and incoherent at worst. Outside of those cases, in which the package will raise an error, any combination can be used by the user, allowing for the structure of the model to be define with the variables that are most convenient (it may be easier or more intuitive to specify the structure in the mean $\mu_t$ and the scale $\sigma_t$, than on the shape $\alpha_t$ and rate $\beta_t$).
+Naturally, the user **CANNOT** specify both $\alpha_t$ AND $\phi_t$ or $\beta_t$ AND $\sigma_t$, as such specification is redundant at best, and incoherent at worst. Outside of those cases, in which the package will raise an error, any combination can be used by the user, allowing for the structure of the model to be define with the variables that are most convenient (it may be easier or more intuitive to specify the structure in the mean $\mu_t$ and the scale $\sigma_t$, than on the shape $\alpha_t$ and rate $\beta_t$).
 
-Another particularity of the Gamma outcome is that the user may set the shape parameter $\phi_t$ to a known constant. In that case, the user must specify the structure to the mean parameter $\mu_t$ (he is not allowed to specify neither $\beta_t$ nor $\sigma_t$). In general, it is not expected that the shape parameter is known, still, there are some important applications where it common the use of Exponential Model ($\phi_t=1$) or some other particular cases of the Gamma distribution.
+Another particularity of the Gamma outcome is that the user may set the shape parameter $\phi_t$ to a known constant. In that case, the user must specify the structure to the mean parameter $\mu_t$ (he is not allowed to specify neither $\beta_t$ nor $\sigma_t$). In general, it is not expected that the shape parameter is known, still, there are some important applications where it is common the use of Exponential Model ($\phi_t=1$) or some other particular cases of the Gamma distribution. The estimation of the shape parameter shape parameter $\phi_t$ is still under development, as such, results may be unreliable and we will not discuss the fitting of such models in this document (a version of the package with a proper estimation for $\phi_t$ will be released very soon).
 
 No matter the parametrization, the link function $g$ will always be the logarithm function, since, given a certain parametrization, we can write the linear predictor of any other parametrization as a linear transformation of the original linear predictors.
 
-In the examples of this section, we will always use the parameters $\phi_t$ (when applicable) and $\mu_t$, but code used can be trivially adapted to other parametrizations.
+In the examples of this section, we will always use the parameters $\phi_t$ (when applicable) and $\mu_t$, but the code used can be trivially adapted to other parametrizations.
 
-```{r}
+```{r eval=FALSE, include=TRUE}
 Gamma(
   phi = NA,
   mu = NA,
@@ -594,7 +594,7 @@ Y_t|\theta_t &\sim \mathcal{G}\left(\alpha_t,\beta_t E_t^{-1}\right).
 \end{align}
 $$
 
-Note that the above relationship implies that:
+Note that the above model implies that:
 
 $$
 \mathbb{E}[Y_t|\theta_t]=\frac{\alpha_t}{\beta_t}E_t.
@@ -617,52 +617,289 @@ scale <- polynomial_block(phi = 1, D = 1)
 
 
 ```{r}
-
-
-# Known shape
 outcome <- Gamma(phi = phi, mu = "mu", outcome = data)
 
 fitted_data <- fit_model(level, season, outcomes = outcome)
-summary(fitted_data)
 
-show_fit(fitted_data, smooth = TRUE)$plot
-```
-
-
-```{r}
-
-devtools::load_all()
-
-# Unknown shape
-outcome <- Gamma(phi = "phi", mu = "mu", outcome = data)
-
-fitted_data <- fit_model(level, season, scale, outcomes = outcome)
-summary(fitted_data)
-
-show_fit(fitted_data, smooth = TRUE)$plot
-```
-
-```{r}
-devtools::load_all()
-# Structure
-volatility=AR_block(h=1,order=1,noise_var=W,AR_support='free')
-shape=polynomial_block(phi=1)
-
-# Outcome
-outcome <- Gamma(phi = 'phi', mu='h', outcome = data)
-
-# Fitting and ploting
-fitted_data <- fit_model(shape,volatility, outcomes = outcome)
-plot(fitted_data,smooth=TRUE)
+plot(fitted_data, smooth = TRUE)
 ```
 
 ## Multinomial case
 
+In this subsection we will present the Multinomial case. Suppose that we have a sequence of $k$-dimensional non-negative integer vectors $Y_t$, such that $Y_t=(Y_{1t},...,Y_{kt})'$. We assume that:
+
+$$
+\begin{align}
+Y_t|\theta_t &\sim Multinom\left(N_t,\vec{p}_t\right),\\
+\ln\left\{\frac{p_{it}}{p_{kt}}\right\}&=\lambda_{it}, i=1,...,k-1,\\
+N_t&=\sum_{i=1}^{k}Y_{it},
+\end{align}
+$$
+where $\vec{p}_t=(p_{1t},...,p_{kt})'$, with $p_{it} \ge 0, \forall i$ and $\sum_{i=1}^k p_{it}=1$.
+
+Notice that $N_t$ is automatically defined by the values of $Y_t$, which we suppose known, as a consequence of that, we have that $N_t$ is always considered a known parameter. Also, it is important to point out that this model has only $k-1$ free parameters (instead of $k$), since the restriction $\sum_{i=1}^k p_{it}=1$ implies that defining $k-1$ entries of $\vec{p}_t$ defines the remaining value. Specifically, we will always take the last entry (or category) of $Y_t$ as the reference value, such that $p_{kt}$ can be considered as the baseline probability of observing data from a category (i.e., we will model how each $p_{it}$ relates to the baseline probability $p_{kt}$).
+
+To create an outcome for this model, we can make use of the `Multinom` function:
+
+```{r eval=FALSE, include=TRUE}
+Multinom(
+  p,
+  outcome,
+  offset = outcome^0
+)
+```
+
+For the Multinomial case, `p` must be a character vector of size $k-1$ containing the names of the linear predictors associated with $\ln\left\{\frac{p_{it}}{p_{kt}}\right\}$ for $i=1,...,k-1$.
+
+The `outcome` argument must be a $T \times k$ matrix containing the values of $Y_t$ for each observation. Notice that each line $i$ must be the values of all categories in time $i$ and each column $j$ must represent the values of a category $j$ through time .
+
+The `offset` argument is optional and must have the same shape of `outcome` (it's shape is also interpreted in the same manner). The argument can be used to provide a measure of the scale of the data and, if the offset is provided, such that for each time $t$ it is equal to $E_t=(E_{1t},...,E_{kt})'$, then we will fit a model assuming that:
+
+$$
+\begin{align}
+Y_t|\theta_t &\sim Multinom\left(N_t,\vec{p}^*_t\right),\\
+\ln\left\{\frac{p^*_{it}}{p^*_{kt}}\right\}&=\ln\left\{\frac{p_{it}}{p_{kt}}\right\}+\ln\left\{\frac{E_{it}}{E_{kt}}\right\}, i=1,...,k-1.
+\end{align}
+$$
+
+At the end of this section we present a brief discussion of the inclusion of the offset, how to interpret it and why we chose to include it as such.
+
+
+Again, we present a brief example for the usage of this outcome:
+
+```{r include=FALSE}
+# Multinomial case
+T <- 200
+y1 <- rpois(T, exp(5 + (-T:T / T) * 5))
+y2 <- rpois(T, exp(6 + (-T:T / T) * 5 + sin((-T:T) * (2 * pi / 12))))
+y3 <- rpois(T, exp(5))
+
+y <- cbind(y1, y2, y3)
+```
+
+
+```{r}
+level1 <- polynomial_block(p1 = 1, order = 2)
+level2 <- polynomial_block(p2 = 1, order = 2)
+season <- harmonic_block(p2 = 1, period = 12)
+outcome <- Multinom(p = c("p1", "p2"), outcome = y)
+
+fitted_data <- fit_model(level1, level2, season, outcomes = outcome)
+plot(fitted_data, smooth = TRUE)
+```
+
+### Some comments on the usage of a offset
+
+The model presented in this section intend to model a phenomena such that we have $N_t$ subjects that were distributed randomly (but not necessarily uniformly randomly) among $k$ categories. In this scenario, $p_{it}$ represent the probability of one observation fall within the category $i$, such that:
+
+$$
+p_{it}=\mathbb{P}(Y_{it}=1|N_t=1).
+$$
+In some application, it might be the case that $N_t$ represents the counting of some event of interest and we want to model the probability of this event occurring in each category, supposing that we already know the probability of an observation to belong to category $i$ (whether the event occurred or not). In this scenario, it is not clear how to use the multinomial model, since we will have that:
+
+$$
+p_{it}=\mathbb{P}(\text{Observation belong to category }i|\text{Event occured}),
+$$
+but we actually want to know:
+
+$$
+p^*_{it}=\mathbb{P}(\text{Event occured}|\text{Observation belong to category }i).
+$$
+
+Since we are assuming that $\mathbb{P}(\text{Event occured})$ is known, we can write:
+
+$$
+\begin{aligned}
+p^*_{it}&=\mathbb{P}(\text{Event occured}|\text{Observation belong to category }i)=\frac{\mathbb{P}(\text{Observation belong to category }i|\text{Event occured})\mathbb{P}(\text{Event occured})}{\mathbb{P}(\text{Observation belong to category }i)}\\
+&=\frac{p_{it}\mathbb{P}(\text{Event occured})}{\mathbb{P}(\text{Observation belong to category }i)}.
+\end{aligned}
+$$
+
+The above relation implies that:
+
+$$
+\begin{aligned}
+\ln\left\{\frac{p^*_{it}}{p^*_{kt}}\right\}
+&=\ln\left\{\frac{p_{it}}{p_{kt}}\right\}-\ln\left\{\frac{\mathbb{P}(\text{Observation belong to category }i)}{\mathbb{P}(\text{Observation belong to category }k)}\right\}.
+\end{aligned}
+$$
+
+If we pass to the `offset` argument of the `Multinom` function such that $E_{it}=\frac{\mathbb{P}(\text{Observation belong to category }i)}{\mathbb{P}(\text{Observation belong to category }k)}$, then, by the specification provided in this section, we have that:
+
+$$
+\ln\left\{\frac{p^*_{it}}{p^*_{kt}}\right\}=\lambda_{it},
+$$
+in other words, the linear predictors (and consequently, the model structure) will model the probability that a event occur in a specific class (instead of the probability that an observation belongs to a class, given that the event occurred).
+
 ## Normal case
+
+In some sense, we can think of these as the most basic, at least in a theoretical point of view, since the Kalman Filter was develop for this specific scenario. In truth, we will present this case in two contexts, the first, which is indeed a simply implementation of the Kalman Filter and Smoother, deals with data coming from a Normal distribution (possibly multivariated) with unknown mean and known variance (or covariance matrix), the second scenario deals with data coming from a univariate Normal distribution with unknown mean and unknown variance.
+
+Also, at the end of the second subsection, we present an extension to the bivariated Normal distribution with unknown mean and unknown covariance matrix. A study is being conducted to expand this approach to the $k$-variated case, for any arbitrary $k$.
 
 ### Normal outcome with known variance
 
+Similarly to the Multinomial case, suppose that we have a sequence of $k$-dimensional vectors $Y_t$, such that $Y_t=(Y_{1t},...,Y_{kt})'$. We assume that:
+
+$$
+\begin{align}
+Y_t|\theta_t &\sim \mathcal{N}_k\left(\mu_t,\Sigma\right),\\
+\mu_{it}&=\lambda_{it}, i=1,...,k,\\
+\end{align}
+$$
+where $\Sigma$ is a known symmetric, definite positive $k\times k$ matrix. Also, for this model, we assume that the link function $g$ is the identity function
+
+To create an outcome for this model, we can make use of the `Normal` function:
+
+```{r eval=FALSE, include=TRUE}
+Normal(
+  mu,
+  Tau = NA,
+  Sigma = NA,
+  Sd = NA,
+  outcome,
+  offset = outcome^0
+)
+```
+
+Intuitively, the `mu` argument must be a character vector of size $k$ containing the names of the linear predictors associated with each $\mu_{i.}$. The user must also specify one (and only one) of `Tau`, `Sigma` or `Sd`. If the user provides `Sigma`, $\Sigma$ is assumed to be the passed value; if the user provides `Tau`, $\Sigma$ is assumed to be the inverse of the passed matrix (i.e., `Tau` is the precision matrix); if the user provides `Sd`, $\Sigma$ is assumed to be such that the standard deviation of the observations is equal to diagonal of `Sd` and the covariance between observations is assumed the be equal to the off-diagonal elements of `Sd`. 
+
+The `outcome` argument must be a $T \times k$ matrix containing the values of $Y_t$ for each observation. Notice that each line $i$ must be the values of all categories in time $i$ and each column $j$ must represent the values of a category $j$ through time .
+
+The `offset` argument is optional and must have the same shape of `outcome` (it's shape is also interpreted in the same manner). The argument can be used to provide a measure of the scale of the data and, if the offset is provided, such that for each time $t$ it is equal to $E_t=(E_{1t},...,E_{kt})'$, then we will fit a model assuming that:
+
+$$
+\begin{align}
+Y_t|\theta_t &\sim \mathcal{N}_k\left(\mu_t,\Sigma^*_t\right),\\
+\mu_it&=\lambda_{it}E_{it}, i=1,...,k-1,\\
+\Sigma^*_t&=\begin{bmatrix}E_{1t} & & 0\\& \ddots & \\0 & & E_{kt}\end{bmatrix}\Sigma\begin{bmatrix}E_{1t} & & 0\\& \ddots & \\0 & & E_{kt}\end{bmatrix}\\
+\end{align}
+$$
+Next, we present two brief examples for the usage of this outcome: One for a univariate outcome and the other for a multivariate model.
+
+```{r include=FALSE}
+T <- 200
+mu <- rnorm(T, 0, 0.1)
+data <- rnorm(T, cumsum(mu))
+```
+
+
+```{r}
+level <- polynomial_block(mu = 1,D = 0.95)
+outcome <- Normal(mu = "mu", Sigma = 1, outcome = data)
+
+fitted_data <- fit_model(level, outcomes = outcome)
+
+plot(fitted_data, smooth = TRUE)
+```
+
+```{r include=FALSE}
+T <- 200
+mu1 <- cumsum(rnorm(T, 0, 0.1))+5
+mu2 <- cumsum(rnorm(T, 0, 0.2))-5
+Sigma=matrix(c(1,1,1,4),2,2)
+data <- Rfast::rmvnorm(T, c(0,0),Sigma)+cbind(mu1,mu2)
+```
+
+
+```{r}
+devtools::load_all()
+level <- polynomial_block(mu = 1,D = 0.95)*2
+outcome <- Normal(mu = c("mu_1","mu_2"),
+                  Sigma = matrix(c(1,1,1,4),2,2),
+                  outcome = data)
+
+fitted_data <- fit_model(level, outcomes = outcome)
+
+plot(fitted_data, smooth = TRUE)
+```
+
 ### Normal outcome with unknown variance
+
+For this type of outcome, we assume that:
+
+$$
+\begin{align}
+Y_t|\theta_t &\sim \mathcal{N}\left(\mu_t,\tau^{-1}\right),\\
+\mu_{t}&=\lambda_{1t},\\
+\ln\{\tau_{t}\}&=\lambda_{2t}.\\
+\end{align}
+$$
+
+To create an outcome for this model, we can make use of the `Normal` function:
+
+```{r eval=FALSE, include=TRUE}
+Normal(
+  mu,
+  Tau = NA,
+  Sigma = NA,
+  Sd = NA,
+  outcome,
+  offset = outcome^0
+)
+```
+
+Intuitively, the `mu` argument must be a character representing the name of the linear predictor associated with each $\mu_.$. The user must also specify one (and only one) of `Tau`, `Sigma` or `Sd`.
+
+Similar to the Gamma case, we allow multiple parametrizations for the variance of the observational model. Specifically, if the user provides `Sigma`, we assume that $\lambda_{2t}=\ln\{\sigma^2_{t}\}=-\ln\{\tau_t\}$; if the user provides `Sd`, we assume that $\lambda_{2t}=\ln\{\sigma_{t}\}=-\ln\{\tau_t\}/2$; if the user provides `Tau`, then the default parametrization is used, i.e., $\lambda_{2t}=\ln\{\tau_t\}$. 
+
+The `outcome` argument must be a $T \times k$ matrix containing the values of $Y_t$ for each observation. Notice that each line $i$ must be the values of all categories in time $i$ and each column $j$ must represent the values of a category $j$ through time .
+
+The `offset` argument is optional and must have the same shape of `outcome` (it's shape is also interpreted in the same manner). The argument can be used to provide a measure of the scale of the data and, if the offset is provided, such that for each time $t$ it is equal to $E_t=(E_{1t},...,E_{kt})'$, then we will fit a model assuming that:
+
+$$
+\begin{align}
+Y_t|\theta_t &\sim \mathcal{N}_k\left(\mu_t,\Sigma^*_t\right),\\
+\mu_it&=\lambda_{it}E_{it}, i=1,...,k-1,\\
+\Sigma^*_t&=\begin{bmatrix}E_{1t} & & 0\\& \ddots & \\0 & & E_{kt}\end{bmatrix}\Sigma\begin{bmatrix}E_{1t} & & 0\\& \ddots & \\0 & & E_{kt}\end{bmatrix}\\
+\end{align}
+$$
+
+Next, we present two brief examples for the usage of this outcome: One for a univariate outcome and the other for a multivariate model.
+
+```{r include=FALSE}
+T <- 200
+mu <- rnorm(T, 0, 0.1)
+data <- rnorm(T, cumsum(mu))
+```
+
+
+```{r}
+level <- polynomial_block(mu = 1,D = 0.95)
+scale <- polynomial_block(sigma = 1,D = 1)
+outcome <- Normal(mu = "mu", Sigma = 'sigma', outcome = data)
+
+fitted_data <- fit_model(
+  level,scale,
+  outcomes = outcome
+)
+
+plot(fitted_data, smooth = TRUE)
+```
+
+```{r include=FALSE}
+T <- 200
+mu1 <- cumsum(rnorm(T, 0, 0.1))+5
+mu2 <- cumsum(rnorm(T, 0, 0.2))-5
+Sigma=matrix(c(1,1,1,4),2,2)
+data <- Rfast::rmvnorm(T, c(0,0),Sigma)+cbind(mu1,mu2)
+```
+
+
+```{r}
+devtools::load_all()
+level <- polynomial_block(mu = 1,D = 0.95)*2+
+         polynomial_block(sigma = 1,D = 1)*2+
+         polynomial_block(rho = 1,D = 1)
+  
+outcome <- Normal(mu = c("mu_1","mu_2"),
+                  Sigma = matrix(c('sigma_1','rho','rho','sigma_2'),2,2),
+                  outcome = data)
+
+fitted_data <- fit_model(level, outcomes = outcome)
+
+plot(fitted_data, smooth = TRUE)
+```
 
 #### Extension to the bivariate case
 

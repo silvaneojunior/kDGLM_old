@@ -417,7 +417,7 @@ normal_pred <- function(conj_param, outcome = NULL, parms = list(), pred_cred = 
   r <- (-1 + sqrt(1 + 4 * r)) / 2
   t <- dim(conj_param)[1]
 
-  pred <- t(data.frame.to_matrix(conj_param[, 1:r]))
+  pred <- t(data.frame.to_matrix(conj_param[, 1:r,drop=FALSE]))
   var.pred <- conj_param[(r + 1):(r * r + r)] %>%
     t() %>%
     array(c(r, r, t))
@@ -806,6 +806,7 @@ update_multi_NG_correl <- function(conj_prior, ft, Qt, y, parms) {
     up_param <- update_NG(param, ft_now, Qt_now, y[1])
     post <- convert_Normal_NG(up_param)
   }
+  print(Qt_now)
 
   ft_post <- post$ft
   Qt_post <- post$Qt
@@ -816,7 +817,9 @@ update_multi_NG_correl <- function(conj_prior, ft, Qt, y, parms) {
   Qt_up <- Qt_up + At %*% (Qt_post - Qt_now) %*% At_t
 
   if (r > 1) {
-    for (i in 2:r) {{      x <- c(ft_up)
+    for (i in 2:r) {
+      {
+      x <- c(ft_up)
       rho <- matrix(0, r, r)
       rho[upper.index] <- rho[lower.index] <- x[cor_index]
       var <- diag(exp(-x[var_index] / 2))
@@ -919,6 +922,7 @@ update_multi_NG_correl <- function(conj_prior, ft, Qt, y, parms) {
       up_param <- update_NG(param, ft_now, Qt_now, y[i])
       post <- convert_Normal_NG(up_param)
     }
+    print(Qt_now)
 
     ft_post <- post$ft
     Qt_post <- post$Qt
@@ -981,9 +985,14 @@ multi_normal_gamma_pred <- function(conj_param, outcome = NULL, parms = list(), 
 
   if (pred.flag) {
     pred <- mu0 %>% t()
-    var.pred <- matrix(sigma2, t, r) %>%
-      apply(1, diag) %>%
-      array(c(r, r, t))
+    if(r==1){
+      var.pred=array(sigma2,c(1,1,t))
+    }else{
+      var.pred <- array(0,c(r,r,t))
+      for(i in 1:t){
+        diag(var.pred[,,i])=sigma2[,i]
+      }
+    }
 
     icl.pred <- (qt((1 - pred_cred) / 2, nu) * sqrt(sigma2) + mu0) %>% t()
     icu.pred <- (qt(1 - (1 - pred_cred) / 2, nu) * sqrt(sigma2) + mu0) %>% t()

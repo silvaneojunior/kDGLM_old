@@ -89,6 +89,7 @@ Gamma <- function(phi = NA, mu = NA, alpha = NA, beta = NA, sigma = NA, outcome,
 
     parms <- list(phi = phi)
   } else {
+    warning("The estimation of the shape parameter phi is still under development. Results are not reliable.")
     k <- 2
     flags <- !is.na(c(phi, mu, alpha, beta, sigma))
     if (sum(flags) < 2) {
