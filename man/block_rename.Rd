@@ -19,14 +19,14 @@ block_rename
 }
 \examples{
 
-base_block=polynomial_block(
-eta=1,
-order = 1,
-name = "Poly",
-D=0.95
+base_block <- polynomial_block(
+  eta = 1,
+  order = 1,
+  name = "Poly",
+  D = 0.95
 )
 
-final_block=block_rename(2*base_block,c('mu','sigma'))
+final_block <- block_rename(2 * base_block, c("mu", "sigma"))
 
 }
 \seealso{

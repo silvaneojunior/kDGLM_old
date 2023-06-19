@@ -266,7 +266,7 @@ polynomial_block <- function(..., order = 1, name = "Var_Poly", D = 1, W = 0, m0
 #'
 #' @references
 #'    \insertAllCited{}
-harmonic_block <- function(..., period, name = "Var_Sazo", D = 1, W = 0, m0 = 0, C0=c(NA, 1)) {
+harmonic_block <- function(..., period, name = "Var_Sazo", D = 1, W = 0, m0 = 0, C0 = c(NA, 1)) {
   w <- 2 * pi / period
   order <- 2
   block <- polynomial_block(..., order = order, name = name, D = D, W = W, m0 = m0, C0 = C0)
@@ -350,11 +350,11 @@ harmonic_block <- function(..., period, name = "Var_Sazo", D = 1, W = 0, m0 = 0,
 #' @references
 #'    \insertAllCited{}
 AR_block <- function(..., order, noise_var, pulse = 0, name = "Var_AR", AR_support = "free",
-                     D = 1, W = 0, m0 = c(1,rep(0,order-1)), C0 = 1,
+                     D = 1, W = 0, m0 = c(1, rep(0, order - 1)), C0 = 1,
                      m0_states = 0, C0_states = c(NA, rep(1, order - 1)), D_states = 1,
                      m0_pulse = 0, C0_pulse = 1, D_pulse = 1, W_pulse = 0) {
-  W_states=diag(order)*0
-  W_states[1,1]=noise_var
+  W_states <- diag(order) * 0
+  W_states[1, 1] <- noise_var
   block_state <-
     polynomial_block(..., order = order, name = paste0(name, "_State"), m0 = m0_states, C0 = C0_states, D = D_states, W = W_states)
 
@@ -381,7 +381,7 @@ AR_block <- function(..., order, noise_var, pulse = 0, name = "Var_AR", AR_suppo
     G <- matrix(0, 2 * order, 2 * order)
     G_labs <- matrix("const", 2 * order, 2 * order)
     G[1, 1:order] <- NA
-    G_labs[1, 2*(1:order)-1] <- tolower(AR_support)
+    G_labs[1, 2 * (1:order) - 1] <- tolower(AR_support)
     G[2:order, -(order:(2 * order))] <- diag(order - 1)
     G[(order + 1):(2 * order), (order + 1):(2 * order)] <- diag(order)
     index <- sort(c(c(1:order), c(1:order)))
@@ -546,7 +546,7 @@ block_merge <- function(...) {
     ref_names <- block$names
     for (name in names(ref_names)) {
       ref_names[[name]] <- ref_names[[name]] + n
-      names[[name]] <- c(names[[name]],ref_names[[name]])
+      names[[name]] <- c(names[[name]], ref_names[[name]])
     }
     # names <- c(names, ref_names)
     var_names <- c(var_names, block$var_names)
@@ -637,15 +637,15 @@ block_merge <- function(...) {
 #' @family {auxiliary functions for structural blocks}
 block_mult <- function(block, k) {
   block_list <- list()
-  size_total=floor(log10(k))+1
+  size_total <- floor(log10(k)) + 1
   if (k > 1) {
     block_ref <- block
-    block$var_names <- paste0(block$var_names, "_",paste0(rep('0',size_total-1),collapse=''),"1")
+    block$var_names <- paste0(block$var_names, "_", paste0(rep("0", size_total - 1), collapse = ""), "1")
     block_list[[1]] <- block
     for (i in 2:k) {
-      size_i=floor(log10(i))+1
+      size_i <- floor(log10(i)) + 1
       block_clone <- block_ref
-      block_clone$var_names <- paste0(block_ref$var_names, "_",paste0(rep('0',size_total-size_i),collapse=''), i)
+      block_clone$var_names <- paste0(block_ref$var_names, "_", paste0(rep("0", size_total - size_i), collapse = ""), i)
       block_list[[i]] <- block_clone
     }
     block <- do.call(block_merge, block_list)
@@ -663,28 +663,28 @@ block_mult <- function(block, k) {
 #'
 #' @examples
 #'
-#' base_block=polynomial_block(
-#' eta=1,
-#' order = 1,
-#' name = "Poly",
-#' D=0.95
+#' base_block <- polynomial_block(
+#'   eta = 1,
+#'   order = 1,
+#'   name = "Poly",
+#'   D = 0.95
 #' )
 #'
-#' final_block=block_rename(2*base_block,c('mu','sigma'))
+#' final_block <- block_rename(2 * base_block, c("mu", "sigma"))
 #'
 #' @family {auxiliary functions for structural blocks}
-block_rename=function(block,names){
-  if(!inherits(block,'dlm_block')){
-    stop('Error: The block argument is not a dlm_block object.')
+block_rename <- function(block, names) {
+  if (!inherits(block, "dlm_block")) {
+    stop("Error: The block argument is not a dlm_block object.")
   }
-  if(length(names)!=length(block$var_names)){
-    stop(paste0('Error: The number of names provided does not match the number of linear predictor in the block. Expected ',length(block$var_names),', got ',length(names),'.'))
+  if (length(names) != length(block$var_names)) {
+    stop(paste0("Error: The number of names provided does not match the number of linear predictor in the block. Expected ", length(block$var_names), ", got ", length(names), "."))
   }
-  if(length(names)!=length(unique(names))){
-    stop(paste0('Error: Repeated names are not allowed.'))
+  if (length(names) != length(unique(names))) {
+    stop(paste0("Error: Repeated names are not allowed."))
   }
 
-  block$var_names=names
-  colnames(block$FF)=names
+  block$var_names <- names
+  colnames(block$FF) <- names
   return(block)
 }

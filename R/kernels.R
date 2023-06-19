@@ -248,6 +248,7 @@ analytic_filter <- function(outcomes, m0 = 0, C0 = 1, FF, G, G_labs, D, W, p_mon
         if (outcome$convert_canom_flag) {
           error_ft <- outcome$convert_mat_default %*% error_ft
           error_Qt <- outcome$convert_mat_default %*% error_Qt %*% transpose(outcome$convert_mat_default)
+          Qt_step <- outcome$convert_mat_default %*% Qt_step %*% transpose(outcome$convert_mat_default)
         }
         At <- Ct_step %*% model$FF %*% ginv(Qt_step)
         models[["null_model"]]$at_step <- mt_step <- mt_step + At %*% error_ft
@@ -377,7 +378,6 @@ calc_lin_pred <- function(at, Rt, FF) {
   FF_vals <- calc_current_F(at, Rt, FF)
   FF <- FF_vals$FF
   FF_diff <- FF_vals$FF_diff
-
   ft <- crossprod(FF, at) - FF_diff
   Qt <- as.matrix(crossprod(FF, Rt) %*% FF)
   list("ft" = ft, "Qt" = Qt, "FF" = FF, "FF_diff" = FF_diff)
@@ -406,8 +406,8 @@ format_param <- function(conj_param, parms) {
       t() %>%
       array(c(r, r, t))
   }
-  if(t==1){
-    Qt=matrix(Qt,r,r)
+  if (t == 1) {
+    Qt <- matrix(Qt, r, r)
   }
   return(list("ft" = ft, "Qt" = Qt))
 }
