@@ -199,6 +199,7 @@ search_model <- function(..., outcomes, search_grid, condition = "TRUE", smooth 
 report_dlm <- function(fitted_dlm, t = fitted_dlm$t, smooth = fitted_dlm$smooth, metric_cutoff = round(fitted_dlm$t / 10)) {
   r <- length(fitted_dlm$outcomes)
   k <- dim(fitted_dlm$mt)[1]
+  t <- dim(fitted_dlm$mt)[2]
   distr_names <- list()
   distr_like <- rep(NA, r)
   distr_rae <- rep(NA, r)
@@ -206,11 +207,12 @@ report_dlm <- function(fitted_dlm, t = fitted_dlm$t, smooth = fitted_dlm$smooth,
     outcome <- fitted_dlm$outcomes[[outcome_index]]
     distr_names[names(fitted_dlm$outcomes)[outcome_index]] <- outcome$name
 
-    prediction <- outcome$calc_pred(outcome$conj_prior_param[-(1:metric_cutoff), ], outcome$outcome[-(1:metric_cutoff), ], parms = outcome$parms, pred_cred = 0.95)
+    in_range <- (1:t) > metric_cutoff
+    prediction <- outcome$calc_pred(outcome$conj_prior_param[in_range, ], outcome$outcome[in_range, ], parms = outcome$parms, pred_cred = 0.95)
     distr_like[outcome_index] <- sum(prediction$log.like, na.rm = TRUE)
 
     pred <- t(prediction$pred)
-    out <- outcome$outcome[-(1:metric_cutoff), ]
+    out <- outcome$outcome[in_range, ]
     out_div <- ifelse(out == 0, 1, out)
     distr_rae[outcome_index] <- mean(abs((pred - out) / out_div), na.rm = TRUE)
   }
@@ -231,14 +233,14 @@ report_dlm <- function(fitted_dlm, t = fitted_dlm$t, smooth = fitted_dlm$smooth,
   } else {
     "Ct"
   }
-  coef_names <- rep(NA,k)
+  coef_names <- rep(NA, k)
   for (name in names(fitted_dlm$names)) {
     name_len <- length(fitted_dlm$names[[name]])
-    name_i=name
+    name_i <- name
     if (name_len > 1) {
       name_i <- paste0(name, "_", 1:length(fitted_dlm$names[[name]]))
     }
-    coef_names[fitted_dlm$names[[name]]]=name_i
+    coef_names[fitted_dlm$names[[name]]] <- name_i
   }
   len_names <- max(sapply(as.character(coef_names), function(x) {
     nchar(x)

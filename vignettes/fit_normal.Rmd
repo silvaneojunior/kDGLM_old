@@ -889,7 +889,7 @@ data <- Rfast::rmvnorm(T, c(0,0),Sigma)+cbind(mu1,mu2)
 ```{r}
 devtools::load_all()
 level <- polynomial_block(mu = 1,D = 0.95)*2+
-         polynomial_block(sigma = 1,D = 1)*2+
+         polynomial_block(sigma = 1,D = 0.95)*2+
          polynomial_block(rho = 1,D = 1)
   
 outcome <- Normal(mu = c("mu_1","mu_2"),

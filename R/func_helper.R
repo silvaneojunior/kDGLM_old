@@ -145,6 +145,7 @@ calcula_max <- function(pre_max) {
 #'
 #' @importFrom Rfast colnth
 #'
+#' @export
 #' @return Vector: The chosen quantile for each column of X.
 #' @keywords internal
 colQuantile <- function(X, q) {
@@ -164,6 +165,7 @@ colQuantile <- function(X, q) {
 #'
 #' @importFrom Rfast rownth
 #'
+#' @export
 #' @return Vector: The chosen quantile for each row of X.
 #' @keywords internal
 rowQuantile <- function(X, q) {

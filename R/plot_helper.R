@@ -141,7 +141,7 @@ show_fit <- function(model, pred_cred = 0.95, smooth = model$smooth, plotly = re
 #' plot_lat_var(fitted_data, smooth = TRUE)$plot
 #'
 #' @family {auxiliary visualization functions for the fitted_dlm class}
-plot_lat_var <- function(model, var = "", smooth = model$smooth, cut_off = round(model$t/10), pred_cred = 0.95, plotly = requireNamespace("plotly", quietly = TRUE)) {
+plot_lat_var <- function(model, var = "", smooth = model$smooth, cut_off = round(model$t / 10), pred_cred = 0.95, plotly = requireNamespace("plotly", quietly = TRUE)) {
   if (!any(grepl(var, names(model$names)))) {
     stop(paste0("Error: Invalid selected variable. Got ", var, ", expected one of the following:\n", names(model$names)))
   }
@@ -155,16 +155,16 @@ plot_lat_var <- function(model, var = "", smooth = model$smooth, cut_off = round
     if (grepl(var, i)) {
       indice <- c(indice, model$names[[i]])
       count <- 0
-      k_i=length(model$names[[i]])
-      size=floor(log10(k_i))+1
-      size_i=size-floor(log10(1:k_i))-1
-      names_index=sapply(size_i,function(x){
-        paste0(rep('0',x),collapse='')
+      k_i <- length(model$names[[i]])
+      size <- floor(log10(k_i)) + 1
+      size_i <- size - floor(log10(1:k_i)) - 1
+      names_index <- sapply(size_i, function(x) {
+        paste0(rep("0", x), collapse = "")
       })
       for (index in model$names[[i]]) {
         count <- count + 1
         if (length(model$names[[i]]) > 1) {
-          names_var <- c(names_var, paste0(i, ":\nlat. val. ",names_index[count], count))
+          names_var <- c(names_var, paste0(i, ":\nlat. val. ", names_index[count], count))
         } else {
           names_var <- c(names_var, i)
         }
