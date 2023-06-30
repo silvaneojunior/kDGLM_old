@@ -7,9 +7,9 @@
 show_fit(
   model,
   pred_cred = 0.95,
-  smooth = model$smooth,
+  smooth = FALSE,
   plotly = requireNamespace("plotly", quietly = TRUE),
-  h = 0
+  h = 1 - smooth
 )
 }
 \arguments{

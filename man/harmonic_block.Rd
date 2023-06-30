@@ -11,7 +11,8 @@ harmonic_block(
   D = 1,
   W = 0,
   m0 = 0,
-  C0 = c(NA, 1)
+  C0 = c(NA, 1),
+  drift = 0
 )
 }
 \arguments{
@@ -28,22 +29,25 @@ harmonic_block(
 \item{m0}{Vector or scalar: The prior mean for the latent variables associated with this block. If m0 is a vector, it's dimension should be equal to the order of the polynomial block. If m0 is a scalar, it's value will be used for all latent variables.}
 
 \item{C0}{Matrix, vector or scalar: The prior covariance matrix for the latent variables associated with this block. If C0 is a matrix, it's dimensions should be n x n. If W is a vector or scalar, a covariance matrix will be created as a diagonal matrix with the values of C0 in the diagonal.}
+
+\item{drift}{Matrix, vector or scalar: A drift to be add after the temporal evoltion (can be interpreted as the mean of the random noise at each time). If a matrix, it's dimension should be 2 x T, where T is the length of the serie. If a vector, it should have size T, and each value will be applied to the first latent variable (the one which affects the linear predictors) in their respective time. If a scalar, the passed value will be used for the first latent variable at each time.}
 }
 \value{
 An object of the class dlm_block containing the following values:
 \itemize{
    \item FF Array: A 3D-array containing the regression matrix for each time. It's dimension should be n x m x T, where n is the number of latent variables, m is the number of outcomes in the model and T is the time series length.
+   \item drift Matrix: The mean for the random noise of the temporal evolution. It's dimension should be n x T.
    \item G Matrix: The state evolution matrix.
    \item D Array: A 3D-array containing the discount factor matrix for each time. It's dimension should be n x n x T, where n is the number of latent variables and T is the time series length.
    \item W Array: A 3D-array containing the covariance matrix of the noise for each time. It's dimension should be the same as D.
    \item m0 Vector: The prior mean for the latent vector.
    \item C0 Matrix: The prior covariance matrix for the latent vector.
-   \item names list: A list containing the variables indexes by their name.
+   \item var_names list: A list containing the variables indexes by their name.
    \item period Positive integer: Same as argument.
    \item n Positive integer: The number of latent variables associated with this block (2).
    \item t Positive integer: The number of time steps associated with this block. If 1, the block is compatible with blocks of any time length, but if t is greater than 1, this block can only be used with blocks of the same time length.
    \item k Positive integer: The number of outcomes associated with this block. This block can only be used with blocks with the same outcome length.
-   \item var_names Vector: The name of the linear predictors associated with this block,
+   \item pred_names Vector: The name of the linear predictors associated with this block,
    \item type Character: The type of block (Harmonic).
 }
 }

@@ -149,78 +149,77 @@ update_multi_NG_correl <- function(conj_prior, ft, Qt, y, parms) {
   Qt_up <- Qt_up + At %*% (Qt_post - Qt_now) %*% At_t
 
   if (r > 1) {
-    for (i in 2:r) {{
-      x <- c(ft_up)
-    rho <- matrix(0, r, r)
-    rho[upper.index] <- rho[lower.index] <- x[cor_index]
-    var <- diag(exp(-x[var_index] / 2))
-    p <- 1 / (1 + exp(-rho))
-    rho <- 2 * p - 1
-    diag(rho) <- 1
-    Sigma <- var %*% rho %*% var
-    # diag(rho)=diag(var)
-    # Sigma=rho%*%t(rho)
-    # Sigma=crossprod(transpose(rho))
-    # print(eigen(Sigma))
+    for (i in 2:r) {
+      {      x <- c(ft_up)
+        rho <- matrix(0, r, r)
+        rho[upper.index] <- rho[lower.index] <- x[cor_index]
+        var <- diag(exp(-x[var_index] / 2))
+        rho <- tanh(rho)
+        diag(rho) <- 1
+        Sigma <- var %*% rho %*% var
+        # diag(rho)=diag(var)
+        # Sigma=rho%*%t(rho)
+        # Sigma=crossprod(transpose(rho))
+        # print(eigen(Sigma))
 
-    Sigma_rho <- Sigma[i, 1:(i - 1)]
-    Sigma_part <- Sigma[1:(i - 1), 1:(i - 1)]
+        Sigma_rho <- Sigma[i, 1:(i - 1)]
+        Sigma_part <- Sigma[1:(i - 1), 1:(i - 1)]
 
-    if (all(Sigma_part == 0)) {
-      ft_now <- x[c(i, i + r)]
-      Qt_now <- Qt_up[c(i, i + r), c(i, i + r)]
-    } else {
-      S <- ginv(Sigma_part)
-      e <- (y[1:(i - 1)] - x[1:(i - 1)])
-      Sigma_S <- c(Sigma_rho %*% S)
-      mu_bar <- x[i] + Sigma_S %*% e
-      S_bar <- Sigma[i, i] - Sigma_S %*% Sigma_rho
+        if (all(Sigma_part == 0)) {
+          ft_now <- x[c(i, i + r)]
+          Qt_now <- Qt_up[c(i, i + r), c(i, i + r)]
+        } else {
+          S <- ginv(Sigma_part)
+          e <- (y[1:(i - 1)] - x[1:(i - 1)])
+          Sigma_S <- c(Sigma_rho %*% S)
+          mu_bar <- x[i] + Sigma_S %*% e
+          S_bar <- Sigma[i, i] - Sigma_S %*% Sigma_rho
 
-      A <- matrix(0, k, 2)
-      A[1:i, 1] <- c(-Sigma_S, 1)
+          A <- matrix(0, k, 2)
+          A[1:i, 1] <- c(-Sigma_S, 1)
 
-      dx <- array(0, c(r, r, r * (r + 1) / 2))
-      for (j in 1:i) {
-        dx[j, j, j] <- -0.5 * var[j, j]
+          dx <- array(0, c(r, r, r * (r + 1) / 2))
+          for (j in 1:i) {
+            dx[j, j, j] <- -0.5 * var[j, j]
+          }
+          ref_rho <- c(rho)[upper.index]
+          dx[vec_r[upper.index] + c(0:(k - 2 * r - 1)) * (r**2) + (r**3)] <-
+            dx[vec_r[lower.index] + c(0:(k - 2 * r - 1)) * (r**2) + (r**3)] <-
+            (1 + ref_rho) * (1 - ref_rho)
+
+          dSigma <- array(NA, c(r, r, r * (r + 1) / 2))
+          aux_1 <- rho %*% var
+
+          dSigma[, , 1:r] <- array_mult_left(dx[, , 1:r], aux_1)
+
+          dSigma[, , 1:r] <- dSigma[, , 1:r] + array_transp(dSigma[, , 1:r])
+          dSigma[, , -(1:r)] <- dx[, , -(1:r), drop = FALSE] %>%
+            array_mult_left(var) %>%
+            array_mult_right(var)
+
+          dSigma_part <- dSigma[(1:(i - 1)), (1:(i - 1)), , drop = FALSE]
+          dSigma_rho <- dSigma[i, (1:(i - 1)), ] %>% matrix(i - 1, r * (r + 1) / 2)
+
+          dSigma_p1 <- -array_mult_right(dSigma_part, S)
+          dSigma_p1 <- array_mult_left(dSigma_p1, S)
+          dSigma_p1 <- array_collapse_left(dSigma_p1, e)
+          dSigma_p1 <- c(Sigma_rho %*% dSigma_p1)
+
+          dSigma_p2 <- c(c(S %*% e) %*% dSigma_rho)
+          A[-(1:r), 1] <- dSigma_p1 + dSigma_p2
+
+          dSigma_p1 <- -array_collapse_right(dSigma_part, Sigma_S)
+          dSigma_p1 <- c(Sigma_S %*% dSigma_p1)
+
+          helper_p2 <- c(S %*% Sigma_rho)
+          dSigma_p2 <- 2 * c(helper_p2 %*% dSigma_rho)
+          A[-(1:r), 2] <- -(dSigma[i, i, ] - dSigma_p1 - dSigma_p2) / c(S_bar)
+
+          ft_now <- c(mu_bar, -log(S_bar))
+          Qt_now <- t(A) %*% Qt_up %*% A
+        }
       }
-      ref_p <- c(p)[upper.index]
-      dx[vec_r[upper.index] + c(0:(k - 2 * r - 1)) * (r**2) + (r**3)] <-
-        dx[vec_r[lower.index] + c(0:(k - 2 * r - 1)) * (r**2) + (r**3)] <-
-        2 * ref_p * (1 - ref_p)
-
-      dSigma <- array(NA, c(r, r, r * (r + 1) / 2))
-      aux_1 <- rho %*% var
-
-      dSigma[, , 1:r] <- array_mult_left(dx[, , 1:r], aux_1)
-
-      dSigma[, , 1:r] <- dSigma[, , 1:r] + array_transp(dSigma[, , 1:r])
-      dSigma[, , -(1:r)] <- dx[, , -(1:r), drop = FALSE] %>%
-        array_mult_left(var) %>%
-        array_mult_right(var)
-
-      dSigma_part <- dSigma[(1:(i - 1)), (1:(i - 1)), , drop = FALSE]
-      dSigma_rho <- dSigma[i, (1:(i - 1)), ] %>% matrix(i - 1, r * (r + 1) / 2)
-
-      dSigma_p1 <- -array_mult_right(dSigma_part, S)
-      dSigma_p1 <- array_mult_left(dSigma_p1, S)
-      dSigma_p1 <- array_collapse_left(dSigma_p1, e)
-      dSigma_p1 <- c(Sigma_rho %*% dSigma_p1)
-
-      dSigma_p2 <- c(c(S %*% e) %*% dSigma_rho)
-      A[-(1:r), 1] <- dSigma_p1 + dSigma_p2
-
-      dSigma_p1 <- -array_collapse_right(dSigma_part, Sigma_S)
-      dSigma_p1 <- c(Sigma_S %*% dSigma_p1)
-
-      helper_p2 <- c(S %*% Sigma_rho)
-      dSigma_p2 <- 2 * c(helper_p2 %*% dSigma_rho)
-      A[-(1:r), 2] <- -(dSigma[i, i, ] - dSigma_p1 - dSigma_p2) / c(S_bar)
-
-      ft_now <- c(mu_bar, -log(S_bar))
-      Qt_now <- t(A) %*% Qt_up %*% A
-    }
-    }
-      ####################################
+      ###################################
       # {f=function(x){
       #
       #   mu <- x
@@ -228,8 +227,7 @@ update_multi_NG_correl <- function(conj_prior, ft, Qt, y, parms) {
       #   rho <- lower_tri.assign(rho, x[cor_index], diag = FALSE)
       #   rho <- upper_tri.assign(rho, x[cor_index], diag = FALSE)
       #   var <- diag(exp(-x[var_index] / 2))
-      #   p <- 1 / (1 + exp(-rho))
-      #   rho <- 2 * p - 1
+      #   rho <- tanh(rho)
       #   diag(rho)=1
       #   Sigma <- var %*% rho %*% var
       #
@@ -242,9 +240,10 @@ update_multi_NG_correl <- function(conj_prior, ft, Qt, y, parms) {
       #   return(c(mu_bar,-log(S_bar)))
       # }
       #
-      # A=t(calculus::derivative(f,var=ft_up))
-      # ft_now=f(ft_up)
-      # Qt_now=t(A)%*%Qt_up%*%A
+      # A_test=t(calculus::derivative(f,var=ft_up))
+      # # ft_now=f(ft_up)
+      # # Qt_now=t(A)%*%Qt_up%*%A
+      # print(max(abs(A-A_test)))
       # }
       ####################################
 
@@ -267,7 +266,8 @@ update_multi_NG_correl <- function(conj_prior, ft, Qt, y, parms) {
       At_t <- t(At)
 
       ft_up <- ft_up + At %*% (ft_post - ft_now)
-      Qt_up <- Qt_up + At %*% (Qt_post - Qt_now) %*% At_t    }
+      Qt_up <- Qt_up + At %*% (Qt_post - Qt_now) %*% At_t
+    }
     # ft_star[,index]=ft_up
     # Qt_star[,,index]=Qt_up
   }

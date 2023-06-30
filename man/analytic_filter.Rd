@@ -9,6 +9,7 @@ analytic_filter(
   m0 = 0,
   C0 = 1,
   FF,
+  drift,
   G,
   G_labs,
   D,
@@ -49,10 +50,12 @@ A list containing the following values:
    \item Qt Array: A 3D-array containing the one-step-ahead covariance matrix for the linear predictor for each time. Dimensions are m x m x T.
    \item FF Array: The same as the argument (same values).
    \item G Matrix: The same as the argument (same values).
+   \item G_labs Matrix: The same as the argument (same values).
    \item D Array: The same as the argument (same values) when there is no monitoring. When monitoring for abnormalities, the value in times where abnormalities were detected is increased.
    \item W Array: The same as the argument (same values).
+   \item shock_var Array: A 3D-array containing the effective covariance matrix of the noise for each time, i.e., taking into account both W and D. It's dimension should be the same as W and D.
    \item outcome List: The same as the argument outcome (same values).
-   \item var_names Vector: The names of the linear predictors.
+   \item pred_names Vector: The names of the linear predictors.
 }
 }
 \description{

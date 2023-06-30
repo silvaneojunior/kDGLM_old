@@ -119,8 +119,8 @@ Normal <- function(mu, Tau = NA, Sigma = NA, Sd = NA, outcome, offset = outcome*
   }
   #### Specifying atributes and methods ####
   if (all(sapply(Var, is.numeric))) {
-    var_names <- c(mu)
-    names(var_names) <- c("mu")
+    pred_names <- c(mu)
+    names(pred_names) <- c("mu")
     k <- r
 
     if (Var_name == "Standard deviation") {
@@ -175,7 +175,7 @@ Normal <- function(mu, Tau = NA, Sigma = NA, Sd = NA, outcome, offset = outcome*
     k <- r + r * (r + 1) / 2
     # warning("Covariance matrix is unknowned. BewareNon diagonal values are intepreted as correlation.")
 
-    var_names <- c(mu, diag(Var), Var[lower.index])
+    pred_names <- c(mu, diag(Var), Var[lower.index])
     mu_index <- 1:r
     var_index <- mu_index + r
     cor_index <- (2 * r + 1):k
@@ -189,9 +189,9 @@ Normal <- function(mu, Tau = NA, Sigma = NA, Sd = NA, outcome, offset = outcome*
       } else {
         "sigma"
       }, "_", 1:r)
-      names(var_names) <- c(paste0("mu_", 1:r), diag(names_mat), names_mat[lower.index])
+      names(pred_names) <- c(paste0("mu_", 1:r), diag(names_mat), names_mat[lower.index])
     } else {
-      names(var_names) <- c("mu", if (Var_name == "Precision") {
+      names(pred_names) <- c("mu", if (Var_name == "Precision") {
         "tau"
       } else if (Var_name == "Variance") {
         "sigma2"
@@ -324,7 +324,7 @@ Normal <- function(mu, Tau = NA, Sigma = NA, Sd = NA, outcome, offset = outcome*
     distr$alt_method <- alt_method | r > 1
   }
 
-  distr$var_names <- var_names
+  distr$pred_names <- pred_names
   distr$r <- r
   distr$k <- k
   distr$l <- k

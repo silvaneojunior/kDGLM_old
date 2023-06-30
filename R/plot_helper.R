@@ -36,9 +36,9 @@
 #' show_fit(fitted_data, smooth = TRUE)$plot
 #'
 #' @family {auxiliary visualization functions for the fitted_dlm class}
-show_fit <- function(model, pred_cred = 0.95, smooth = model$smooth, plotly = requireNamespace("plotly", quietly = TRUE), h = 0) {
+show_fit <- function(model, pred_cred = 0.95, smooth = FALSE, plotly = requireNamespace("plotly", quietly = TRUE), h = 1 - smooth) {
   t_last <- dim(model$mt)[2]
-  eval <- eval_past(model, smooth = smooth, h = h, pred_cred = pred_cred)
+  eval <- eval_past(model, smooth = smooth, h = h, pred_cred = pred_cred)$data
 
   obs_na_rm <- eval$Observation[!is.na(eval$Observation)]
   max_value <- calcula_max(obs_na_rm - min(obs_na_rm))[[3]] + min(obs_na_rm)
@@ -70,15 +70,18 @@ show_fit <- function(model, pred_cred = 0.95, smooth = model$smooth, plotly = re
     scale_color_manual("", na.value = NA, values = colors) +
     scale_y_continuous(name = "$y_t$") +
     scale_x_continuous("Time") +
+    ggtitle(ifelse(smooth, "Smoothed predictions", paste0(h, "-step(s) ahead prediction"))) +
     theme_bw() +
     coord_cartesian(ylim = c(min_value, max_value))
-
-  if (any(model$outcomes[[1]]$alt.flags == 1)) {
-    plt <- plt +
-      geom_vline(
-        data = data.frame(xintercept = (1:t_last)[model$outcomes[[1]]$alt.flags == 1], linetype = "Detected changes"),
-        aes_string(xintercept = "xintercept", linetype = "linetype", fill = "linetype", color = "linetype")
-      )
+  for (name_i in names(model$outcomes)) {
+    outcome_i <- model$outcomes[[name_i]]
+    if (any(outcome_i$alt.flags == 1)) {
+      plt <- plt +
+        geom_vline(
+          data = data.frame(xintercept = (1:t_last)[outcome_i$alt.flags == 1], linetype = "Detected changes", serie = name_i),
+          aes_string(xintercept = "xintercept", linetype = "linetype")
+        )
+    }
   }
   if (plotly) {
     if (!requireNamespace("plotly", quietly = TRUE)) {
@@ -96,6 +99,11 @@ show_fit <- function(model, pred_cred = 0.95, smooth = model$smooth, plotly = re
 
         plt$x$data[[i + 1 + 2 * n_colors]]$legendgroup <-
           plt$x$data[[i + 1 + 2 * n_colors]]$name <- paste0(series_names[i + 1], ": observations")
+      }
+      n <- length(plt$x$data)
+      if (n %% 3 == 1) {
+        plt$x$data[[n]]$legendgroup <-
+          plt$x$data[[n]]$name <- "Detected changes"
       }
     }
   }
@@ -142,31 +150,31 @@ show_fit <- function(model, pred_cred = 0.95, smooth = model$smooth, plotly = re
 #'
 #' @family {auxiliary visualization functions for the fitted_dlm class}
 plot_lat_var <- function(model, var = "", smooth = model$smooth, cut_off = round(model$t / 10), pred_cred = 0.95, plotly = requireNamespace("plotly", quietly = TRUE)) {
-  if (!any(grepl(var, names(model$names)))) {
-    stop(paste0("Error: Invalid selected variable. Got ", var, ", expected one of the following:\n", names(model$names)))
+  if (!any(grepl(var, names(model$var_names)))) {
+    stop(paste0("Error: Invalid variable selection. Got '", var, "', expected one of the following:\n", paste0(names(model$var_names), collapse = "\n")))
   }
   if (pred_cred >= 1 | pred_cred <= 0) {
     stop(paste0("Error: Invalid value for I.C. width. Must be between 0 and 1, got ", pred_cred))
   }
 
   indice <- c()
-  names_var <- c()
-  for (i in names(model$names)) {
+  var_names <- c()
+  for (i in names(model$var_names)) {
     if (grepl(var, i)) {
-      indice <- c(indice, model$names[[i]])
+      indice <- c(indice, model$var_names[[i]])
       count <- 0
-      k_i <- length(model$names[[i]])
+      k_i <- length(model$var_names[[i]])
       size <- floor(log10(k_i)) + 1
       size_i <- size - floor(log10(1:k_i)) - 1
       names_index <- sapply(size_i, function(x) {
         paste0(rep("0", x), collapse = "")
       })
-      for (index in model$names[[i]]) {
+      for (index in model$var_names[[i]]) {
         count <- count + 1
-        if (length(model$names[[i]]) > 1) {
-          names_var <- c(names_var, paste0(i, ":\nlat. val. ", names_index[count], count))
+        if (length(model$var_names[[i]]) > 1) {
+          var_names <- c(var_names, paste0(i, ":\nlat. val. ", names_index[count], count))
         } else {
-          names_var <- c(names_var, i)
+          var_names <- c(var_names, i)
         }
       }
     }
@@ -201,9 +209,9 @@ plot_lat_var <- function(model, var = "", smooth = model$smooth, cut_off = round
   lim_i <- as.data.frame(lim_i)
   lim_s <- as.data.frame(lim_s)
 
-  names(m1) <- names_var
-  names(lim_i) <- names_var
-  names(lim_s) <- names_var
+  names(m1) <- var_names
+  names(lim_i) <- var_names
+  names(lim_s) <- var_names
 
   max_value <- calcula_max(m1 - min(m1))[[3]] + min(m1)
   min_value <- -calcula_max(-(m1 - max(m1)))[[3]] + max(m1)
@@ -314,15 +322,15 @@ plot_lat_var <- function(model, var = "", smooth = model$smooth, cut_off = round
 #'
 #' @family {auxiliary visualization functions for the fitted_dlm class}
 plot_lin_pred <- function(model, pred = "", smooth = model$smooth, cut_off = 10, pred_cred = 0.95, plotly = requireNamespace("plotly", quietly = TRUE)) {
-  if (!any(grepl(pred, model$var_names))) {
-    stop(paste0("Error: Invalid selected variable. Got ", pred, ", expected one of the following:\n", model$var_names))
+  if (!any(grepl(pred, model$pred_names))) {
+    stop(paste0("Error: Invalid selected variable. Got ", pred, ", expected one of the following:\n", paste0(names(model$pred_names), collapse = "\n")))
   }
   if (pred_cred >= 1 | pred_cred <= 0) {
     stop(paste0("Error: Invalid value for I.C. width. Must be between 0 and 1, got ", pred_cred))
   }
 
-  indice <- (1:length(model$var_names))[grepl(pred, model$var_names)]
-  names_var <- model$var_names[grepl(pred, model$var_names)]
+  indice <- (1:length(model$pred_names))[grepl(pred, model$pred_names)]
+  names_var <- model$pred_names[grepl(pred, model$pred_names)]
 
   size <- length(indice)
   t <- dim(model$mts)[2]
@@ -357,9 +365,9 @@ plot_lin_pred <- function(model, pred = "", smooth = model$smooth, cut_off = 10,
   lim_i <- as.data.frame(lim_i)
   lim_s <- as.data.frame(lim_s)
 
-  names(f1) <- names_var
-  names(lim_i) <- names_var
-  names(lim_s) <- names_var
+  names(f1) <- var_names
+  names(lim_i) <- var_names
+  names(lim_s) <- var_names
 
   max_value <- calcula_max(f1 - min(f1))[[3]] + min(f1)
   min_value <- -calcula_max(-(f1 - max(f1)))[[3]] + max(f1)

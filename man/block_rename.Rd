@@ -4,12 +4,12 @@
 \alias{block_rename}
 \title{block_rename}
 \usage{
-block_rename(block, names)
+block_rename(block, pred_names)
 }
 \arguments{
 \item{block}{A dlm_block object.}
 
-\item{names}{A vector of string with names for each linear predictor in block.}
+\item{pred_names}{A vector of string with names for each linear predictor in block.}
 }
 \value{
 A dlm_block with the linear predictors renamed to the values passed in names.

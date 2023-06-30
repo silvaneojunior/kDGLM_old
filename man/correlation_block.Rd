@@ -5,7 +5,7 @@
 \title{correlation_block}
 \usage{
 correlation_block(
-  var_names,
+  pred_names,
   order = 1,
   name = "Var_cor",
   D = 1,
@@ -15,7 +15,7 @@ correlation_block(
 )
 }
 \arguments{
-\item{var_names}{Vector: Name of the linear predictors associated with this block.}
+\item{pred_names}{Vector: Name of the linear predictors associated with this block.}
 
 \item{name}{String: An optional argument providing the name for this block. Can be useful to identify the models with meaningful labels, also, the name used will be used in some auxiliary functions.}
 
@@ -36,11 +36,11 @@ An object of the class dlm_block containing the following values:
    \item W Array: A 3D-array containing the covariance matrix of the noise for each time. It's dimension should be the same as D.
    \item m0 Vector: The prior mean for the latent vector.
    \item C0 Matrix: The prior covariance matrix for the latent vector.
-   \item names list: A list containing the variables indexes by their name.
+   \item var_names list: A list containing the variables indexes by their name.
    \item n Positive integer: The number of latent variables associated with this block (2).
    \item t Positive integer: The number of time steps associated with this block. If 1, the block is compatible with blocks of any time length, but if t is greater than 1, this block can only be used with blocks of the same time length.
    \item k Positive integer: The number of outcomes associated with this block. This block can only be used with blocks with the same outcome length.
-   \item var_names Vector: The name of the linear predictors associated with this block,
+   \item pred_names Vector: The name of the linear predictors associated with this block,
    \item type Character: The type of block (Correlation).
 }
 }
