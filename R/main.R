@@ -159,6 +159,7 @@ fit_model <- function(..., outcomes, pred_cred = 0.95, smooth = TRUE, p_monit = 
 
   if (structure$t == 1) {
     structure$t <- t
+    structure$drift <- matrix(structure$drift, structure$n, structure$t)
     structure$G <- array(structure$G, c(structure$n, structure$n, structure$t), dimnames = dimnames(structure$G))
     structure$D <- array(structure$D, c(structure$n, structure$n, structure$t), dimnames = dimnames(structure$D))
     structure$W <- array(structure$W, c(structure$n, structure$n, structure$t), dimnames = dimnames(structure$W))
@@ -171,15 +172,15 @@ fit_model <- function(..., outcomes, pred_cred = 0.95, smooth = TRUE, p_monit = 
     stop(paste0("Error: outcome does not have the same time length as structure: got ", t, " from outcome, expected ", structure$t))
   }
 
-  var_names_out <- c()
+  pred_names_out <- c()
   for (outcome in outcomes) {
-    var_names_out <- c(var_names_out, outcome$var_names)
+    pred_names_out <- c(pred_names_out, outcome$pred_names)
   }
-  unique(var_names_out)
-  if (any(!(var_names_out %in% structure$var_names))) {
+  unique(pred_names_out)
+  if (any(!(pred_names_out %in% structure$pred_names))) {
     stop("Error: One or more linear predictor in outcomes are not present in the model structure.")
   }
-  if (any(!(structure$var_names %in% var_names_out))) {
+  if (any(!(structure$pred_names %in% pred_names_out))) {
     warning("One or more linear predictor in the model structure are not used in the outcomes.")
   }
 
@@ -188,6 +189,7 @@ fit_model <- function(..., outcomes, pred_cred = 0.95, smooth = TRUE, p_monit = 
     m0 = structure$m0,
     C0 = structure$C0,
     FF = structure$FF,
+    drift = structure$drift,
     G = structure$G,
     G_labs = structure$G_labs,
     D = structure$D,
@@ -217,7 +219,7 @@ fit_model <- function(..., outcomes, pred_cred = 0.95, smooth = TRUE, p_monit = 
   }
   model$m0 <- structure$m0
   model$C0 <- structure$C0
-  model$names <- structure$names
+  model$var_names <- structure$var_names
   model$smooth <- smooth
   model$pred_cred <- pred_cred
   model$t <- t
@@ -233,8 +235,8 @@ fit_model <- function(..., outcomes, pred_cred = 0.95, smooth = TRUE, p_monit = 
 #' @param model <undefined class> or list: The fitted model to be use for predictions.
 #' @param t Numeric: Time window for prediction.
 #' @param outcome List (optional): A named list containing the observed values in the prediction window. Note that the names in the list must be the same as the names passed during the fitting process.
-#' @param offset Matrix or scalar: offset for predictions. Should have dimensions k x t, where k is the number of outcomes of the model. If offset is not specified, the last value observed by the model will be used.
-#' @param FF Array: A 3D-array containing the regression matrix for each time. It's dimension should be n x k x t, where n is the number of latent variables, k is the number of outcomes in the model. If not specified, the last value given to the model will be used.
+#' @param offset Matrix or scalar: offset for predictions. Should have dimensions r x t, where r is the number of outcomes of the model. If offset is not specified, the last value observed by the model will be used.
+#' @param FF Array: A 3D-array containing the regression matrix for each time. It's dimension should be n x k x t, where n is the number of latent variables, k is the number of linear predictors in the model. If not specified, the last value given to the model will be used.
 #' @param G Array: A 3D-array containing the evolution matrix for each time. It's dimension should be n x n x t, where n is the number of latent variables. If not specified, the last value given to the model will be used.
 #' @param D Array: A 3D-array containing the discount factor matrix for each time. It's dimension should be n x n x t, where n is the number of latent variables and T is the time series length. If not specified, the last value given to the model will be used in the first step, and 1 will be use thereafter.
 #' @param W Array: A 3D-array containing the covariance matrix of the noise for each time. It's dimension should be n x n x t, where n is the number of latent variables and T is the time series length. If not specified, 0 will be used.
@@ -243,12 +245,14 @@ fit_model <- function(..., outcomes, pred_cred = 0.95, smooth = TRUE, p_monit = 
 #'
 #' @return A list containing:
 #' \itemize{
-#'    \item pred Matrix: A matrix with the predictive mean at each time. Dimensions are k x t, where k is the number of outcomes.
-#'    \item var.pred Array: A 3D-array with the predictive covariance matrix at each time. Dimensions are k x k x t, where k is the number of outcomes.
-#'    \item icl.pred Matrix: A matrix with the lower bound of the I.C. based on the credibility given in the arguments. Dimensions are k x t, where k is the number of outcomes.
-#'    \item icu.pred Matrix: A matrix with the upper bound of the I.C. based on the credibility given in the arguments. Dimensions are k x t, where k is the number of outcomes.
-#'    \item at Matrix: A matrix with the values for the linear predictor at each time. Dimensions are k x t, where k is the number of outcomes.
-#'    \item Rt Array: A 3D-array with the covariance of the linear predictor matrix at each time. Dimensions are k x k x t, where k is the number of outcomes.
+#'    \item pred Matrix: A matrix with the predictive mean at each time. Dimensions are r x t, where r is the number of outcomes.
+#'    \item var.pred Array: A 3D-array with the predictive covariance matrix at each time. Dimensions are r x r x t, where r is the number of outcomes.
+#'    \item icl.pred Matrix: A matrix with the lower bound of the I.C. based on the credibility given in the arguments. Dimensions are r x t, where r is the number of outcomes.
+#'    \item icu.pred Matrix: A matrix with the upper bound of the I.C. based on the credibility given in the arguments. Dimensions are r x t, where r is the number of outcomes.
+#'    \item mt Matrix: A matrix with the values for the latent states at each time. Dimensions are n x t, where n is the number of latent states
+#'    \item Ct Array: A 3D-array with the covariance of the latent states at each time. Dimensions are n x n x t, where n is the number of linear predictors.
+#'    \item ft Matrix: A matrix with the values for the linear predictors at each time. Dimensions are n x t, where n is the number of linear predictors
+#'    \item Qt Array: A 3D-array with the covariance of the linear predictors at each time. Dimensions are n x n x t, where n is the number of linear predictors.
 #'    \item plot (if so chosen): A plotly or ggplot object.
 #' }
 #' @import ggplot2
@@ -272,7 +276,7 @@ fit_model <- function(..., outcomes, pred_cred = 0.95, smooth = TRUE, p_monit = 
 #' forecast(fitted_data, 20)$plot
 #'
 #' @family {auxiliary functions for fitted_dlm objects}
-forecast <- function(model, t = 1, outcome = NULL, offset = NULL, FF = NULL, G = NULL, D = NULL, W = NULL, plot = ifelse(requireNamespace("plotly", quietly = TRUE), "plotly", TRUE), pred_cred = 0.95) {
+forecast <- function(model, t = 1, outcome = NULL, offset = NULL, FF = NULL, drift = NULL, G = NULL, D = NULL, W = NULL, plot = ifelse(requireNamespace("plotly", quietly = TRUE), "plotly", TRUE), pred_cred = 0.95) {
   n <- dim(model$mt)[1]
   t_last <- dim(model$mt)[2]
   k <- dim(model$FF)[2]
@@ -305,6 +309,9 @@ forecast <- function(model, t = 1, outcome = NULL, offset = NULL, FF = NULL, G =
   G_labs <- model$G_labs
   if (is.null(G)) {
     G <- array(model$G[, , t_last], c(n, n, t))
+  }
+  if (is.null(drift)) {
+    drift <- matrix(model$drift[, t_last], n, t)
   }
   if (is.null(FF)) {
     FF <- array(model$FF[, , t_last], c(n, k, t))
@@ -387,7 +394,7 @@ forecast <- function(model, t = 1, outcome = NULL, offset = NULL, FF = NULL, G =
 
 
   for (t_i in c(1:t)) {
-    next_step <- one_step_evolve(last_m, last_C, G[, , t_i] %>% matrix(n, n), G_labs, D_inv[, , t_i]**0, W[, , t_i] + C0 * (D_inv[, , t_i] - 1))
+    next_step <- one_step_evolve(last_m, last_C, drift[, t_i], G[, , t_i] %>% matrix(n, n), G_labs, D_inv[, , t_i]**0, W[, , t_i] + C0 * (D_inv[, , t_i] - 1))
     last_m <- next_step$at
     last_C <- next_step$Rt
 
@@ -399,7 +406,7 @@ forecast <- function(model, t = 1, outcome = NULL, offset = NULL, FF = NULL, G =
     Q1[, , t_i] <- lin_pred$Qt
     for (outcome_name in names(model$outcomes)) {
       model_i <- model$outcomes[[outcome_name]]
-      pred_index <- match(model_i$var_names, model$var_names)
+      pred_index <- match(model_i$pred_names, model$pred_names)
       lin_pred_offset <- model_i$apply_offset(
         lin_pred$ft[pred_index, , drop = FALSE],
         lin_pred$Qt[pred_index, pred_index, drop = FALSE],
@@ -487,7 +494,7 @@ forecast <- function(model, t = 1, outcome = NULL, offset = NULL, FF = NULL, G =
   data$Time <- as.numeric(data$Time)
   data$Serie <- as.factor(data$Serie)
 
-  data_past <- eval_past(model, smooth = TRUE, pred_cred = pred_cred)
+  data_past <- eval_past(model, smooth = TRUE, pred_cred = pred_cred)$data
   plot_data <- rbind(
     cbind(data_past, type = "Past"),
     cbind(data, type = "Forecast")
@@ -550,19 +557,22 @@ forecast <- function(model, t = 1, outcome = NULL, offset = NULL, FF = NULL, G =
 
 #' eval_past
 #'
-#' Evaluates the predictive values for the observed values used to fit the model. Predictions can be made with smoothed values or with filtered values with a time offset.
+#' Evaluates the predictive values for the observed values used to fit the model and it's latent variables.
+#' Predictions can be made with smoothed values or with filtered values with a time offset.
 #'
 #' @param model <undefined class> or list: The fitted model to be use for evaluation.
 #' @param smooth bool: The flag indicating if smoothed values should be used. If TRUE, h will not be used.
+#' @param T vector: An vector of positive integers indicating the time index from which to extract predictions.
 #' @param h positive integer: The relative offset for forecast. Values for time t will be calculated based on the filtered values of time t-h Will be ignored if smooth is TRUE.
 #' @param pred_cred Numeric: The credibility level for the I.C. intervals.
 #'
 #' @return A list containing:
 #' \itemize{
-#'    \item pred Matrix: A matrix with the predictive mean at each time. Dimensions are k x t, where k is the number of outcomes.
-#'    \item var.pred Array: A 3D-array with the predictive covariance matrix at each time. Dimensions are k x k x t, where k is the number of outcomes.
-#'    \item icl.pred Matrix: A matrix with the lower bound of the I.C. based on the credibility given in the arguments. Dimensions are k x t, where k is the number of outcomes.
-#'    \item icu.pred Matrix: A matrix with the upper bound of the I.C. based on the credibility given in the arguments. Dimensions are k x t, where k is the number of outcomes.
+#'    \item data data.frame: A table with the model evaluated at each observed time.
+#'    \item mt Matrix: The mean of the latent variables at each time. Dimensions are n x T.
+#'    \item Ct Array: A 3D-array containing the covariance matrix of the latent variable at each time. Dimensions are n x n x T.
+#'    \item ft Matrix: The mean of the linear predictor at each time. Dimensions are k x T.
+#'    \item Qt Array: A 3D-array containing the covariance matrix for the linear predictor at each time. Dimensions are k x k x T.
 #' }
 #' @importFrom Rfast transpose data.frame.to_matrix
 #' @export
@@ -588,28 +598,48 @@ forecast <- function(model, t = 1, outcome = NULL, offset = NULL, FF = NULL, G =
 #' past <- eval_past(fitted_data, smooth = TRUE)
 #'
 #' @family {auxiliary functions for fitted_dlm objects}
-eval_past <- function(model, smooth = FALSE, h = 0, pred_cred = 0.95) {
+eval_past <- function(model, smooth = FALSE, T = 1:t_last, h = 1 - smooth, pred_cred = 0.95) {
   if (smooth & h > 0) {
     h <- 0
-    warning("h is only used if smooth is set to TRUE.")
+    warning("h is only used if smooth is set to FALSE.")
   }
   if (h < 0 | round(h) != h) {
     stop(paste0("ERROR: h should be a positive integer. Got ", h, "."))
   }
   n <- dim(model$mt)[1]
   t_last <- dim(model$mt)[2]
-  r <- dim(model$FF)[2]
-  k <- sum(sapply(model$outcomes, function(x) {
+  k <- dim(model$FF)[2]
+  r <- sum(sapply(model$outcomes, function(x) {
     x$r
   }))
 
+  if (min(T) < 1) {
+    warning("Cannot evaluate parameters before time 1.")
+    T <- T[T >= 1]
+  }
+  if (max(T) > t_last) {
+    warning("Cannot evaluate parameters after last observation.")
+    T <- T[T <= t_last]
+  }
+  init_ref <- min(T) - h
+  init_t <- min(T)
+  final_t <- max(T)
+  len_t <- final_t - init_t + 1
+
   FF <- model$FF
-  G <- array(diag(n), c(n, n, t_last))
-  pred <- matrix(NA, k, t_last)
-  var.pred <- array(NA, c(k, k, t_last))
-  icl.pred <- matrix(NA, k, t_last)
-  icu.pred <- matrix(NA, k, t_last)
-  log.like <- rep(NA, t_last)
+  G <- array(diag(n), c(n, n, len_t))
+  drift <- matrix(0, n, len_t)
+
+  mt.pred <- matrix(NA, n, len_t)
+  Ct.pred <- array(NA, c(n, n, len_t))
+  ft.pred <- matrix(NA, k, len_t)
+  Qt.pred <- array(NA, c(k, k, len_t))
+
+  pred <- matrix(NA, r, len_t)
+  var.pred <- array(NA, c(r, r, len_t))
+  icl.pred <- matrix(NA, r, len_t)
+  icu.pred <- matrix(NA, r, len_t)
+  log.like <- rep(NA, len_t)
 
   if (smooth) {
     ref_mt <- model$mts
@@ -628,37 +658,45 @@ eval_past <- function(model, smooth = FALSE, h = 0, pred_cred = 0.95) {
       #   G <- G %*% model$G
       # }
       G <- model$G
+      drift <- model$drift
     }
   }
   G_labs <- model$G_labs
 
-  for (i in c((1 + h):t_last)) {
-    mt <- if (i <= h) {
-      model$m0
+  for (i in c(init_t:final_t)) {
+    if (i <= h) {
+      mt <- model$m0
+      Ct <- model$C0
+      h_i <- i - 1
+    } else if (i <= t_last) {
+      mt <- ref_mt[, (i - h):(i - h)]
+      Ct <- ref_Ct[, , (i - h):(i - h)]
+      h_i <- i
     } else {
-      ref_mt[, (i - h):(i - h)]
+      mt <- ref_mt[, t_last]
+      Ct <- ref_Ct[, , t_last]
+      h_i <- h + i - t_last
     }
-    Ct <- if (i <= h) {
-      model$C0
-    } else {
-      ref_Ct[, , i - h]
-    }
-    # model$filter(model$outcome[i, ], mt, Ct, FF[, , i] %>% matrix(n, r), G, D_inv[, , i], W[, , i], model$offset[i, ], parms = model$parms)
     next_step <- list("at" = mt, "Rt" = Ct)
-    if (h >= 1) {
-      for (t in c(1:h)) {
-        next_step <- one_step_evolve(next_step$at, next_step$Rt, G[, , i - t + 1], G_labs, D_inv[, , i - t + 1]**(t == 1), W[, , i - t + 1])
+    if (h_i >= 1) {
+      for (t in c(1:h_i)) {
+        next_step <- one_step_evolve(next_step$at, next_step$Rt, drift[, i - t + 1], G[, , i - t + 1], G_labs, D_inv[, , i - t + 1]**(t == 1), W[, , i - t + 1])
       }
     }
-    # next_step <- one_step_evolve(mt, Ct, FF[, , i] %>% matrix(n, r), G, G_labs, D_inv[, , i], W[, , i])
-    lin_pred <- calc_lin_pred(next_step$at %>% matrix(n, 1), next_step$Rt, FF[, , i] %>% matrix(n, r))
+    lin_pred <- calc_lin_pred(next_step$at %>% matrix(n, 1), next_step$Rt, FF[, , i] %>% matrix(n, k))
+
+    mt.pred[, i - init_t + 1] <- next_step$at
+    Ct.pred[, , i - init_t + 1] <- next_step$Rt
+    ft.pred[, i - init_t + 1] <- lin_pred$ft
+    Qt.pred[, , i - init_t + 1] <- lin_pred$Qt
+
 
     r_acum <- 0
     for (outcome in model$outcomes) {
       r_cur <- outcome$r
 
-      pred_index <- match(outcome$var_names, model$var_names)
-      k_i <- length(pred_index)
+      pred_index <- match(outcome$pred_names, model$pred_names)
+      r_i <- length(pred_index)
 
       cur_step <- outcome$apply_offset(lin_pred$ft[pred_index, , drop = FALSE], lin_pred$Qt[pred_index, pred_index, drop = FALSE], outcome$offset[i, ])
 
@@ -672,20 +710,28 @@ eval_past <- function(model, smooth = FALSE, h = 0, pred_cred = 0.95) {
 
 
       conj_distr <- outcome$conj_prior(ft_canom, Qt_canom, parms = outcome$parms)
-      prediction <- outcome$calc_pred(conj_distr, outcome$outcome[i, , drop = FALSE], pred_cred, parms = outcome$parms)
+      prediction <- outcome$calc_pred(conj_distr,
+        if (i > t_last) {
+          NULL
+        } else {
+          outcome$outcome[i, , drop = FALSE]
+        },
+        pred_cred,
+        parms = outcome$parms
+      )
 
-      pred[(r_acum + 1):(r_acum + r_cur), i] <- prediction$pred
-      var.pred[(r_acum + 1):(r_acum + r_cur), (r_acum + 1):(r_acum + r_cur), i] <- prediction$var.pred
-      icl.pred[(r_acum + 1):(r_acum + r_cur), i] <- prediction$icl.pred
-      icu.pred[(r_acum + 1):(r_acum + r_cur), i] <- prediction$icu.pred
-      log.like[i] <- log.like[i] + sum(prediction$log.like)
+      pred[(r_acum + 1):(r_acum + r_cur), i - init_t + 1] <- prediction$pred
+      var.pred[(r_acum + 1):(r_acum + r_cur), (r_acum + 1):(r_acum + r_cur), i - init_t + 1] <- prediction$var.pred
+      icl.pred[(r_acum + 1):(r_acum + r_cur), i - init_t + 1] <- prediction$icl.pred
+      icu.pred[(r_acum + 1):(r_acum + r_cur), i - init_t + 1] <- prediction$icu.pred
+      log.like[i - init_t + 1] <- log.like[i - init_t + 1] + sum(prediction$log.like)
       r_acum <- r_acum + r_cur
     }
   }
 
   r_acum <- 0
-  out_names <- rep(NA, k)
-  output <- matrix(NA, t_last, k)
+  out_names <- rep(NA, r)
+  output <- matrix(NA, len_t, r)
   for (outcome_name in names(model$outcomes)) {
     r_cur <- model$outcomes[[outcome_name]]$r
     if (r_cur > 1) {
@@ -693,7 +739,8 @@ eval_past <- function(model, smooth = FALSE, h = 0, pred_cred = 0.95) {
     } else {
       out_names[(r_acum + 1):(r_acum + r_cur)] <- outcome_name
     }
-    output[, (r_acum + 1):(r_acum + r_cur)] <- model$outcomes[[outcome_name]]$outcome
+    output[1:min(final_t - init_t + 1, t_last - init_t + 1), (r_acum + 1):(r_acum + r_cur)] <- model$outcomes[[outcome_name]]$outcome[init_t:min(final_t, t_last), ]
+
 
     r_acum <- r_acum + r_cur
   }
@@ -702,9 +749,9 @@ eval_past <- function(model, smooth = FALSE, h = 0, pred_cred = 0.95) {
   data_name <- c("Observation", "Prediction", "C.I.lower", "C.I.upper")
 
   data_raw <- lapply(1:4, function(i) {
-    data <- cbind(as.character(1:t_last) %>% as.data.frame(), data_list[[i]]) %>%
+    data <- cbind(as.character(init_t:final_t) %>% as.data.frame(), data_list[[i]]) %>%
       as.data.frame() %>%
-      pivot_longer(1:k + 1)
+      pivot_longer(1:r + 1)
 
     data$name <- as.factor(data$name)
     names(data) <- c("Time", "Serie", data_name[i])
@@ -721,7 +768,13 @@ eval_past <- function(model, smooth = FALSE, h = 0, pred_cred = 0.95) {
   }, data_raw)
   data$Time <- as.numeric(data$Time)
   data$Serie <- as.factor(data$Serie)
-  return(data)
+  return(list(
+    data = data %>% filter(Time %in% T),
+    mt = mt.pred[, init_t:final_t %in% T],
+    Ct = Ct.pred[, , init_t:final_t %in% T],
+    ft = ft.pred[, init_t:final_t %in% T],
+    Qt = Qt.pred[, , init_t:final_t %in% T]
+  ))
 }
 
 #' dlm_sampling
@@ -777,6 +830,9 @@ dlm_sampling <- function(model, sample_size, filtered_distr = FALSE) {
   T_len <- dim(mt)[2]
   n <- dim(mt)[1]
   k <- dim(FF)[2]
+  sum(sapply(model$outcomes, function(x) {
+    x$r
+  }))
   outcomes <- list()
   for (outcome_name in names(model$outcomes)) {
     outcomes[[outcome_name]] <- list(
@@ -784,6 +840,7 @@ dlm_sampling <- function(model, sample_size, filtered_distr = FALSE) {
       apply_offset = model$outcomes[[outcome_name]]$apply_offset,
       offset = model$outcomes[[outcome_name]]$offset,
       l = model$outcomes[[outcome_name]]$l,
+      r = model$outcomes[[outcome_name]]$r,
       convert_mat_canom = model$outcomes[[outcome_name]]$convert_mat_canom,
       convert_canom_flag = model$outcomes[[outcome_name]]$convert_canom_flag
     )
@@ -807,12 +864,12 @@ dlm_sampling <- function(model, sample_size, filtered_distr = FALSE) {
     ft_sample_i <- crossprod(FF_step, mt_sample_i)
   }
 
-  var_names <- colnames(FF)
+  pred_names <- colnames(FF)
   for (outcome_name in names(outcomes)) {
-    pred_index <- match(model$outcome[[outcome_name]]$var_names, var_names)
-    k_i <- length(pred_index)
+    pred_index <- match(model$outcome[[outcome_name]]$pred_names, pred_names)
+    r_i <- length(pred_index)
 
-    outcomes[[outcome_name]]$k_i <- k_i
+    outcomes[[outcome_name]]$r_i <- r_i
     outcomes[[outcome_name]]$pred_index <- pred_index
 
     offset_step <- outcomes[[outcome_name]]$offset[T_len, ]
@@ -850,8 +907,9 @@ dlm_sampling <- function(model, sample_size, filtered_distr = FALSE) {
       mt_sample_i <- crossprod(Ct_chol, mt_sample[, t, ]) + mts
     } else {
       mt_now <- mt[, t]
+      Ct_now <- Ct
 
-      G_ref <- calc_current_G(mt_now, G[, , t + 1], G_labs)$G
+      G_ref <- calc_current_G(mt_now, Ct_now, G[, , t + 1], G_labs)$G
       simple_Rt_inv <- Ct %*% crossprod(G_ref, ginv(Rt))
       simple_Rt_inv_t <- transpose(simple_Rt_inv)
       # simple_Rt_inv_t <- solve(Rt, G_ref %*% Ct)
@@ -906,4 +964,176 @@ dlm_sampling <- function(model, sample_size, filtered_distr = FALSE) {
       x$param_sample
     })
   ))
+}
+
+
+#' Search the best hyper parameters fo a kDGLM model
+#'
+#' @param ... dlm_block object: The structural blocks of the model. At least one block must be "undefined". See polynomial_block for more details.
+#' @param outcomes List: The observed data. It should contain objects of the class dlm_distr.
+#' @param search_grid List: A named list containing the possible values of each undefined hyper parameter.
+#' @param condition Character: A character defining which combinations of undefined hyper parameter should be tested. See example for details.
+#' @param smooth Bool: A flag indicating if the smoothed distribution for the latent variables should be calculated.
+#' @param pred_cred Numeric: A number between 0 and 1 (not included) indicating the credibility interval for predictions. If not within the valid range of values, 0.95 will be used.
+#'
+#' @return A searched_dlm object containing the following values:
+#' \itemize{
+#'    \item search_data Data.frame: A table contain the metrics of each combination of hyper parameter tested and ordered from best combination to worst.
+#'    \item structure dlm_block: The initial structure passed by the user, by with the undefined hyper parameters set to the best values found.
+#'    \item model fitted_dlm: A model fitted with the best combination of hyper parameters.
+#' }
+#'
+#' @export
+#'
+#' @examples
+#'
+#' T <- 200
+#' w <- (200 / 40) * 2 * pi
+#' data <- rpois(T, 20 * (sin(w * 1:T / T) + 2))
+#'
+#' level <- polynomial_block(rate = 1, D = "D_level")
+#' season <- harmonic_block(rate = "sazo_effect", period = 40, D = "D_sazo")
+#'
+#' outcome <- Poisson(lambda = "rate", outcome = data)
+#'
+#' search_model(level, season,
+#'   outcomes = outcome,
+#'   search_grid = list(
+#'     sazo_effect = c(0, 1),
+#'     D_level = c(seq(0.8, 1, 0.05)),
+#'     D_sazo = c(seq(0.95, 1, 0.01))
+#'   ),
+#'   condition = "sazo_effect==1 | D_sazo==1"
+#' )
+#'
+#' @details
+#'
+#' This is an auxiliary function to search for the best combination of hyper parameters among the possible variations specfied by the user.
+#' This function simple evaluates all possible combinations and chooses the one that results in the best fitting.
+#' To compare each model, we evaluate the predictive log likelyhood for the one-step ahead prediction. We also compute the Relative Absolute Error (RAE) and return it to the user. It is important to note that one should be careful with the RAE metric, as it only takes into account the ponctual prediction.
+#'
+#' @seealso \code{\link{fit_model}}
+search_model <- function(..., outcomes, search_grid, condition = "TRUE", smooth = TRUE, pred_cred = 0.95) {
+  if (is.null(pred_cred) | is.na(pred_cred)) {
+    pred_cred <- 0.95
+  } else {
+    if (pred_cred <= 0 | pred_cred >= 1) {
+      warning("Invalid value for credibility. Using 95% of credibility.")
+      pred_cred <- 0.95
+    }
+  }
+  structure <- block_merge(...)
+  if (structure$status == "defined") {
+    stop("Error: There is no hiper parameter to select. Did you forgot to label the hiper parameters?")
+  }
+
+  ref_strucuture <- structure
+  var_length <- length(search_grid)
+  search_data <- do.call(expand.grid, search_grid) %>%
+    filter(eval(parse(text = condition)))
+  search_data$log.like <- NA
+  search_data$rae <- NA
+  vals_names <- names(search_grid)
+
+  dim_FF <- dim(structure$FF)
+  dimnames_FF <- dimnames(structure$FF)
+
+  dim_D <- dim(structure$D)
+  dim_W <- dim(structure$W)
+  dim_G <- dim(structure$G)
+
+  dim_C0 <- dim(structure$C0)
+
+  vals_nums <- dim(search_data)[1]
+  vals_size <- dim(search_data)[2]
+  best_structure <- NULL
+  best_model <- NULL
+  best_metric <- -Inf
+  init <- Sys.time()
+  for (i in 1:vals_nums) {
+    time_past <- Sys.time() - init
+    raw_perc <- i / vals_nums
+    perc <- round(100 * raw_perc, 2)
+    n_bar <- round(50 * raw_perc)
+    cat(paste0(
+      "\r[", paste0(rep("=", n_bar), collapse = ""),
+      paste0(rep(" ", 50 - n_bar), collapse = ""), "] - ",
+      perc,
+      "% - ETA - ",
+      round(as.numeric((1 - raw_perc) * time_past / raw_perc, units = "mins"), 2),
+      " minutes                 "
+    ))
+    cur_param <- search_data[i, ]
+    structure <- ref_strucuture
+    for (name in vals_names) {
+      structure$FF[structure$FF == name] <- cur_param[[name]]
+      structure$D[structure$D == name] <- cur_param[[name]]
+      structure$W[structure$W == name] <- cur_param[[name]]
+      structure$m0[structure$m0 == name] <- cur_param[[name]]
+      structure$C0[structure$C0 == name] <- cur_param[[name]]
+      structure$G[structure$G == name] <- cur_param[[name]]
+    }
+    if (any(is.na(as.numeric(if.na(structure$FF, 0)))) |
+      any(is.na(as.numeric(if.na(structure$D, 0)))) |
+      any(is.na(as.numeric(if.na(structure$W, 0)))) |
+      any(is.na(as.numeric(if.na(structure$m0, 0)))) |
+      any(is.na(as.numeric(if.na(structure$C0, 0)))) |
+      any(is.na(as.numeric(if.na(structure$G, 0))))
+    ) {
+      stop("Error: not all unkown hiper parameter have values. Check the search grid to make sure every unkown hiper parameter has a range of values.")
+    }
+    structure$FF <- array(as.numeric(structure$FF), dim_FF, dimnames = dimnames_FF)
+    structure$D <- array(as.numeric(structure$D), dim_D)
+    structure$W <- array(as.numeric(structure$W), dim_W)
+    structure$m0 <- as.numeric(structure$m0)
+    structure$C0 <- matrix(as.numeric(structure$C0), dim_C0[1], dim_C0[2])
+    structure$G <- array(as.numeric(structure$G), dim_G)
+
+    if (any(if.na(structure$D, 0) < 0 | if.na(structure$D, 0) > 1)) {
+      stop(paste0("Error: invalid value for D. Expected a real number between 0 and 1, got: ", paste(structure$D[if.na(structure$D, 0) < 0 | if.na(structure$D, 0) > 1], collapse = ", "), "."))
+    }
+    if (any(if.na(structure$W, 0) < 0)) {
+      stop(paste0("Error: invalid value for W. Expected a non negative number, got: ", paste(structure$W[if.na(structure$W, 0) < 0], collapse = ", "), "."))
+    }
+    if (any(if.na(structure$C0, 0) < 0)) {
+      stop(paste0("Error: invalid value for C0. Expected a non negative number, got: ", paste(structure$C0[if.na(structure$C0, 0) < 0], collapse = ", "), "."))
+    }
+
+    structure$status <- "defined"
+    fitted_model <- fit_model(structure, outcomes = outcomes, pred_cred = 0.95, smooth = FALSE, p_monit = NA, c_monit = 1)
+    log.like <- sum(as.numeric(lapply(fitted_model$outcomes, function(x) {
+      sum(x$log.like)
+    })), na.rm = TRUE)
+    rae <- mean(as.numeric(lapply(fitted_model$outcomes, function(x) {
+      out <- x$outcome
+      pred <- t(x$pred)
+
+      base <- ifelse(out == 0, 1, out)
+      mean(abs((pred - out) / out))
+    })), na.rm = TRUE)
+    search_data[i, vals_size - 1] <- log.like
+    search_data[i, vals_size] <- rae
+    if (log.like > best_metric) {
+      best_structure <- structure
+      best_model <- fitted_model
+      best_metric <- log.like
+    }
+  }
+  if (smooth) {
+    smoothed <- generic_smoother(best_model$mt, best_model$Ct, best_model$at, best_model$Rt, best_model$G, best_model$G_labs)
+    best_model$mts <- smoothed$mts
+    best_model$Cts <- smoothed$Cts
+    best_model$smooth <- smooth
+  }
+  cat("\n")
+  search_data <- search_data %>% arrange(-log.like, -rae)
+
+  out.vals <- list(
+    search.data = search_data,
+    structure = best_structure,
+    model = best_model
+  )
+  class(out.vals) <- "searched_dlm"
+
+  return(out.vals)
 }

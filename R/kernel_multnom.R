@@ -53,10 +53,10 @@ Multinom <- function(p, outcome, offset = outcome**0, alt_method = FALSE) {
   }
   convert_mat_default <- convert_mat_canom <- diag(k)
   parms <- list()
-  # var_names=p
-  # names(var_names)=paste0('p',c(1:r))
+  # pred_names=p
+  # names(pred_names)=paste0('p',c(1:r))
   distr <- list(
-    var_names = p,
+    pred_names = p,
     r = r,
     k = k,
     l = r,

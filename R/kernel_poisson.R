@@ -61,7 +61,7 @@ Poisson <- function(lambda, outcome, offset = outcome**0, alt_method = FALSE) {
     },
     link_function = log, inv_link_function = exp,
     param_names = c("alpha", "beta"),
-    var_names = c(lambda),
+    pred_names = c(lambda),
     r = r,
     k = k,
     l = k,

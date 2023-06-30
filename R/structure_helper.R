@@ -5,10 +5,11 @@
 #' @param ... Named values for the planing matrix.
 #' @param order Positive integer: The order of the polynomial structure.
 #' @param name String: An optional argument providing the name for this block. Can be useful to identify the models with meaningful labels, also, the name used will be used in some auxiliary functions.
-#' @param D Array, Matrix, vector or  scalar: The values for the discount factors at each time. If D is a array, it's dimensions should be n x n x t, where n is the order of the polynomial block and t is the length of the outcomes. If D is a matrix, it's dimensions should be n x n and it's values will be used for each time. If D is a vector or scalar, a discount factor matrix will be created as a diagonal matrix with the values of D in the diagonal.
-#' @param W Array, Matrix, vector or  scalar: The values for the covariance matrix for the noise factor at each time. If W is a array, it's dimensions should be n x n x t, where n is the order of the polynomial block and t is the length of the outcomes. If W is a matrix, it's dimensions should be n x n and it's values will be used for each time. If W is a vector or scalar, a discount factor matrix will be created as a diagonal matrix with the values of W in the diagonal.
+#' @param D Array, Matrix, vector or  scalar: The values for the discount factors at each time. If D is a array, it's dimensions should be n x n x T, where n is the order of the polynomial block and T is the length of the serie If D is a matrix, it's dimensions should be n x n and it's values will be used for each time. If D is a vector or scalar, a discount factor matrix will be created as a diagonal matrix with the values of D in the diagonal.
+#' @param W Array, Matrix, vector or  scalar: The values for the covariance matrix for the noise factor at each time. If W is a array, it's dimensions should be n x n x T, where n is the order of the polynomial block and T is the length of the serie. If W is a matrix, it's dimensions should be n x n and it's values will be used for each time. If W is a vector or scalar, a discount factor matrix will be created as a diagonal matrix with the values of W in the diagonal.
 #' @param m0 Vector or scalar: The prior mean for the latent variables associated with this block. If m0 is a vector, it's dimension should be equal to the order of the polynomial block. If m0 is a scalar, it's value will be used for all latent variables.
 #' @param C0 Matrix, vector or scalar: The prior covariance matrix for the latent variables associated with this block. If C0 is a matrix, it's dimensions should be n x n. If W is a vector or scalar, a covariance matrix will be created as a diagonal matrix with the values of C0 in the diagonal. If the first element of C0 is equal to NA, then a proper variance is calculated for the first latent state based on the scale of the effect of that state on the linear predictor.
+#' @param drift Matrix, vector or scalar: A drift to be add after the temporal evoltion (can be interpreted as the mean of the random noise at each time). If a matrix, it's dimension should be n x T, where n is the number of latent variables (i.e., the order) and T is the length of the serie. If a vector, it should have size T, and each value will be applied to the first latent variable (the one which affects the linear predictors) in their respective time. If a scalar, the passed value will be used for the first latent variable at each time.
 #'
 #' @return An object of the class dlm_block containing the following values:
 #' \itemize{
@@ -18,12 +19,13 @@
 #'    \item W Array: A 3D-array containing the covariance matrix of the noise for each time. It's dimension should be the same as D.
 #'    \item m0 Vector: The prior mean for the latent vector.
 #'    \item C0 Matrix: The prior covariance matrix for the latent vector.
-#'    \item names list: A list containing the variables indexes by their name.
+#'    \item drift Matrix: The mean for the random noise of the temporal evolution. It's dimension should be n x T.
+#'    \item var_names list: A list containing the variables indexes by their name.
 #'    \item order Positive integer: Same as argument.
 #'    \item n Positive integer: The number of latent variables associated with this block (same value as order).
 #'    \item t Positive integer: The number of time steps associated with this block. If 1, the block is compatible with blocks of any time length, but if t is greater than 1, this block can only be used with blocks of the same time length.
 #'    \item k Positive integer: The number of outcomes associated with this block. This block can only be used with blocks with the same outcome length.
-#'    \item var_names Vector: The name of the linear predictors associated with this block,
+#'    \item pred_names Vector: The name of the linear predictors associated with this block,
 #'    \item type Character: The type of block (polynomial).
 #' }
 #'
@@ -58,7 +60,7 @@
 #'
 #' @references
 #'    \insertAllCited{}
-polynomial_block <- function(..., order = 1, name = "Var_Poly", D = 1, W = 0, m0 = 0, C0 = c(NA, rep(1, order - 1))) {
+polynomial_block <- function(..., order = 1, name = "Var_Poly", D = 1, W = 0, m0 = 0, C0 = c(NA, rep(1, order - 1)), drift = 0) {
   if (any(D > 1 | D < 0) & is.numeric(D)) {
     stop("Error: The discount factor D must be a value between 0 and 1 (included).")
   }
@@ -114,7 +116,22 @@ polynomial_block <- function(..., order = 1, name = "Var_Poly", D = 1, W = 0, m0
   } else {
     t
   }
+
+  if (length(dim(drift)) < 2) {
+    if (t == 1 & length(drift) > 1) {
+      t <- length(drift)
+    }
+    placeholder <- drift
+    drift <- matrix(0, order, t)
+    drift[1, ] <- placeholder
+  }
+
+  if (any(dim(drift) != c(order, t))) {
+    stop(paste0("Error: Invalid shape for drift. Expected ", order, "x", t, ". Got ", paste(dim(drift), collapse = "x"), "."))
+  }
+
   D <- array(D, c(order, order, t))
+  W <- array(W, c(order, order, t))
 
   if (length(dim(W)) > 3 | any(dim(W)[1:2] != order) | (dim(W)[3] != t & t > 1)) {
     stop(paste0("Error: Invalid shape for W. Expected ", order, "x", order, "x", t, ". Got ", paste(dim(W), collapse = "x"), "."))
@@ -172,22 +189,23 @@ polynomial_block <- function(..., order = 1, name = "Var_Poly", D = 1, W = 0, m0
     stop(paste0("Error: C0 must have dimensions ", order, "x", order, ". Got ", dim(C0)[1], "x", dim(C0)[2], "."))
   }
 
-  names <- list()
-  names[[name]] <- c(1:order)
+  var_names <- list()
+  var_names[[name]] <- c(1:order)
   block <- list(
     "FF" = FF,
+    "drift" = drift,
     "G" = array(G, c(order, order, t)),
     "G_labs" = matrix("const", order, order),
     "D" = D,
     "W" = W,
     "m0" = m0,
     "C0" = C0,
-    "names" = names,
+    "var_names" = var_names,
     "order" = order,
     "n" = order,
     "t" = t,
     "k" = k,
-    "var_names" = vars,
+    "pred_names" = vars,
     "type" = "Polynomial"
   )
   class(block) <- "dlm_block"
@@ -217,21 +235,23 @@ polynomial_block <- function(..., order = 1, name = "Var_Poly", D = 1, W = 0, m0
 #' @param W Array, Matrix, vector or  scalar: The values for the covariance matrix for the noise factor at each time. If W is a array, it's dimensions should be n x n x t, where n is the order of the polynomial block and t is the length of the outcomes. If W is a matrix, it's dimensions should be n x n and it's values will be used for each time. If W is a vector or scalar, a discount factor matrix will be created as a diagonal matrix with the values of W in the diagonal.
 #' @param m0 Vector or scalar: The prior mean for the latent variables associated with this block. If m0 is a vector, it's dimension should be equal to the order of the polynomial block. If m0 is a scalar, it's value will be used for all latent variables.
 #' @param C0 Matrix, vector or scalar: The prior covariance matrix for the latent variables associated with this block. If C0 is a matrix, it's dimensions should be n x n. If W is a vector or scalar, a covariance matrix will be created as a diagonal matrix with the values of C0 in the diagonal.
+#' @param drift Matrix, vector or scalar: A drift to be add after the temporal evoltion (can be interpreted as the mean of the random noise at each time). If a matrix, it's dimension should be 2 x T, where T is the length of the serie. If a vector, it should have size T, and each value will be applied to the first latent variable (the one which affects the linear predictors) in their respective time. If a scalar, the passed value will be used for the first latent variable at each time.
 #'
 #' @return An object of the class dlm_block containing the following values:
 #' \itemize{
 #'    \item FF Array: A 3D-array containing the regression matrix for each time. It's dimension should be n x m x T, where n is the number of latent variables, m is the number of outcomes in the model and T is the time series length.
+#'    \item drift Matrix: The mean for the random noise of the temporal evolution. It's dimension should be n x T.
 #'    \item G Matrix: The state evolution matrix.
 #'    \item D Array: A 3D-array containing the discount factor matrix for each time. It's dimension should be n x n x T, where n is the number of latent variables and T is the time series length.
 #'    \item W Array: A 3D-array containing the covariance matrix of the noise for each time. It's dimension should be the same as D.
 #'    \item m0 Vector: The prior mean for the latent vector.
 #'    \item C0 Matrix: The prior covariance matrix for the latent vector.
-#'    \item names list: A list containing the variables indexes by their name.
+#'    \item var_names list: A list containing the variables indexes by their name.
 #'    \item period Positive integer: Same as argument.
 #'    \item n Positive integer: The number of latent variables associated with this block (2).
 #'    \item t Positive integer: The number of time steps associated with this block. If 1, the block is compatible with blocks of any time length, but if t is greater than 1, this block can only be used with blocks of the same time length.
 #'    \item k Positive integer: The number of outcomes associated with this block. This block can only be used with blocks with the same outcome length.
-#'    \item var_names Vector: The name of the linear predictors associated with this block,
+#'    \item pred_names Vector: The name of the linear predictors associated with this block,
 #'    \item type Character: The type of block (Harmonic).
 #' }
 #'
@@ -266,10 +286,10 @@ polynomial_block <- function(..., order = 1, name = "Var_Poly", D = 1, W = 0, m0
 #'
 #' @references
 #'    \insertAllCited{}
-harmonic_block <- function(..., period, name = "Var_Sazo", D = 1, W = 0, m0 = 0, C0 = c(NA, 1)) {
+harmonic_block <- function(..., period, name = "Var_Sazo", D = 1, W = 0, m0 = 0, C0 = c(NA, 1), drift = 0) {
   w <- 2 * pi / period
   order <- 2
-  block <- polynomial_block(..., order = order, name = name, D = D, W = W, m0 = m0, C0 = C0)
+  block <- polynomial_block(..., order = order, name = name, D = D, W = W, m0 = m0, C0 = C0, drift = drift)
 
   G <- matrix(c(cos(w), -sin(w), sin(w), cos(w)), order, order)
   block$G <- array(G, c(order, order, block$t))
@@ -298,13 +318,16 @@ harmonic_block <- function(..., period, name = "Var_Sazo", D = 1, W = 0, m0 = 0,
 #' @param W Array, Matrix, vector or  scalar: The values for the covariance matrix for the noise factor associated with the AR coefficients at each time. If W is a array, it's dimensions should be n x n x t, where n is the order of the AR block and t is the length of the outcomes. If W is a matrix, it's dimensions should be n x n and it's values will be used for each time. If W is a vector or scalar, a discount factor matrix will be created as a diagonal matrix with the values of W in the diagonal.
 #' @param m0 Vector or scalar: The prior mean for the coefficients associated with this block. If m0 is a vector, it's dimension should be equal to the order of the AR block. If m0 is a scalar, it's value will be used for all coefficients. If the coefficients are restricted to the interval (-1,1), the m0 is interpreted as the mean for logit((rho+1)/2), where rho is the AR coefficient.
 #' @param C0 Matrix, vector or scalar: The prior covariance matrix for the coefficients associated with this block. If C0 is a matrix, it's dimensions should be n x n, where n is the order of the AR block. If C0 is a vector or scalar, a covariance matrix will be created as a diagonal matrix with the values of C0 in the diagonal. If the coefficients are restricted to the interval (-1,1), the C0 is interpreted as the covariance matrix for logit((rho+1)/2), where rho is the AR coefficient.
+#' @param drift Matrix, vector or scalar: A drift to be add in the AR coefficients after the temporal evoltion (can be interpreted as the mean of the random noise at each time). If a matrix, it's dimension should be n x T, where n is the order of the AR block and T is the length of the serie. If a scalar, the passed value will be used for all coefficients at each time.
 #' @param m0_states Vector or scalar: The prior mean for the states associated with this block. If m0_states is a vector, it's dimension should be equal to the order of the AR block. If m0_states is a scalar, it's value will be used for all coefficients.
 #' @param C0_states Matrix, vector or scalar: The prior covariance matrix for the states associated with this block. If C0_states is a matrix, it's dimensions should be n x n, where n is the order of the AR block. If C0_state is a vector or scalar, a covariance matrix will be created as a diagonal matrix with the values of C0_state in the diagonal.
 #' @param D_states Array, Matrix, vector or  scalar: The values for the discount factors for the states associated with this block. If D_states is a array, it's dimensions should be n x n x t, where n is the order of the AR block and t is the length of the outcomes. If D_states is a matrix, it's dimensions should be n x n and it's values will be used for each time. If D_states is a vector or scalar, a discount factor matrix will be created as a diagonal matrix with the values of D_states in the diagonal.
+#' @param drift_states Matrix, vector or scalar: A drift to be add in the states after the temporal evoltion (can be interpreted as the mean of the random noise at each time). If a matrix, it's dimension should be n x T, where n is the order of the AR block and T is the length of the serie. If a vector, it should have size T, and each value will be applied to the first latent variable (the one which affects the linear predictors) in their respective time. If a scalar, the passed value will be used for the first latent variable at each time.
 #' @param m0_pulse Vector or scalar: The prior mean for the coefficients associated with the pulses. If m0_pulse is a vector, it's dimension should be equal to the number of pulses. If m0_pulse is a scalar, it's value will be used for all coefficients.
 #' @param C0_pulse  Matrix, vector or scalar: The prior covariance matrix for the coefficients associated with the pulses. If C0_pulse is a matrix, it's dimensions should be n x n, where n is the number of pulses. If C0_pulse is a vector or scalar, a covariance matrix will be created as a diagonal matrix with the values of C0_pulse in the diagonal.
 #' @param D_pulse Array, Matrix, vector or  scalar: The values for the discount factors associated with pulse coefficients at each time. If D_pulse is a array, it's dimensions should be n x n x t, where n is the number of pulses and t is the length of the outcomes. If D_pulse is a matrix, it's dimensions should be n x n and it's values will be used for each time. If D_pulse is a vector or scalar, a discount factor matrix will be created as a diagonal matrix with the values of D_pulse in the diagonal.
 #' @param W_pulse Array, Matrix, vector or  scalar: The values for the covariance matrix for the noise factor associated with pulse coefficients at each time. If W_pulse is a array, it's dimensions should be n x n x t, where n is the number of pulses and t is the length of the outcomes. If W_pulse is a matrix, it's dimensions should be n x n and it's values will be used for each time. If W_pulse is a vector or scalar, a covariance matrix will be created as a diagonal matrix with the values of W_pulse in the diagonal.
+#' @param drift_pulse Matrix, vector or scalar: A drift to be add in the pulse effect after the temporal evoltion (can be interpreted as the mean of the random noise at each time). If a matrix, it's dimension should be n x T, where n is the number of pulses and T is the length of the serie. If a scalar, the passed value will be used for all latent variable at each time.
 #'
 #' @return An object of the class dlm_block containing the following values:
 #' \itemize{
@@ -314,12 +337,12 @@ harmonic_block <- function(..., period, name = "Var_Sazo", D = 1, W = 0, m0 = 0,
 #'    \item W Array: A 3D-array containing the covariance matrix of the noise for each time. It's dimension should be the same as D.
 #'    \item m0 Vector: The prior mean for the latent vector.
 #'    \item C0 Matrix: The prior covariance matrix for the latent vector.
-#'    \item names list: A list containing the variables indexes by their name.
+#'    \item var_names list: A list containing the variables indexes by their name.
 #'    \item order Positive integer: Same as argument.
 #'    \item n Positive integer: The number of latent variables associated with this block (2).
 #'    \item t Positive integer: The number of time steps associated with this block. If 1, the block is compatible with blocks of any time length, but if t is greater than 1, this block can only be used with blocks of the same time length.
 #'    \item k Positive integer: The number of outcomes associated with this block. This block can only be used with blocks with the same outcome length.
-#'    \item var_names Vector: The name of the linear predictors associated with this block,
+#'    \item pred_names Vector: The name of the linear predictors associated with this block,
 #'    \item type Character: The type of block (AR).
 #'    \item AR_support Character: Same as argument.
 #' }
@@ -350,21 +373,24 @@ harmonic_block <- function(..., period, name = "Var_Sazo", D = 1, W = 0, m0 = 0,
 #' @references
 #'    \insertAllCited{}
 AR_block <- function(..., order, noise_var, pulse = 0, name = "Var_AR", AR_support = "free",
-                     D = 1, W = 0, m0 = c(1, rep(0, order - 1)), C0 = 1,
-                     m0_states = 0, C0_states = c(NA, rep(1, order - 1)), D_states = 1,
-                     m0_pulse = 0, C0_pulse = 1, D_pulse = 1, W_pulse = 0) {
-  W_states <- diag(order) * 0
-  W_states[1, 1] <- noise_var
+                     D = 1, W = 0, m0 = c(1, rep(0, order - 1)), C0 = 1, drift = 0,
+                     m0_states = 0, C0_states = c(NA, rep(1, order - 1)), D_states = 1, drift_states = 0,
+                     m0_pulse = 0, C0_pulse = 1, D_pulse = 1, W_pulse = 0, drift_pulse = 0) {
+  W_states <- array(0, c(order, order, length(noise_var)))
+  W_states[1, 1, ] <- noise_var
   block_state <-
-    polynomial_block(..., order = order, name = paste0(name, "_State"), m0 = m0_states, C0 = C0_states, D = D_states, W = W_states)
+    polynomial_block(..., order = order, name = paste0(name, "_State"), m0 = m0_states, C0 = C0_states, D = D_states, W = W_states, drift = drift_states)
 
 
   dummy_var <- list()
   dummy_var[[names(list(...))[1]]] <- rep(0, block_state$t)
+  if (length(drift_states) > 1 & length(dim(drift_states)) < 2) {
+    drift_states <- matrix(drift_states, order, length(drift_states))
+  }
   block_coeff <-
     do.call(
       function(...) {
-        polynomial_block(..., order = order, name = paste0(name, "_Coeff"), m0 = m0, C0 = C0, D = D, W = W)
+        polynomial_block(..., order = order, name = paste0(name, "_Coeff"), m0 = m0, C0 = C0, D = D, W = W, drift = drift_states)
       },
       dummy_var
     )
@@ -397,17 +423,20 @@ AR_block <- function(..., order, noise_var, pulse = 0, name = "Var_AR", AR_suppo
   block$C0 <- block$C0[true_order, true_order]
   block$D <- block$D[true_order, true_order, ]
   block$W <- block$W[true_order, true_order, ]
-  block$names[[1]] <- seq(1, 2 * order, 2)[block$names[[1]]]
-  block$names[[2]] <- seq(2, 2 * order, 2)[block$names[[2]] - order]
+  block$var_names[[1]] <- seq(1, 2 * order, 2)[block$var_names[[1]]]
+  block$var_names[[2]] <- seq(2, 2 * order, 2)[block$var_names[[2]] - order]
   if (any(pulse != 0)) {
     k <- if.null(dim(pulse)[2], 1)
     t <- if.null(dim(pulse)[1], length(pulse))
     dummy_var <- list()
     dummy_var[[names(list(...))[1]]] <- rep(0, t)
+    if (length(drift_pulse) > 1 & length(dim(drift_pulse)) < 2) {
+      drift_pulse <- matrix(drift_pulse, order, length(drift_pulse))
+    }
     block_pulse <-
       do.call(
         function(...) {
-          polynomial_block(..., order = k, name = paste0(name, "_Pulse"), m0 = m0_pulse, C0 = C0_pulse, D = D_pulse, W = W_pulse)
+          polynomial_block(..., order = k, name = paste0(name, "_Pulse"), m0 = m0_pulse, C0 = C0_pulse, D = D_pulse, W = W_pulse, drift = drift_pulse)
         },
         dummy_var
       )
@@ -422,7 +451,7 @@ AR_block <- function(..., order, noise_var, pulse = 0, name = "Var_AR", AR_suppo
 #'
 #' DESCRIPTION
 #'
-#' @param var_names Vector: Name of the linear predictors associated with this block.
+#' @param pred_names Vector: Name of the linear predictors associated with this block.
 #' @param name String: An optional argument providing the name for this block. Can be useful to identify the models with meaningful labels, also, the name used will be used in some auxiliary functions.
 #' @param D Array, Matrix, vector or  scalar: The values for the discount factors at each time. If D is a array, it's dimensions should be n x n x t, where n is the order of the polynomial block and t is the length of the outcomes. If D is a matrix, it's dimensions should be n x n and it's values will be used for each time. If D is a vector or scalar, a discount factor matrix will be created as a diagonal matrix with the values of D in the diagonal.
 #' @param W Array, Matrix, vector or  scalar: The values for the covariance matrix for the noise factor at each time. If W is a array, it's dimensions should be n x n x t, where n is the order of the polynomial block and t is the length of the outcomes. If W is a matrix, it's dimensions should be n x n and it's values will be used for each time. If W is a vector or scalar, a discount factor matrix will be created as a diagonal matrix with the values of W in the diagonal.
@@ -437,11 +466,11 @@ AR_block <- function(..., order, noise_var, pulse = 0, name = "Var_AR", AR_suppo
 #'    \item W Array: A 3D-array containing the covariance matrix of the noise for each time. It's dimension should be the same as D.
 #'    \item m0 Vector: The prior mean for the latent vector.
 #'    \item C0 Matrix: The prior covariance matrix for the latent vector.
-#'    \item names list: A list containing the variables indexes by their name.
+#'    \item var_names list: A list containing the variables indexes by their name.
 #'    \item n Positive integer: The number of latent variables associated with this block (2).
 #'    \item t Positive integer: The number of time steps associated with this block. If 1, the block is compatible with blocks of any time length, but if t is greater than 1, this block can only be used with blocks of the same time length.
 #'    \item k Positive integer: The number of outcomes associated with this block. This block can only be used with blocks with the same outcome length.
-#'    \item var_names Vector: The name of the linear predictors associated with this block,
+#'    \item pred_names Vector: The name of the linear predictors associated with this block,
 #'    \item type Character: The type of block (Correlation).
 #' }
 #'
@@ -455,10 +484,10 @@ AR_block <- function(..., order, noise_var, pulse = 0, name = "Var_AR", AR_suppo
 #'
 #' @references
 #'    \insertAllCited{}
-correlation_block <- function(var_names, order = 1, name = "Var_cor", D = 1, W = 0, m0 = 0, C0 = 1) {
-  k <- length(var_names)
+correlation_block <- function(pred_names, order = 1, name = "Var_cor", D = 1, W = 0, m0 = 0, C0 = 1) {
+  k <- length(pred_names)
   arg_list <- c(rep(0, k), list(order = k, name = name, D = D, W = W, m0 = m0, C0 = C0))
-  names(arg_list) <- c(var_names, "order", "name", "D", "W", "m0", "C0")
+  names(arg_list) <- c(pred_names, "order", "name", "D", "W", "m0", "C0")
   block <- do.call(polynomial_block, arg_list)
 
   block$FF <- simplify2array(apply(block$FF, 3, function(x) {
@@ -485,7 +514,7 @@ correlation_block <- function(var_names, order = 1, name = "Var_cor", D = 1, W =
   block$k <- k
 
   n <- k + 1
-  block$names[[name]] <- c(block$names[[name]], n)
+  block$var_names[[name]] <- c(block$var_names[[name]], n)
   block$order <- order
   block$n <- n
   if (order > 1) {
@@ -540,16 +569,15 @@ block_merge <- function(...) {
   t <- 1
   k <- 1
 
-  names <- list()
-  var_names <- c()
+  var_names <- list()
+  pred_names <- c()
   for (block in blocks) {
-    ref_names <- block$names
+    ref_names <- block$var_names
     for (name in names(ref_names)) {
       ref_names[[name]] <- ref_names[[name]] + n
-      names[[name]] <- c(names[[name]], ref_names[[name]])
+      var_names[[name]] <- c(var_names[[name]], ref_names[[name]])
     }
-    # names <- c(names, ref_names)
-    var_names <- c(var_names, block$var_names)
+    pred_names <- c(pred_names, block$pred_names)
     if (block$t > 1) {
       if (block$t != t & t > 1) {
         stop(paste("Error: Blocks should have same length or length equal 1. Got", block$t, "and", t))
@@ -558,17 +586,11 @@ block_merge <- function(...) {
     }
     n <- n + block$n
   }
-  var_names <- sort(unique(var_names))
-  k <- length(var_names)
-  # for (name in names(names)) {
-  #   ref_idx <- which(names(names) == name)
-  #   n_names <- length(ref_idx)
-  #   if (n_names > 1) {
-  #     names(names)[ref_idx] <- paste0(names(names)[ref_idx], "_", c(1:n_names))
-  #   }
-  # }
+  pred_names <- sort(unique(pred_names))
+  k <- length(pred_names)
 
-  FF <- array(0, c(n, k, t), dimnames = list(NULL, var_names, NULL))
+  FF <- array(0, c(n, k, t), dimnames = list(NULL, pred_names, NULL))
+  drift <- matrix(0, n, t)
   G <- array(0, c(n, n, t))
   G_labs <- matrix("const", n, n)
   D <- array(0, c(n, n, t))
@@ -578,10 +600,11 @@ block_merge <- function(...) {
   position <- 1
   status <- "defined"
   for (block in blocks) {
-    k_i <- length(block$var_names)
+    k_i <- length(block$pred_names)
     current_range <- position:(position + block$n - 1)
-    FF[current_range, var_names %in% block$var_names, ] <- block$FF[, (1:k_i)[order(block$var_names)], ]
+    FF[current_range, pred_names %in% block$pred_names, ] <- block$FF[, (1:k_i)[order(block$pred_names)], ]
 
+    drift[current_range, ] <- block$drift
     G[current_range, current_range, ] <- block$G
     G_labs[current_range, current_range] <- block$G_labs
     D[current_range, current_range, ] <- block$D
@@ -597,6 +620,7 @@ block_merge <- function(...) {
   }
   block <- list(
     "FF" = FF,
+    "drift" = drift,
     "G" = G,
     "G_labs" = G_labs,
     "D" = D,
@@ -607,8 +631,8 @@ block_merge <- function(...) {
     "t" = t,
     "k" = k,
     "status" = status,
-    "names" = names,
-    "var_names" = var_names
+    "var_names" = var_names,
+    "pred_names" = pred_names
   )
   class(block) <- "dlm_block"
   return(block)
@@ -640,12 +664,12 @@ block_mult <- function(block, k) {
   size_total <- floor(log10(k)) + 1
   if (k > 1) {
     block_ref <- block
-    block$var_names <- paste0(block$var_names, "_", paste0(rep("0", size_total - 1), collapse = ""), "1")
+    block$pred_names <- paste0(block$pred_names, "_", paste0(rep("0", size_total - 1), collapse = ""), "1")
     block_list[[1]] <- block
     for (i in 2:k) {
       size_i <- floor(log10(i)) + 1
       block_clone <- block_ref
-      block_clone$var_names <- paste0(block_ref$var_names, "_", paste0(rep("0", size_total - size_i), collapse = ""), i)
+      block_clone$pred_names <- paste0(block_ref$pred_names, "_", paste0(rep("0", size_total - size_i), collapse = ""), i)
       block_list[[i]] <- block_clone
     }
     block <- do.call(block_merge, block_list)
@@ -656,7 +680,7 @@ block_mult <- function(block, k) {
 #' block_rename
 #'
 #' @param block A dlm_block object.
-#' @param names A vector of string with names for each linear predictor in block.
+#' @param pred_names A vector of string with names for each linear predictor in block.
 #'
 #' @return A dlm_block with the linear predictors renamed to the values passed in names.
 #' @export
@@ -673,18 +697,18 @@ block_mult <- function(block, k) {
 #' final_block <- block_rename(2 * base_block, c("mu", "sigma"))
 #'
 #' @family {auxiliary functions for structural blocks}
-block_rename <- function(block, names) {
+block_rename <- function(block, pred_names) {
   if (!inherits(block, "dlm_block")) {
     stop("Error: The block argument is not a dlm_block object.")
   }
-  if (length(names) != length(block$var_names)) {
-    stop(paste0("Error: The number of names provided does not match the number of linear predictor in the block. Expected ", length(block$var_names), ", got ", length(names), "."))
+  if (length(pred_names) != length(block$pred_names)) {
+    stop(paste0("Error: The number of names provided does not match the number of linear predictor in the block. Expected ", length(block$pred_names), ", got ", length(names), "."))
   }
-  if (length(names) != length(unique(names))) {
+  if (length(pred_names) != length(unique(pred_names))) {
     stop(paste0("Error: Repeated names are not allowed."))
   }
 
-  block$var_names <- names
-  colnames(block$FF) <- names
+  block$pred_names <- pred_names
+  colnames(block$FF) <- pred_names
   return(block)
 }

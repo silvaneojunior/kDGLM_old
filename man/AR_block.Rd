@@ -15,13 +15,16 @@ AR_block(
   W = 0,
   m0 = c(1, rep(0, order - 1)),
   C0 = 1,
+  drift = 0,
   m0_states = 0,
   C0_states = c(NA, rep(1, order - 1)),
   D_states = 1,
+  drift_states = 0,
   m0_pulse = 0,
   C0_pulse = 1,
   D_pulse = 1,
-  W_pulse = 0
+  W_pulse = 0,
+  drift_pulse = 0
 )
 }
 \arguments{
@@ -45,11 +48,15 @@ AR_block(
 
 \item{C0}{Matrix, vector or scalar: The prior covariance matrix for the coefficients associated with this block. If C0 is a matrix, it's dimensions should be n x n, where n is the order of the AR block. If C0 is a vector or scalar, a covariance matrix will be created as a diagonal matrix with the values of C0 in the diagonal. If the coefficients are restricted to the interval (-1,1), the C0 is interpreted as the covariance matrix for logit((rho+1)/2), where rho is the AR coefficient.}
 
+\item{drift}{Matrix, vector or scalar: A drift to be add in the AR coefficients after the temporal evoltion (can be interpreted as the mean of the random noise at each time). If a matrix, it's dimension should be n x T, where n is the order of the AR block and T is the length of the serie. If a scalar, the passed value will be used for all coefficients at each time.}
+
 \item{m0_states}{Vector or scalar: The prior mean for the states associated with this block. If m0_states is a vector, it's dimension should be equal to the order of the AR block. If m0_states is a scalar, it's value will be used for all coefficients.}
 
 \item{C0_states}{Matrix, vector or scalar: The prior covariance matrix for the states associated with this block. If C0_states is a matrix, it's dimensions should be n x n, where n is the order of the AR block. If C0_state is a vector or scalar, a covariance matrix will be created as a diagonal matrix with the values of C0_state in the diagonal.}
 
 \item{D_states}{Array, Matrix, vector or  scalar: The values for the discount factors for the states associated with this block. If D_states is a array, it's dimensions should be n x n x t, where n is the order of the AR block and t is the length of the outcomes. If D_states is a matrix, it's dimensions should be n x n and it's values will be used for each time. If D_states is a vector or scalar, a discount factor matrix will be created as a diagonal matrix with the values of D_states in the diagonal.}
+
+\item{drift_states}{Matrix, vector or scalar: A drift to be add in the states after the temporal evoltion (can be interpreted as the mean of the random noise at each time). If a matrix, it's dimension should be n x T, where n is the order of the AR block and T is the length of the serie. If a vector, it should have size T, and each value will be applied to the first latent variable (the one which affects the linear predictors) in their respective time. If a scalar, the passed value will be used for the first latent variable at each time.}
 
 \item{m0_pulse}{Vector or scalar: The prior mean for the coefficients associated with the pulses. If m0_pulse is a vector, it's dimension should be equal to the number of pulses. If m0_pulse is a scalar, it's value will be used for all coefficients.}
 
@@ -58,6 +65,8 @@ AR_block(
 \item{D_pulse}{Array, Matrix, vector or  scalar: The values for the discount factors associated with pulse coefficients at each time. If D_pulse is a array, it's dimensions should be n x n x t, where n is the number of pulses and t is the length of the outcomes. If D_pulse is a matrix, it's dimensions should be n x n and it's values will be used for each time. If D_pulse is a vector or scalar, a discount factor matrix will be created as a diagonal matrix with the values of D_pulse in the diagonal.}
 
 \item{W_pulse}{Array, Matrix, vector or  scalar: The values for the covariance matrix for the noise factor associated with pulse coefficients at each time. If W_pulse is a array, it's dimensions should be n x n x t, where n is the number of pulses and t is the length of the outcomes. If W_pulse is a matrix, it's dimensions should be n x n and it's values will be used for each time. If W_pulse is a vector or scalar, a covariance matrix will be created as a diagonal matrix with the values of W_pulse in the diagonal.}
+
+\item{drift_pulse}{Matrix, vector or scalar: A drift to be add in the pulse effect after the temporal evoltion (can be interpreted as the mean of the random noise at each time). If a matrix, it's dimension should be n x T, where n is the number of pulses and T is the length of the serie. If a scalar, the passed value will be used for all latent variable at each time.}
 }
 \value{
 An object of the class dlm_block containing the following values:
@@ -68,12 +77,12 @@ An object of the class dlm_block containing the following values:
    \item W Array: A 3D-array containing the covariance matrix of the noise for each time. It's dimension should be the same as D.
    \item m0 Vector: The prior mean for the latent vector.
    \item C0 Matrix: The prior covariance matrix for the latent vector.
-   \item names list: A list containing the variables indexes by their name.
+   \item var_names list: A list containing the variables indexes by their name.
    \item order Positive integer: Same as argument.
    \item n Positive integer: The number of latent variables associated with this block (2).
    \item t Positive integer: The number of time steps associated with this block. If 1, the block is compatible with blocks of any time length, but if t is greater than 1, this block can only be used with blocks of the same time length.
    \item k Positive integer: The number of outcomes associated with this block. This block can only be used with blocks with the same outcome length.
-   \item var_names Vector: The name of the linear predictors associated with this block,
+   \item pred_names Vector: The name of the linear predictors associated with this block,
    \item type Character: The type of block (AR).
    \item AR_support Character: Same as argument.
 }

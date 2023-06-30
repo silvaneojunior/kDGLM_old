@@ -28,13 +28,13 @@
 #'    \insertAllCited{}
 generic_smoother <- function(mt, Ct, at, Rt, G, G_labs) {
   T <- dim(mt)[2]
-  n <- dim(mt)[1]
   mts <- mt
   Cts <- Ct
   if (T > 1) {
     for (t in (T - 1):1) {
-      mt_now <- mt[, t]
-      G_step <- calc_current_G(mt_now, G[, , t + 1], G_labs)$G
+      mt_now <- mt[, t, drop = FALSE]
+      Ct_now <- Ct[, , t]
+      G_step <- calc_current_G(mt_now, Ct_now, mt_now * 0, G[, , t + 1], G_labs)$G
       restricted_Rt <- Rt[, , t + 1]
       restricted_Ct <- Ct[, , t]
 
@@ -75,10 +75,12 @@ generic_smoother <- function(mt, Ct, at, Rt, G, G_labs) {
 #'    \item Qt Array: A 3D-array containing the one-step-ahead covariance matrix for the linear predictor for each time. Dimensions are m x m x T.
 #'    \item FF Array: The same as the argument (same values).
 #'    \item G Matrix: The same as the argument (same values).
+#'    \item G_labs Matrix: The same as the argument (same values).
 #'    \item D Array: The same as the argument (same values) when there is no monitoring. When monitoring for abnormalities, the value in times where abnormalities were detected is increased.
 #'    \item W Array: The same as the argument (same values).
+#'    \item shock_var Array: A 3D-array containing the effective covariance matrix of the noise for each time, i.e., taking into account both W and D. It's dimension should be the same as W and D.
 #'    \item outcome List: The same as the argument outcome (same values).
-#'    \item var_names Vector: The names of the linear predictors.
+#'    \item pred_names Vector: The names of the linear predictors.
 #' }
 #'
 #' @keywords internal
@@ -94,7 +96,7 @@ generic_smoother <- function(mt, Ct, at, Rt, G, G_labs) {
 #' @seealso \code{\link{generic_smoother}}
 #' @references
 #'    \insertAllCited{}
-analytic_filter <- function(outcomes, m0 = 0, C0 = 1, FF, G, G_labs, D, W, p_monit = NA, c_monit = 1) {
+analytic_filter <- function(outcomes, m0 = 0, C0 = 1, FF, drift, G, G_labs, D, W, p_monit = NA, c_monit = 1) {
   # Defining quantities
   T <- dim(FF)[3]
   r <- sum(sapply(outcomes, function(x) {
@@ -103,7 +105,7 @@ analytic_filter <- function(outcomes, m0 = 0, C0 = 1, FF, G, G_labs, D, W, p_mon
   n <- dim(FF)[1]
   k <- dim(FF)[2]
 
-  var_names <- colnames(FF)
+  pred_names <- colnames(FF)
   D_flags <- (D == 0)
   D <- ifelse(D == 0, 1, D)
   D_inv <- 1 / D
@@ -112,6 +114,7 @@ analytic_filter <- function(outcomes, m0 = 0, C0 = 1, FF, G, G_labs, D, W, p_mon
   mt <- matrix(NA, nrow = n, ncol = T)
   Ct <- array(NA, dim = c(n, n, T))
   Rt <- array(NA, dim = c(n, n, T))
+  shock_var <- array(NA, dim = c(n, n, T))
   ft <- matrix(NA, nrow = k, ncol = T)
   at <- matrix(NA, nrow = n, ncol = T)
   Qt <- array(NA, dim = c(k, k, T))
@@ -137,7 +140,7 @@ analytic_filter <- function(outcomes, m0 = 0, C0 = 1, FF, G, G_labs, D, W, p_mon
     outcomes[[outcome_name]]$alt.flags <- rep(0, T)
 
 
-    pred_index <- match(outcomes[[outcome_name]]$var_names, var_names)
+    pred_index <- match(outcomes[[outcome_name]]$pred_names, pred_names)
     k_i <- length(pred_index)
 
     outcomes[[outcome_name]]$ft <- matrix(NA, nrow = k_i, ncol = T)
@@ -157,16 +160,17 @@ analytic_filter <- function(outcomes, m0 = 0, C0 = 1, FF, G, G_labs, D, W, p_mon
     for (model in model_list) {
       D_p <- D_inv[, , t]
       D_p[!D_flags[, , t]] <- D_p[!D_flags[, , t]] * D_mult[[model]]
-      next_step <- one_step_evolve(last_m, last_C, G[, , t] %>% matrix(n, n), G_labs, D_p**0, W[, , t] + diag(n) * W_add[[model]] + last_C_D * (D_p - 1))
+      next_step <- one_step_evolve(last_m, last_C, drift[, t], G[, , t] %>% matrix(n, n), G_labs, D_p**0, W[, , t] + diag(n) * W_add[[model]] + last_C_D * (D_p - 1))
 
       models[[model]] <- list(
         "at" = next_step$at, "Rt" = next_step$Rt,
-        "at_step" = next_step$at, "Rt_step" = next_step$Rt
+        "at_step" = next_step$at, "Rt_step" = next_step$Rt,
+        "shock_var" = next_step$shock_var
       )
     }
     for (outcome_name in names(outcomes)) {
       outcome <- outcomes[[outcome_name]]
-      pred_index <- match(outcome$var_names, var_names)
+      pred_index <- match(outcome$pred_names, pred_names)
       k_i <- length(pred_index)
       FF_step <- matrix(FF[, pred_index, t], n, k_i)
 
@@ -199,6 +203,7 @@ analytic_filter <- function(outcomes, m0 = 0, C0 = 1, FF, G, G_labs, D, W, p_mon
         models[[model]] <- list(
           "at" = models[[model]]$at, "Rt" = models[[model]]$Rt,
           "at_step" = at_step, "Rt_step" = Rt_step,
+          "shock_var" = models[[model]]$shock_var,
           "ft_step" = ft_canom, "Qt_step" = Qt_canom,
           "FF_step" = lin_pred$FF,
           "conj_prior" = conj_prior,
@@ -265,7 +270,7 @@ analytic_filter <- function(outcomes, m0 = 0, C0 = 1, FF, G, G_labs, D, W, p_mon
 
       for (outcome_name in names(outcomes)) {
         outcome <- outcomes[[outcome_name]]
-        pred_index <- match(outcome$var_names, var_names)
+        pred_index <- match(outcome$pred_names, pred_names)
 
         offset_step <- outcome$offset[t, ]
         na.flag <- any(is.null(offset_step) | any(offset_step == 0) | any(is.na(offset_step)))
@@ -287,9 +292,9 @@ analytic_filter <- function(outcomes, m0 = 0, C0 = 1, FF, G, G_labs, D, W, p_mon
         conj_prior <- outcome$conj_prior(ft_canom, Qt_canom, parms = outcome$parms)
         outcomes[[outcome_name]]$conj_prior_param[t, ] <- conj_prior
       }
-
       mt[, t] <- last_m <- mt_step
       Ct[, , t] <- last_C <- Ct_step
+      shock_var[, , t] <- model$shock_var
     }
   }
 
@@ -297,45 +302,87 @@ analytic_filter <- function(outcomes, m0 = 0, C0 = 1, FF, G, G_labs, D, W, p_mon
     "mt" = mt, "Ct" = Ct,
     "at" = at, "Rt" = Rt,
     "ft" = ft, "Qt" = Qt,
-    "FF" = FF, "G" = G, "G_labs" = G_labs,
-    "D" = D, "W" = W,
-    "outcomes" = outcomes, "var_names" = var_names
+    "FF" = FF,
+    "drift" = drift, "G" = G, "G_labs" = G_labs,
+    "D" = D, "W" = W, "shock_var" = shock_var,
+    "outcomes" = outcomes, "pred_names" = pred_names
   )
   return(result)
 }
 
-calc_current_G <- function(m0, G, G_labs) {
+calc_current_G <- function(m0, C0, drift, G, G_labs) {
   n <- if.null(dim(G)[1], 1)
   G_now <- G %>% as.matrix()
-  G_diff <- rep(0, n)
-  if (any(G_labs != "const")) {
-    for (index_row in (1:n)[rowSums(is.na(G)) > 0]) {
+
+  flag_na <- rowSums(is.na(G_now)) >= 1
+  index_na <- (1:n)[flag_na]
+  if (any(flag_na)) {
+    for (index_row in index_na) {
       index_col <- (1:n)[is.na(G_now[index_row, ])]
-      if (all(G_labs[index_row, index_col] == "constrained")) {
-        p <- 1 / (1 + exp(-m0[index_col + 1]))
-        G_now[index_row, index_col] <- (2 * p - 1)
-        G_now[index_row, index_col + 1] <- 2 * p * (1 - p) * m0[index_col]
-        G_diff[index_row] <- sum(G_diff[index_row] - 2 * p * (1 - p) * m0[index_col] * m0[index_col + 1])
-      } else {
-        G_now[index_row, index_col] <- m0[index_col + 1]
-        G_now[index_row, index_col + 1] <- m0[index_col]
-        G_diff[index_row] <- sum(G_diff[index_row] - m0[index_col] * m0[index_col + 1])
+      flags_const <- G_labs[index_row, index_col] == "constrained"
+      if (any(flags_const)) {
+        index_const <- index_col[flags_const]
+        rho <- tanh(m0[index_const + 1])
+        G_now[index_row, index_const] <- rho
+        G_now[index_row, index_const + 1] <- (1 + rho) * (1 - rho) * m0[index_const]
+        drift[index_row] <- drift[index_row] - sum((1 + rho) * (1 - rho) * m0[index_col] * m0[index_col + 1])
+      }
+
+      flags_free <- G_labs[index_row, index_col] == "free"
+      if (any(flags_free)) {
+        index_free <- index_col[flags_free]
+        G_now[index_row, index_free] <- m0[index_free + 1]
+        G_now[index_row, index_free + 1] <- m0[index_free]
+        drift[index_row] <- drift[index_row] - sum(m0[index_free] * m0[index_free + 1])
+      }
+
+
+      m1 <- m0
+      C1 <- C0
+      flags_kl <- G_labs[index_row, index_col] == "kl"
+      if (any(flags_kl)) {
+        index_kl <- index_col[flags_kl]
+        for (i in index_kl) {
+          m1[i] <- m0[i] * m0[i + 1] + C0[i, i + 1]
+          C1[i, i] <- C0[i, i] * C0[i + 1, i + 1] +
+            C0[i, i + 1]**2 +
+            2 * m0[i] * m0[i + 1] * C0[i, i + 1] +
+            (m0[i]**2) * C0[i + 1, i + 1] + (m0[i + 1]**2) * C0[i, i]
+          cov_vec <- c(
+            C0[i, i + 1] * m0[i] + C0[i, i] * m0[i + 1],
+            C0[i, i + 1] * m0[i + 1] + C0[i + 1, i + 1] * m0[i]
+          )
+          C1[-i, i] <-
+            C1[i, -i] <-
+            cov_vec %*% ginv(C0[i:(i + 1), i:(i + 1)]) %*% C0[i:(i + 1), -i]
+          G_now[i, i] <- 1
+        }
+        C1 <- G_now %*% C1 %*% transpose(G_now)
+        G_now <- create_G(C0, C1)
+        drift <- drift - G_now %*% m0 + m1
       }
     }
   }
-  list("G" = G_now, "G_diff" = G_diff)
+
+  m1 <- G_now %*% m0 + drift
+  C1 <- G_now %*% C0 %*% transpose(G_now)
+
+  list("m1" = m1, "C1" = C1, "G" = G_now, "drift" = drift)
 }
 
-one_step_evolve <- function(m0, C0, G, G_labs, D_inv, W) {
-  G_vals <- calc_current_G(m0, G, G_labs)
+one_step_evolve <- function(m0, C0, drift, G, G_labs, D_inv, W) {
+  G_vals <- calc_current_G(m0, C0, drift, G, G_labs)
+
+  # print('####################')
+  # print(cbind(m0,G_vals$m1))
+  # print(cbind(C0,G_vals$C1))
   G_now <- G_vals$G
-  G_diff <- G_vals$G_diff
-  at <- (G_now %*% m0) + G_diff
-  G_now_t <- transpose(G_now)
-  Pt <- G_now %*% C0 %*% G_now_t
+  drift <- G_vals$drift
+  at <- G_vals$m1
+  Pt <- G_vals$C1
   Rt <- as.matrix(D_inv * Pt) + W
 
-  list("at" = at, "Rt" = Rt, "G" = G_now, "G_diff" = G_diff)
+  list("at" = at, "Rt" = Rt, "G" = G_now, "drift" = drift, "shock_var" = as.matrix((D_inv - 1) * Pt) + W)
 }
 
 calc_current_F <- function(at, Rt, FF) {

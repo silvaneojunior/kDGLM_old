@@ -10,6 +10,7 @@ forecast(
   outcome = NULL,
   offset = NULL,
   FF = NULL,
+  drift = NULL,
   G = NULL,
   D = NULL,
   W = NULL,
@@ -24,9 +25,9 @@ forecast(
 
 \item{outcome}{List (optional): A named list containing the observed values in the prediction window. Note that the names in the list must be the same as the names passed during the fitting process.}
 
-\item{offset}{Matrix or scalar: offset for predictions. Should have dimensions k x t, where k is the number of outcomes of the model. If offset is not specified, the last value observed by the model will be used.}
+\item{offset}{Matrix or scalar: offset for predictions. Should have dimensions r x t, where r is the number of outcomes of the model. If offset is not specified, the last value observed by the model will be used.}
 
-\item{FF}{Array: A 3D-array containing the regression matrix for each time. It's dimension should be n x k x t, where n is the number of latent variables, k is the number of outcomes in the model. If not specified, the last value given to the model will be used.}
+\item{FF}{Array: A 3D-array containing the regression matrix for each time. It's dimension should be n x k x t, where n is the number of latent variables, k is the number of linear predictors in the model. If not specified, the last value given to the model will be used.}
 
 \item{G}{Array: A 3D-array containing the evolution matrix for each time. It's dimension should be n x n x t, where n is the number of latent variables. If not specified, the last value given to the model will be used.}
 
@@ -41,12 +42,14 @@ forecast(
 \value{
 A list containing:
 \itemize{
-   \item pred Matrix: A matrix with the predictive mean at each time. Dimensions are k x t, where k is the number of outcomes.
-   \item var.pred Array: A 3D-array with the predictive covariance matrix at each time. Dimensions are k x k x t, where k is the number of outcomes.
-   \item icl.pred Matrix: A matrix with the lower bound of the I.C. based on the credibility given in the arguments. Dimensions are k x t, where k is the number of outcomes.
-   \item icu.pred Matrix: A matrix with the upper bound of the I.C. based on the credibility given in the arguments. Dimensions are k x t, where k is the number of outcomes.
-   \item at Matrix: A matrix with the values for the linear predictor at each time. Dimensions are k x t, where k is the number of outcomes.
-   \item Rt Array: A 3D-array with the covariance of the linear predictor matrix at each time. Dimensions are k x k x t, where k is the number of outcomes.
+   \item pred Matrix: A matrix with the predictive mean at each time. Dimensions are r x t, where r is the number of outcomes.
+   \item var.pred Array: A 3D-array with the predictive covariance matrix at each time. Dimensions are r x r x t, where r is the number of outcomes.
+   \item icl.pred Matrix: A matrix with the lower bound of the I.C. based on the credibility given in the arguments. Dimensions are r x t, where r is the number of outcomes.
+   \item icu.pred Matrix: A matrix with the upper bound of the I.C. based on the credibility given in the arguments. Dimensions are r x t, where r is the number of outcomes.
+   \item mt Matrix: A matrix with the values for the latent states at each time. Dimensions are n x t, where n is the number of latent states
+   \item Ct Array: A 3D-array with the covariance of the latent states at each time. Dimensions are n x n x t, where n is the number of linear predictors.
+   \item ft Matrix: A matrix with the values for the linear predictors at each time. Dimensions are n x t, where n is the number of linear predictors
+   \item Qt Array: A 3D-array with the covariance of the linear predictors at each time. Dimensions are n x n x t, where n is the number of linear predictors.
    \item plot (if so chosen): A plotly or ggplot object.
 }
 }

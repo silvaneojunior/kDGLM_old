@@ -83,19 +83,34 @@ print.searched_dlm <- function(x, ...) {
   summary.searched_dlm(x, ...)
 }
 
-#' effects.fitted_dlm
+#' coef.fitted_dlm
 #'
-#' effects method for class fitted_dlm
+#' coef method for class fitted_dlm
 #'
 #' @param object A fitted_dlm object.
-#' @param ... Arguments passed to plot_lat_var.
+#' @param ... Arguments passed to eval_past.
 #'
-#' @importFrom stats effects
+#' @importFrom stats coef
 #'
 #' @export
 #' @keywords internal
-effects.fitted_dlm <- function(object, ...) {
-  plot_lat_var(object, ...)
+coef.fitted_dlm <- function(object, ...) {
+  eval_past(object, ...)
+}
+
+#' coefficients.fitted_dlm
+#'
+#' coefficients method for class fitted_dlm
+#'
+#' @param object A fitted_dlm object.
+#' @param ... Arguments passed to eval_past.
+#'
+#' @importFrom stats coefficients
+#'
+#' @export
+#' @keywords internal
+coefficients.fitted_dlm <- function(object, ...) {
+  eval_past(object, ...)
 }
 
 #' fitted.values.fitted_dlm

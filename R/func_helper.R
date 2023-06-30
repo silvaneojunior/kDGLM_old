@@ -86,6 +86,27 @@ ginv <- function(S) {
   }
 }
 
+#' create_G
+#'
+#' Creates a matrix G such that G %*% C0 %*% G'= C1.
+#'
+#' @param S0 A covariance matrix
+#' @param S1 A covariance matrix
+#'
+#' @keywords internal
+create_G <- function(S0, S1) {
+  svd_decomp0 <- svd(S0)
+  svd_decomp1 <- svd(S1)
+  d0 <- sqrt(svd_decomp0$d)
+  d1 <- sqrt(svd_decomp1$d)
+  d <- ifelse(d0 > 1e-6, d1 / d0, 0)
+
+  u0 <- transpose(svd_decomp0$u)
+  # u0 <- transpose(svd_decomp0$v)
+  u1 <- svd_decomp1$u
+  return(u1 %*% diag(d) %*% u0)
+}
+
 bdiag <- function(...) {
   mats <- list(...)
   ns <- sapply(mats, function(x) {
