@@ -54,7 +54,7 @@ Multinom <- function(p, outcome, offset = outcome**0, alt_method = FALSE) {
   convert_mat_default <- convert_mat_canom <- diag(k)
   parms <- list()
   # pred_names=p
-  # names(pred_names)=paste0('p',c(1:r))
+  names(p) <- paste0("Odds for category ", c(1:k), " (p_", c(1:k), ")")
   distr <- list(
     pred_names = p,
     r = r,

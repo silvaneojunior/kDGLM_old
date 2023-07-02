@@ -24,6 +24,19 @@ summary.fitted_dlm <- function(object, ...) {
   report_dlm(object, ...)
 }
 
+#' summary.dlm_block
+#'
+#' summary method for class dlm_block
+#'
+#' @param object A dlm_block object.
+#' @param ... Arguments passed to report_dlm
+#'
+#' @export
+#' @keywords internal
+summary.dlm_block <- function(object, ...) {
+  report_block(object, ...)
+}
+
 #' summary.searched_dlm
 #'
 #' summary method for class searched_dlm
@@ -70,6 +83,17 @@ print.fitted_dlm <- function(x, ...) {
 #' @keywords internal
 print.dlm_distr <- function(x, ...) {
   summary.dlm_distr(x, ...)
+}
+
+#' print.dlm_block
+#'
+#' @param x A dlm_block object.
+#' @param ... Arguments passed to summary.dlm_block
+#'
+#' @export
+#' @keywords internal
+print.dlm_block <- function(x, ...) {
+  summary.dlm_block(x, ...)
 }
 
 #' print.searched_dlm

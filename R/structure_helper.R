@@ -14,6 +14,7 @@
 #' @return An object of the class dlm_block containing the following values:
 #' \itemize{
 #'    \item FF Array: A 3D-array containing the regression matrix for each time. It's dimension should be n x m x T, where n is the number of latent variables, m is the number of outcomes in the model and T is the time series length.
+#'    \item FF_labs Array: DESCRIPTION
 #'    \item G Matrix: The state evolution matrix.
 #'    \item D Array: A 3D-array containing the discount factor matrix for each time. It's dimension should be n x n x T, where n is the number of latent variables and T is the time series length.
 #'    \item W Array: A 3D-array containing the covariance matrix of the noise for each time. It's dimension should be the same as D.
@@ -60,7 +61,7 @@
 #'
 #' @references
 #'    \insertAllCited{}
-polynomial_block <- function(..., order = 1, name = "Var_Poly", D = 1, W = 0, m0 = 0, C0 = c(NA, rep(1, order - 1)), drift = 0) {
+polynomial_block <- function(..., order = 1, name = "Var_Poly", D = 1, W = 0, m0 = 0, C0 = diag(order), drift = 0) {
   if (any(D > 1 | D < 0) & is.numeric(D)) {
     stop("Error: The discount factor D must be a value between 0 and 1 (included).")
   }
@@ -70,7 +71,10 @@ polynomial_block <- function(..., order = 1, name = "Var_Poly", D = 1, W = 0, m0
   values <- list(...)
   vars <- names(values)
   if (any(vars == "")) {
-    stop("Error: One or more outcomes are unnamed. Please, name all arguments.")
+    stop("Error: One or more linear predictors are unnamed. Please, name all arguments.")
+  }
+  if (any(vars == "const")) {
+    stop("Error: Cannot create a linear predictor named 'const' (reserved name). Choose another label.")
   }
   var_len <- sapply(values, length)
   k <- length(values)
@@ -137,16 +141,25 @@ polynomial_block <- function(..., order = 1, name = "Var_Poly", D = 1, W = 0, m0
     stop(paste0("Error: Invalid shape for W. Expected ", order, "x", order, "x", t, ". Got ", paste(dim(W), collapse = "x"), "."))
   }
 
-  for (name_var in vars[var_len == 1]) {
-    var_len[[name_var]] <- t
-    values[[name_var]] <- rep(values[[name_var]], t)
+  FF <- array(0, c(order, k, t), dimnames = list(NULL, vars, NULL))
+  FF_labs <- matrix("const", order, k, dimnames = list(NULL, vars))
+  for (i in 1:k) {
+    name_var <- vars[i]
+    if (typeof(values[[name_var]]) == "character") {
+      FF[1, i, ] <- NA
+      FF_labs[1, i] <- values[[name_var]]
+      if (values[[name_var]] == "const") {
+        stop("Error: Predictor value is equal to 'const', but 'const' is a reserved name. Choose another label.")
+      }
+    } else {
+      FF[1, i, ] <- values[[name_var]]
+    }
   }
 
-  FF <- array(0, c(order, k, t))
-  FF[1, , ] <- matrix(sapply(values, c), k, t, byrow = TRUE)
-  D[, , apply(is.na(FF), 3, any)] <- 1
-  W[, , apply(is.na(FF), 3, any)] <- 0
-  FF <- ifelse(is.na(FF), 0, FF)
+  not_observed_flag <- is.na(FF) & (array(FF_labs, c(order, k, t)) == "const")
+  D[, , apply(not_observed_flag, 3, any)] <- 1
+  W[, , apply(not_observed_flag, 3, any)] <- 0
+  FF <- ifelse(not_observed_flag, 0, FF)
 
   G <- diag(order)
   if (order == 2) {
@@ -167,19 +180,6 @@ polynomial_block <- function(..., order = 1, name = "Var_Poly", D = 1, W = 0, m0
   } else {
     C0
   }
-  if (any(is.na(C0))) {
-    ref_val <- as.numeric(c(...))
-    ref_val <- ref_val[!is.na(ref_val)]
-    if (all(ref_val == 0 | ref_val == 1) | if.na(var(ref_val), 0) == 0) {
-      ref_var <- 1
-    } else {
-      ref_var <- 1 / var(ref_val)
-    }
-    if (is.na(C0[1, 1])) {
-      C0[1, 1] <- ref_var
-    }
-    C0[is.na(C0)] <- 1
-  }
 
 
   if (length(dim(C0)) > 2) {
@@ -193,6 +193,7 @@ polynomial_block <- function(..., order = 1, name = "Var_Poly", D = 1, W = 0, m0
   var_names[[name]] <- c(1:order)
   block <- list(
     "FF" = FF,
+    "FF_labs" = FF_labs,
     "drift" = drift,
     "G" = array(G, c(order, order, t)),
     "G_labs" = matrix("const", order, order),
@@ -209,17 +210,7 @@ polynomial_block <- function(..., order = 1, name = "Var_Poly", D = 1, W = 0, m0
     "type" = "Polynomial"
   )
   class(block) <- "dlm_block"
-  if (any(is.character(if.na(FF, 0))) |
-    any(is.character(if.na(G, 0))) |
-    any(is.character(if.na(D, 0))) |
-    any(is.character(if.na(W, 0))) |
-    any(is.character(if.na(m0, 0))) |
-    any(is.character(if.na(C0, 0)))
-  ) {
-    block$status <- "undefined"
-  } else {
-    block$status <- "defined"
-  }
+  block$status <- check.block.status(block)
   return(block)
 }
 
@@ -240,6 +231,7 @@ polynomial_block <- function(..., order = 1, name = "Var_Poly", D = 1, W = 0, m0
 #' @return An object of the class dlm_block containing the following values:
 #' \itemize{
 #'    \item FF Array: A 3D-array containing the regression matrix for each time. It's dimension should be n x m x T, where n is the number of latent variables, m is the number of outcomes in the model and T is the time series length.
+#'    \item FF_labs Array: DESCRIPTION
 #'    \item drift Matrix: The mean for the random noise of the temporal evolution. It's dimension should be n x T.
 #'    \item G Matrix: The state evolution matrix.
 #'    \item D Array: A 3D-array containing the discount factor matrix for each time. It's dimension should be n x n x T, where n is the number of latent variables and T is the time series length.
@@ -286,7 +278,7 @@ polynomial_block <- function(..., order = 1, name = "Var_Poly", D = 1, W = 0, m0
 #'
 #' @references
 #'    \insertAllCited{}
-harmonic_block <- function(..., period, name = "Var_Sazo", D = 1, W = 0, m0 = 0, C0 = c(NA, 1), drift = 0) {
+harmonic_block <- function(..., period, name = "Var_Sazo", D = 1, W = 0, m0 = 0, C0 = diag(2), drift = 0) {
   w <- 2 * pi / period
   order <- 2
   block <- polynomial_block(..., order = order, name = name, D = D, W = W, m0 = m0, C0 = C0, drift = drift)
@@ -332,6 +324,7 @@ harmonic_block <- function(..., period, name = "Var_Sazo", D = 1, W = 0, m0 = 0,
 #' @return An object of the class dlm_block containing the following values:
 #' \itemize{
 #'    \item FF Array: A 3D-array containing the regression matrix for each time. It's dimension should be n x m x T, where n is the number of latent variables, m is the number of outcomes in the model and T is the time series length.
+#'    \item FF_labs Array: DESCRIPTION
 #'    \item G Matrix: The state evolution matrix.
 #'    \item D Array: A 3D-array containing the discount factor matrix for each time. It's dimension should be n x n x T, where n is the number of latent variables and T is the time series length.
 #'    \item W Array: A 3D-array containing the covariance matrix of the noise for each time. It's dimension should be the same as D.
@@ -374,7 +367,7 @@ harmonic_block <- function(..., period, name = "Var_Sazo", D = 1, W = 0, m0 = 0,
 #'    \insertAllCited{}
 AR_block <- function(..., order, noise_var, pulse = 0, name = "Var_AR", AR_support = "free",
                      D = 1, W = 0, m0 = c(1, rep(0, order - 1)), C0 = 1, drift = 0,
-                     m0_states = 0, C0_states = c(NA, rep(1, order - 1)), D_states = 1, drift_states = 0,
+                     m0_states = 0, C0_states = diag(order), D_states = 1, drift_states = 0,
                      m0_pulse = 0, C0_pulse = 1, D_pulse = 1, W_pulse = 0, drift_pulse = 0) {
   W_states <- array(0, c(order, order, length(noise_var)))
   W_states[1, 1, ] <- noise_var
@@ -447,92 +440,6 @@ AR_block <- function(..., order, noise_var, pulse = 0, name = "Var_AR", AR_suppo
   return(block)
 }
 
-#' correlation_block
-#'
-#' DESCRIPTION
-#'
-#' @param pred_names Vector: Name of the linear predictors associated with this block.
-#' @param name String: An optional argument providing the name for this block. Can be useful to identify the models with meaningful labels, also, the name used will be used in some auxiliary functions.
-#' @param D Array, Matrix, vector or  scalar: The values for the discount factors at each time. If D is a array, it's dimensions should be n x n x t, where n is the order of the polynomial block and t is the length of the outcomes. If D is a matrix, it's dimensions should be n x n and it's values will be used for each time. If D is a vector or scalar, a discount factor matrix will be created as a diagonal matrix with the values of D in the diagonal.
-#' @param W Array, Matrix, vector or  scalar: The values for the covariance matrix for the noise factor at each time. If W is a array, it's dimensions should be n x n x t, where n is the order of the polynomial block and t is the length of the outcomes. If W is a matrix, it's dimensions should be n x n and it's values will be used for each time. If W is a vector or scalar, a discount factor matrix will be created as a diagonal matrix with the values of W in the diagonal.
-#' @param m0 Vector or scalar: The prior mean for the latent variables associated with this block. If m0 is a vector, it's dimension should be equal to the order of the polynomial block. If m0 is a scalar, it's value will be used for all latent variables.
-#' @param C0 Matrix, vector or scalar: The prior covariance matrix for the latent variables associated with this block. If C0 is a matrix, it's dimensions should be n x n. If W is a vector or scalar, a covariance matrix will be created as a diagonal matrix with the values of C0 in the diagonal.
-#'
-#' @return An object of the class dlm_block containing the following values:
-#' \itemize{
-#'    \item FF Array: A 3D-array containing the regression matrix for each time. It's dimension should be n x m x T, where n is the number of latent variables, m is the number of outcomes in the model and T is the time series length.
-#'    \item G Matrix: The state evolution matrix.
-#'    \item D Array: A 3D-array containing the discount factor matrix for each time. It's dimension should be n x n x T, where n is the number of latent variables and T is the time series length.
-#'    \item W Array: A 3D-array containing the covariance matrix of the noise for each time. It's dimension should be the same as D.
-#'    \item m0 Vector: The prior mean for the latent vector.
-#'    \item C0 Matrix: The prior covariance matrix for the latent vector.
-#'    \item var_names list: A list containing the variables indexes by their name.
-#'    \item n Positive integer: The number of latent variables associated with this block (2).
-#'    \item t Positive integer: The number of time steps associated with this block. If 1, the block is compatible with blocks of any time length, but if t is greater than 1, this block can only be used with blocks of the same time length.
-#'    \item k Positive integer: The number of outcomes associated with this block. This block can only be used with blocks with the same outcome length.
-#'    \item pred_names Vector: The name of the linear predictors associated with this block,
-#'    \item type Character: The type of block (Correlation).
-#' }
-#'
-#' @export
-#' @keywords internal
-#' @examples
-#' # EXAMPLE
-#'
-#' @family {auxiliary functions for structural blocks}
-#'
-#'
-#' @references
-#'    \insertAllCited{}
-correlation_block <- function(pred_names, order = 1, name = "Var_cor", D = 1, W = 0, m0 = 0, C0 = 1) {
-  k <- length(pred_names)
-  arg_list <- c(rep(0, k), list(order = k, name = name, D = D, W = W, m0 = m0, C0 = C0))
-  names(arg_list) <- c(pred_names, "order", "name", "D", "W", "m0", "C0")
-  block <- do.call(polynomial_block, arg_list)
-
-  block$FF <- simplify2array(apply(block$FF, 3, function(x) {
-    diag(x) <- NA
-    rbind(x, NA)
-  },
-  simplify = FALSE
-  ))
-
-  W <- 1
-  block$G <- array(diag(c(rep(1, k), 0)), c(k + 1, k + 1, block$t))
-  block$D <- simplify2array(apply(block$D, 3, function(x) {
-    as.matrix(bdiag(x, 1))
-  },
-  simplify = FALSE
-  ))
-  block$W <- simplify2array(apply(block$W, 3, function(x) {
-    as.matrix(bdiag(x, W))
-  },
-  simplify = FALSE
-  ))
-  block$m0 <- c(block$m0, 0)
-  block$C0 <- as.matrix(bdiag(block$C0, W))
-  block$k <- k
-
-  n <- k + 1
-  block$var_names[[name]] <- c(block$var_names[[name]], n)
-  block$order <- order
-  block$n <- n
-  if (order > 1) {
-    block_ref <- block
-    for (i in 2:order) {
-      block_copy <- block_ref
-      block_copy$m0[1:(i - 1)] <- 0
-      block_copy$C0[1:(i - 1), ] <- 0
-      block_copy$C0[, 1:(i - 1)] <- 0
-      block <- block + block_copy
-    }
-  }
-
-
-  block$type <- "Correlation"
-  return(block)
-}
-
 #' Auxiliary function to merge blocks
 #'
 #' An auxiliary function to merge blocks.
@@ -559,6 +466,9 @@ correlation_block <- function(pred_names, order = 1, name = "Var_cor", D = 1, W 
 #' @family {auxiliary functions for structural blocks}
 block_merge <- function(...) {
   blocks <- list(...)
+  if (length(blocks) == 1) {
+    return(blocks[[1]])
+  }
   for (block in blocks) {
     if (!inherits(block, "dlm_block")) {
       stop(paste0("Error: Expected all arguments to be dlm_block's, but got a ", class(block), "."))
@@ -590,6 +500,7 @@ block_merge <- function(...) {
   k <- length(pred_names)
 
   FF <- array(0, c(n, k, t), dimnames = list(NULL, pred_names, NULL))
+  FF_labs <- matrix("const", n, k, dimnames = list(NULL, pred_names))
   drift <- matrix(0, n, t)
   G <- array(0, c(n, n, t))
   G_labs <- matrix("const", n, n)
@@ -603,6 +514,7 @@ block_merge <- function(...) {
     k_i <- length(block$pred_names)
     current_range <- position:(position + block$n - 1)
     FF[current_range, pred_names %in% block$pred_names, ] <- block$FF[, (1:k_i)[order(block$pred_names)], ]
+    FF_labs[current_range, pred_names %in% block$pred_names] <- block$FF_labs[, (1:k_i)[order(block$pred_names)]]
 
     drift[current_range, ] <- block$drift
     G[current_range, current_range, ] <- block$G
@@ -612,14 +524,10 @@ block_merge <- function(...) {
     m0 <- c(m0, block$m0)
     C0[current_range, current_range] <- block$C0
     position <- position + block$n
-    status <- if (block$status == "undefined") {
-      "undefined"
-    } else {
-      status
-    }
   }
   block <- list(
     "FF" = FF,
+    "FF_labs" = FF_labs,
     "drift" = drift,
     "G" = G,
     "G_labs" = G_labs,
@@ -632,9 +540,11 @@ block_merge <- function(...) {
     "k" = k,
     "status" = status,
     "var_names" = var_names,
-    "pred_names" = pred_names
+    "pred_names" = pred_names,
+    "type" = "Mixed"
   )
   class(block) <- "dlm_block"
+  block$status <- check.block.status(block)
   return(block)
 }
 
@@ -710,5 +620,6 @@ block_rename <- function(block, pred_names) {
 
   block$pred_names <- pred_names
   colnames(block$FF) <- pred_names
+  block$status <- check.block.status(block)
   return(block)
 }

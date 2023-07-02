@@ -11,7 +11,7 @@ harmonic_block(
   D = 1,
   W = 0,
   m0 = 0,
-  C0 = c(NA, 1),
+  C0 = diag(2),
   drift = 0
 )
 }
@@ -36,6 +36,7 @@ harmonic_block(
 An object of the class dlm_block containing the following values:
 \itemize{
    \item FF Array: A 3D-array containing the regression matrix for each time. It's dimension should be n x m x T, where n is the number of latent variables, m is the number of outcomes in the model and T is the time series length.
+   \item FF_labs Array: DESCRIPTION
    \item drift Matrix: The mean for the random noise of the temporal evolution. It's dimension should be n x T.
    \item G Matrix: The state evolution matrix.
    \item D Array: A 3D-array containing the discount factor matrix for each time. It's dimension should be n x n x T, where n is the number of latent variables and T is the time series length.
@@ -90,7 +91,7 @@ Other {auxiliary functions for structural blocks}:
 \code{\link{block_merge}()},
 \code{\link{block_mult}()},
 \code{\link{block_rename}()},
-\code{\link{correlation_block}()},
-\code{\link{polynomial_block}()}
+\code{\link{polynomial_block}()},
+\code{\link{report_block}()}
 }
 \concept{{auxiliary functions for structural blocks}}

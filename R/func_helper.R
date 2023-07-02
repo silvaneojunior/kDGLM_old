@@ -234,3 +234,17 @@ f_root <- function(f, df, start, tol = 1e-8, n_max = 1000) {
   }
   return(list("root" = x_root, "f.root" = fx, "inter." = count))
 }
+
+check.block.status <- function(block) {
+  status <- "defined"
+  for (param in c("G", "D", "W", "m0", "C0")) {
+    if (any(is.character(if.na(block[[param]], 0)))) {
+      status <- "undefined"
+      break
+    }
+  }
+  if (!all(block$FF_labs %in% c("const", block$pred_names))) {
+    status <- "undefined"
+  }
+  return(status)
+}

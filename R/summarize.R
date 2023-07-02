@@ -115,7 +115,7 @@ report_dlm <- function(fitted_dlm, t = fitted_dlm$t, smooth = fitted_dlm$smooth,
   cat(paste0(
     "Fitted DGLM with ", length(fitted_dlm$outcomes), " outcomes.\n\n",
     "distributions:\n",
-    paste0(names(distr_names), ": ", distr_names, "\n", collapse = ""), "\n",
+    paste0("    ", names(distr_names), ": ", distr_names, "\n", collapse = ""), "\n",
     "Coeficients (", coef_label, ") at time ", t, ":\n",
     paste(format(" ", width = len_names, justify = "l"), "Estimate", "Std. Error", " t value", "Pr(>|t|)"), "\n",
     paste(coef_names, mean_coef, std_coef, t_coef, p_val_str, status, "\n", collapse = ""),
@@ -132,22 +132,48 @@ report_dlm <- function(fitted_dlm, t = fitted_dlm$t, smooth = fitted_dlm$smooth,
 #'
 #' Prints a report for a dlm_distr object.
 #'
-#' @param dlm_distr A fitted_dlm object.
+#' @param dlm_distr A dlm_distr object.
 #'
 #' @export
 #' @keywords internal
-#' @family {auxiliary visualization functions for the fitted_dlm class}
+#' @family {auxiliary functions for a creating outcomes}
 report_distr <- function(dlm_distr) {
   cat(paste0(
-    dlm_distr$name, " distribution.\n\nUnkown parameters:\n",
-    paste0(names(dlm_distr$pred_names), ": ", dlm_distr$pred_names, "\n", collapse = ""),
+    dlm_distr$name, " distribution.\n\nUnknown parameters: \n",
+    paste0("    ", names(dlm_distr$pred_names), " - ", dlm_distr$pred_names, collapse = "\n"), "\n",
     if (length(dlm_distr$parms) > 0) {
-      paste0(names(dlm_distr$parms), ": ", dlm_distr$parms, "\n", collapse = "\n")
+      paste0("Known parameters: \n", paste0("    ", names(dlm_distr$parms), "=", dlm_distr$parms, collapse = "\n"), "\n")
     } else {
-      "\n"
+      ""
     },
+    "\n",
     paste0("Serie length: ", dlm_distr$t, "\n"),
-    paste0("Number of outcomes: ", dlm_distr$r)
+    paste0("Number of outcomes: ", dlm_distr$r, "\n"),
+    paste0("Number of parameters: ", dlm_distr$k), "\n"
+  ))
+}
+
+#' Summary for a kDGLM structure
+#'
+#' Prints a report for a dlm_block object.
+#'
+#' @param dlm_block A dlm_block object.
+#'
+#' @export
+#' @keywords internal
+#' @family {auxiliary functions for structural blocks}
+report_block <- function(dlm_block) {
+  cat(paste0(
+    dlm_block$type, " DLM block.",
+    "\n",
+    paste0("Latent variables: \n", paste0("    ", names(dlm_block$var_names), " - ", lapply(dlm_block$var_names, length), " variable(s)", collapse = "\n"), "\n"),
+    "\n",
+    paste0("Linear predictors: \n", paste0("    ", dlm_block$pred_names, collapse = "\n"), "\n"),
+    "\n",
+    paste0("Status: ", dlm_block$status, "\n"),
+    paste0("Serie length: ", dlm_block$t, "\n"),
+    paste0("Number of latent variables: ", dlm_block$n, "\n"),
+    paste0("Number of linear predictors: ", dlm_block$k)
   ))
 }
 

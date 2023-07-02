@@ -106,6 +106,7 @@ Gamma <- function(phi = NA, mu = NA, alpha = NA, beta = NA, sigma = NA, outcome,
     convert_canom_flag <- !all(flags[c(1, 2)])
     parms <- list()
     pred_names <- c(phi, mu, alpha, beta, sigma)[flags]
+    names(pred_names) <- c("Shape (phi)", "Mean (mu)", "Shape (alpha)", "Rate (beta)", "Scale (sigma)")[flags]
 
     distr <- list(
       conj_prior = convert_FGamma_Normal,
