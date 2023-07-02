@@ -164,6 +164,7 @@ fit_model <- function(..., outcomes, pred_cred = 0.95, smooth = TRUE, p_monit = 
     structure$D <- array(structure$D, c(structure$n, structure$n, structure$t), dimnames = dimnames(structure$D))
     structure$W <- array(structure$W, c(structure$n, structure$n, structure$t), dimnames = dimnames(structure$W))
     structure$FF <- array(structure$FF, c(structure$n, structure$k, structure$t), dimnames = dimnames(structure$FF))
+    structure$FF_labs <- matrix(structure$FF_labs, structure$n, structure$k)
   }
   structure$G[, , 1] <- diag(structure$n)
   structure$D[, , 1] <- 1
@@ -172,11 +173,12 @@ fit_model <- function(..., outcomes, pred_cred = 0.95, smooth = TRUE, p_monit = 
     stop(paste0("Error: outcome does not have the same time length as structure: got ", t, " from outcome, expected ", structure$t))
   }
 
-  pred_names_out <- c()
+  pred_names_out <- unique(structure$FF_labs)
+  pred_names_out <- pred_names_out[pred_names_out != "const"]
   for (outcome in outcomes) {
     pred_names_out <- c(pred_names_out, outcome$pred_names)
   }
-  unique(pred_names_out)
+  pred_names_out <- unique(pred_names_out)
   if (any(!(pred_names_out %in% structure$pred_names))) {
     stop("Error: One or more linear predictor in outcomes are not present in the model structure.")
   }
@@ -189,6 +191,7 @@ fit_model <- function(..., outcomes, pred_cred = 0.95, smooth = TRUE, p_monit = 
     m0 = structure$m0,
     C0 = structure$C0,
     FF = structure$FF,
+    FF_labs = structure$FF_labs,
     drift = structure$drift,
     G = structure$G,
     G_labs = structure$G_labs,
@@ -223,6 +226,7 @@ fit_model <- function(..., outcomes, pred_cred = 0.95, smooth = TRUE, p_monit = 
   model$smooth <- smooth
   model$pred_cred <- pred_cred
   model$t <- t
+  model$structure <- structure
   class(model) <- "fitted_dlm"
 
   return(model)
@@ -283,6 +287,7 @@ forecast <- function(model, t = 1, outcome = NULL, offset = NULL, FF = NULL, dri
   r <- sum(sapply(model$outcomes, function(x) {
     x$r
   }))
+  pred.names <- model$pred_names
   pred <- matrix(NA, r, t)
   var.pred <- array(NA, c(r, r, t))
   icl.pred <- matrix(NA, r, t)
@@ -313,6 +318,7 @@ forecast <- function(model, t = 1, outcome = NULL, offset = NULL, FF = NULL, dri
   if (is.null(drift)) {
     drift <- matrix(model$drift[, t_last], n, t)
   }
+  FF_labs <- model$FF_labs
   if (is.null(FF)) {
     FF <- array(model$FF[, , t_last], c(n, k, t))
   }
@@ -401,7 +407,7 @@ forecast <- function(model, t = 1, outcome = NULL, offset = NULL, FF = NULL, dri
     m1[, t_i] <- last_m
     C1[, , t_i] <- last_C
 
-    lin_pred <- calc_lin_pred(last_m, last_C, FF[, , t_i] %>% matrix(n, k))
+    lin_pred <- calc_lin_pred(last_m, last_C, FF[, , t_i] %>% matrix(n, k, dimnames = list(NULL, pred.names)), FF_labs)
     f1[, t_i] <- lin_pred$ft
     Q1[, , t_i] <- lin_pred$Qt
     for (outcome_name in names(model$outcomes)) {
@@ -606,6 +612,7 @@ eval_past <- function(model, smooth = FALSE, T = 1:t_last, h = 1 - smooth, pred_
   if (h < 0 | round(h) != h) {
     stop(paste0("ERROR: h should be a positive integer. Got ", h, "."))
   }
+  pred.names <- model$pred_names
   n <- dim(model$mt)[1]
   t_last <- dim(model$mt)[2]
   k <- dim(model$FF)[2]
@@ -627,6 +634,7 @@ eval_past <- function(model, smooth = FALSE, T = 1:t_last, h = 1 - smooth, pred_
   len_t <- final_t - init_t + 1
 
   FF <- model$FF
+  FF_labs <- model$FF_labs
   G <- array(diag(n), c(n, n, len_t))
   drift <- matrix(0, n, len_t)
 
@@ -671,7 +679,7 @@ eval_past <- function(model, smooth = FALSE, T = 1:t_last, h = 1 - smooth, pred_
     } else if (i <= t_last) {
       mt <- ref_mt[, (i - h):(i - h)]
       Ct <- ref_Ct[, , (i - h):(i - h)]
-      h_i <- i
+      h_i <- h
     } else {
       mt <- ref_mt[, t_last]
       Ct <- ref_Ct[, , t_last]
@@ -683,7 +691,7 @@ eval_past <- function(model, smooth = FALSE, T = 1:t_last, h = 1 - smooth, pred_
         next_step <- one_step_evolve(next_step$at, next_step$Rt, drift[, i - t + 1], G[, , i - t + 1], G_labs, D_inv[, , i - t + 1]**(t == 1), W[, , i - t + 1])
       }
     }
-    lin_pred <- calc_lin_pred(next_step$at %>% matrix(n, 1), next_step$Rt, FF[, , i] %>% matrix(n, k))
+    lin_pred <- calc_lin_pred(next_step$at %>% matrix(n, 1), next_step$Rt, FF[, , i] %>% matrix(n, k, dimnames = list(NULL, pred.names)), FF_labs)
 
     mt.pred[, i - init_t + 1] <- next_step$at
     Ct.pred[, , i - init_t + 1] <- next_step$Rt
@@ -827,6 +835,7 @@ dlm_sampling <- function(model, sample_size, filtered_distr = FALSE) {
   mt <- model$mt
   mts <- model$mts
   FF <- model$FF
+  FF_labs <- model$FF_labs
   T_len <- dim(mt)[2]
   n <- dim(mt)[1]
   k <- dim(FF)[2]
@@ -856,7 +865,7 @@ dlm_sampling <- function(model, sample_size, filtered_distr = FALSE) {
   if (any(is.na(FF_step))) {
     ft_sample_i <- sapply(1:sample_size,
       function(j) {
-        calc_lin_pred(mt_sample_i[, j], Ct_chol * 0, FF_step)$ft
+        calc_lin_pred(mt_sample_i[, j], Ct_chol * 0, FF_step, FF_labs)$ft
       },
       simplify = "matrix"
     )
@@ -927,7 +936,7 @@ dlm_sampling <- function(model, sample_size, filtered_distr = FALSE) {
     if (any(is.na(FF_step))) {
       ft_sample_i <- sapply(1:sample_size,
         function(j) {
-          calc_lin_pred(mt_sample_i[, j], Ct_chol * 0, FF_step)$ft
+          calc_lin_pred(mt_sample_i[, j], Ct_chol * 0, FF_step, FF_labs)$ft
         },
         simplify = "matrix"
       )
@@ -1027,7 +1036,20 @@ search_model <- function(..., outcomes, search_grid, condition = "TRUE", smooth 
     stop("Error: There is no hiper parameter to select. Did you forgot to label the hiper parameters?")
   }
 
+  if (names(search_grid) %in% c("const", "constrained", "free", "kl")) {
+    stop("Error: Invalid label for hyper parameter. Cannot use 'const', 'constrained', 'free' or 'kl'. Chose another label.")
+  }
+
   ref_strucuture <- structure
+
+  if (names(search_grid) %in% ref_strucuture$pred_names) {
+    stop(paste0(
+      "Error: Ambiguous label for hyper parameter. Cannot have a hyper parameter with the same name of a linear predictor\n
+         The user passed the following hyper parameters: ", paste0(names(search_grid), collapse = ", "), ".\n",
+      "The model has the the following linear predictors: ", paste0(ref_strucuture$pred_names, collapse = ", "), "."
+    ))
+  }
+
   var_length <- length(search_grid)
   search_data <- do.call(expand.grid, search_grid) %>%
     filter(eval(parse(text = condition)))
@@ -1037,6 +1059,8 @@ search_model <- function(..., outcomes, search_grid, condition = "TRUE", smooth 
 
   dim_FF <- dim(structure$FF)
   dimnames_FF <- dimnames(structure$FF)
+
+  dim_FF_labs <- dim(structure$FF_labs)
 
   dim_D <- dim(structure$D)
   dim_W <- dim(structure$W)
@@ -1066,28 +1090,26 @@ search_model <- function(..., outcomes, search_grid, condition = "TRUE", smooth 
     cur_param <- search_data[i, ]
     structure <- ref_strucuture
     for (name in vals_names) {
-      structure$FF[structure$FF == name] <- cur_param[[name]]
+      structure$FF[array(structure$FF_labs == name, dim_FF)] <- cur_param[[name]]
+      structure$FF_labs[structure$FF_labs == name] <- "const"
       structure$D[structure$D == name] <- cur_param[[name]]
       structure$W[structure$W == name] <- cur_param[[name]]
       structure$m0[structure$m0 == name] <- cur_param[[name]]
       structure$C0[structure$C0 == name] <- cur_param[[name]]
       structure$G[structure$G == name] <- cur_param[[name]]
     }
-    if (any(is.na(as.numeric(if.na(structure$FF, 0)))) |
-      any(is.na(as.numeric(if.na(structure$D, 0)))) |
-      any(is.na(as.numeric(if.na(structure$W, 0)))) |
-      any(is.na(as.numeric(if.na(structure$m0, 0)))) |
-      any(is.na(as.numeric(if.na(structure$C0, 0)))) |
-      any(is.na(as.numeric(if.na(structure$G, 0))))
-    ) {
-      stop("Error: not all unkown hiper parameter have values. Check the search grid to make sure every unkown hiper parameter has a range of values.")
-    }
+
     structure$FF <- array(as.numeric(structure$FF), dim_FF, dimnames = dimnames_FF)
     structure$D <- array(as.numeric(structure$D), dim_D)
     structure$W <- array(as.numeric(structure$W), dim_W)
     structure$m0 <- as.numeric(structure$m0)
     structure$C0 <- matrix(as.numeric(structure$C0), dim_C0[1], dim_C0[2])
     structure$G <- array(as.numeric(structure$G), dim_G)
+    structure$status <- check.block.status(structure)
+
+    if (structure$status == "undefined") {
+      stop("Error: not all unkown hiper parameter have values. Check the search grid to make sure every unkown hiper parameter has a range of values.")
+    }
 
     if (any(if.na(structure$D, 0) < 0 | if.na(structure$D, 0) > 1)) {
       stop(paste0("Error: invalid value for D. Expected a real number between 0 and 1, got: ", paste(structure$D[if.na(structure$D, 0) < 0 | if.na(structure$D, 0) > 1], collapse = ", "), "."))
@@ -1099,7 +1121,6 @@ search_model <- function(..., outcomes, search_grid, condition = "TRUE", smooth 
       stop(paste0("Error: invalid value for C0. Expected a non negative number, got: ", paste(structure$C0[if.na(structure$C0, 0) < 0], collapse = ", "), "."))
     }
 
-    structure$status <- "defined"
     fitted_model <- fit_model(structure, outcomes = outcomes, pred_cred = 0.95, smooth = FALSE, p_monit = NA, c_monit = 1)
     log.like <- sum(as.numeric(lapply(fitted_model$outcomes, function(x) {
       sum(x$log.like)

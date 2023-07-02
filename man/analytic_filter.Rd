@@ -9,6 +9,7 @@ analytic_filter(
   m0 = 0,
   C0 = 1,
   FF,
+  FF_labs,
   drift,
   G,
   G_labs,

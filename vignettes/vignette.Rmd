@@ -940,7 +940,7 @@ level <- polynomial_block(mu = 1, D = 0.95, C0 = 1) * 2 +
 
 outcome <- Normal(
   mu = c("mu_1", "mu_2"),
-  Sigma = matrix(c("sigma_1", "rho", "rho", "sigma_2"), 2, 2),
+  Tau = matrix(c("sigma_1", "rho", "rho", "sigma_2"), 2, 2),
   outcome = data
 )
 

@@ -53,7 +53,6 @@ show_fit(fitted_data, smooth = TRUE)$plot
 Other {auxiliary visualization functions for the fitted_dlm class}: 
 \code{\link{plot_lat_var}()},
 \code{\link{plot_lin_pred}()},
-\code{\link{report_distr}()},
 \code{\link{report_dlm}()},
 \code{\link{report_searched_dlm}()}
 }

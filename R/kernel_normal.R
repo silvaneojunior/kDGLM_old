@@ -181,22 +181,27 @@ Normal <- function(mu, Tau = NA, Sigma = NA, Sd = NA, outcome, offset = outcome*
     cor_index <- (2 * r + 1):k
 
     if (r > 1) {
-      names_mat <- matrix(paste0("rho_", matrix(1:r, r, r, byrow = TRUE), matrix(1:r, r, r)), r, r)
+      names_mat <- matrix(paste0(
+        "Correlation between series ",
+        matrix(1:r, r, r, byrow = TRUE),
+        " and ", matrix(1:r, r, r),
+        " (rho_", matrix(1:r, r, r, byrow = TRUE), matrix(1:r, r, r), ")"
+      ), r, r)
       diag(names_mat) <- paste0(if (Var_name == "Precision") {
-        "tau"
+        "Precision (Tau) for serie "
       } else if (Var_name == "Variance") {
-        "sigma2"
+        "Variance (Sigma) for serie "
       } else {
-        "sigma"
-      }, "_", 1:r)
-      names(pred_names) <- c(paste0("mu_", 1:r), diag(names_mat), names_mat[lower.index])
+        "Scale (Sd) for serie "
+      }, 1:r)
+      names(pred_names) <- c(paste0("Mean for Serie ", 1:r, " (mu_", 1:r, ")"), diag(names_mat), names_mat[lower.index])
     } else {
-      names(pred_names) <- c("mu", if (Var_name == "Precision") {
-        "tau"
+      names(pred_names) <- c("Mean (mu)", if (Var_name == "Precision") {
+        "Precision (Tau)"
       } else if (Var_name == "Variance") {
-        "sigma2"
+        "Variance (Sigma)"
       } else {
-        "sigma"
+        "Scale (Sd)"
       })
     }
     distr <- list(

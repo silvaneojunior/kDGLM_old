@@ -51,6 +51,7 @@ show_fit(fitted_data, smooth = TRUE)$plot
 Other {auxiliary functions for a creating outcomes}: 
 \code{\link{Gamma}()},
 \code{\link{Multinom}()},
-\code{\link{Normal}()}
+\code{\link{Normal}()},
+\code{\link{report_distr}()}
 }
 \concept{{auxiliary functions for a creating outcomes}}

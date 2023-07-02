@@ -61,7 +61,7 @@ Poisson <- function(lambda, outcome, offset = outcome**0, alt_method = FALSE) {
     },
     link_function = log, inv_link_function = exp,
     param_names = c("alpha", "beta"),
-    pred_names = c(lambda),
+    pred_names = c("Mean (labmda)" = lambda),
     r = r,
     k = k,
     l = k,

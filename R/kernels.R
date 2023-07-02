@@ -96,7 +96,7 @@ generic_smoother <- function(mt, Ct, at, Rt, G, G_labs) {
 #' @seealso \code{\link{generic_smoother}}
 #' @references
 #'    \insertAllCited{}
-analytic_filter <- function(outcomes, m0 = 0, C0 = 1, FF, drift, G, G_labs, D, W, p_monit = NA, c_monit = 1) {
+analytic_filter <- function(outcomes, m0 = 0, C0 = 1, FF, FF_labs, drift, G, G_labs, D, W, p_monit = NA, c_monit = 1) {
   # Defining quantities
   T <- dim(FF)[3]
   r <- sum(sapply(outcomes, function(x) {
@@ -168,11 +168,12 @@ analytic_filter <- function(outcomes, m0 = 0, C0 = 1, FF, drift, G, G_labs, D, W
         "shock_var" = next_step$shock_var
       )
     }
+    FF_step <- matrix(FF[, , t], n, k, dimnames = list(NULL, pred_names))
     for (outcome_name in names(outcomes)) {
       outcome <- outcomes[[outcome_name]]
       pred_index <- match(outcome$pred_names, pred_names)
-      k_i <- length(pred_index)
-      FF_step <- matrix(FF[, pred_index, t], n, k_i)
+      # k_i <- length(pred_index)
+      # FF_step <- matrix(FF[, pred_index, t], n, k_i)
 
       offset_step <- outcome$offset[t, ]
       na.flag <- any(is.null(offset_step) | any(offset_step == 0) | any(is.na(offset_step)) | any(is.na(outcome$outcome[t, ])))
@@ -180,10 +181,10 @@ analytic_filter <- function(outcomes, m0 = 0, C0 = 1, FF, drift, G, G_labs, D, W
         at_step <- models[[model]]$at_step
         Rt_step <- models[[model]]$Rt_step
 
-        lin_pred <- calc_lin_pred(at_step, Rt_step, FF_step)
+        lin_pred <- calc_lin_pred(at_step, Rt_step, FF_step, FF_labs)
 
-        ft_canom <- lin_pred$ft
-        Qt_canom <- lin_pred$Qt
+        ft_canom <- lin_pred$ft[pred_index, , drop = FALSE]
+        Qt_canom <- lin_pred$Qt[pred_index, pred_index, drop = FALSE]
         if (outcome$convert_canom_flag) {
           ft_canom <- outcome$convert_mat_canom %*% ft_canom
           Qt_canom <- outcome$convert_mat_canom %*% Qt_canom %*% transpose(outcome$convert_mat_canom)
@@ -205,7 +206,7 @@ analytic_filter <- function(outcomes, m0 = 0, C0 = 1, FF, drift, G, G_labs, D, W
           "at_step" = at_step, "Rt_step" = Rt_step,
           "shock_var" = models[[model]]$shock_var,
           "ft_step" = ft_canom, "Qt_step" = Qt_canom,
-          "FF_step" = lin_pred$FF,
+          "FF_step" = lin_pred$FF[, pred_index, drop = FALSE],
           "conj_prior" = conj_prior,
           "log_like" = log.like
         )
@@ -264,7 +265,7 @@ analytic_filter <- function(outcomes, m0 = 0, C0 = 1, FF, drift, G, G_labs, D, W
       at[, t] <- model$at
       Rt[, , t] <- model$Rt
 
-      lin_pred_ref <- calc_lin_pred(model$at, model$Rt, FF[, , t])
+      lin_pred_ref <- calc_lin_pred(model$at, model$Rt, FF_step, FF_labs)
       ft[, t] <- lin_pred_ref$ft
       Qt[, , t] <- lin_pred_ref$Qt
 
@@ -302,7 +303,7 @@ analytic_filter <- function(outcomes, m0 = 0, C0 = 1, FF, drift, G, G_labs, D, W
     "mt" = mt, "Ct" = Ct,
     "at" = at, "Rt" = Rt,
     "ft" = ft, "Qt" = Qt,
-    "FF" = FF,
+    "FF" = FF, "FF_labs" = FF_labs,
     "drift" = drift, "G" = G, "G_labs" = G_labs,
     "D" = D, "W" = W, "shock_var" = shock_var,
     "outcomes" = outcomes, "pred_names" = pred_names
@@ -385,47 +386,50 @@ one_step_evolve <- function(m0, C0, drift, G, G_labs, D_inv, W) {
   list("at" = at, "Rt" = Rt, "G" = G_now, "drift" = drift, "shock_var" = as.matrix((D_inv - 1) * Pt) + W)
 }
 
-calc_current_F <- function(at, Rt, FF) {
-  if (is.null(dim(FF))) {
-    FF <- matrix(FF, length(FF), 1)
-  }
+calc_current_F <- function(at, Rt, FF, FF_labs) {
+  pred.names <- colnames(FF)
   n <- dim(FF)[1]
   k <- dim(FF)[2]
 
+
   charge <- matrix(0, k, 1)
   at_mod <- at[, 1]
-  for (i in 1:k) {
-    FF_step <- FF[, i]
-    FF_flags <- is.na(FF_step)
-    vals_na <- (1:n)[FF_flags]
-    n_na <- length(vals_na)
-    if (n_na > 1) {
-      vals_coef <- vals_na[((1:(n_na / 2) * 2) - 1)]
-      vals_noise <- vals_na[((1:(n_na / 2)) * 2)]
-      flags_na <- diag(Rt)[vals_noise] == 1 & diag(Rt)[vals_coef] > 0
-
-      FF[vals_coef, i] <- ifelse(flags_na,
-        (at_mod[vals_noise]) * exp(at_mod[vals_coef]),
-        (at_mod[vals_noise])
-      )
-      FF[vals_noise, i] <- ifelse(flags_na,
-        exp(at_mod[vals_coef]),
-        at_mod[vals_coef]
-      )
-      charge[i, 1] <- charge[i, 1] + sum(ifelse(flags_na,
-        (at_mod[vals_noise]) * exp(at_mod[vals_coef]),
-        (at_mod[vals_noise]) * at_mod[vals_coef]
-      ))
+  count.na <- sum(is.na(FF))
+  while (count.na > 0) {
+    flag.na <- colSums(is.na(FF)) > 0
+    index.na <- (1:k)[flag.na]
+    for (index.pred in index.na) {
+      flag.var <- is.na(FF[, index.pred])
+      index.var <- (1:n)[flag.var]
+      for (index.effect in index.var) {
+        effect.name <- FF_labs[index.effect, index.pred]
+        effect.vals <- FF[, effect.name == pred.names]
+        if (any(is.na(effect.vals))) {
+          break
+        }
+        FF[index.var, index.pred] <- sum(effect.vals * at_mod)
+        FF[, index.pred] <- FF[, index.pred] + effect.vals * at_mod[index.var]
+        charge[index.pred, 1] <- charge[index.pred, 1] - at_mod[index.var] * sum(effect.vals * at_mod)
+      }
     }
+    new.count.na <- sum(is.na(FF))
+    if (count.na == new.count.na) {
+      stop("Error: A circularity was detected in the specification of FF. Revise the definition of the linear predictors.")
+    }
+    count.na <- new.count.na
   }
+
   list("FF" = FF, "FF_diff" = charge)
 }
 
-calc_lin_pred <- function(at, Rt, FF) {
-  FF_vals <- calc_current_F(at, Rt, FF)
+calc_lin_pred <- function(at, Rt, FF, FF_labs) {
+  FF_vals <- calc_current_F(at, Rt, FF, FF_labs)
   FF <- FF_vals$FF
   FF_diff <- FF_vals$FF_diff
-  ft <- crossprod(FF, at) - FF_diff
+  # print('#########################')
+  # print(FF)
+  # print(at)
+  ft <- crossprod(FF, at) + FF_diff
   Qt <- as.matrix(crossprod(FF, Rt) %*% FF)
   list("ft" = ft, "Qt" = Qt, "FF" = FF, "FF_diff" = FF_diff)
 }
